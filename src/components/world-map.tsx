@@ -1,5 +1,6 @@
 import type { MapData, User, Tile } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { isLand } from "@/lib/world-map-shape";
 
 interface WorldMapProps {
   mapData: MapData;
@@ -20,11 +21,19 @@ const TileComponent = ({
   onClick: () => void;
   isConquerable: boolean;
 }) => {
+  const isLandTile = isLand(tile.x, tile.y);
+
   const tileClasses = cn(
-    "aspect-square transition-all duration-300 ease-in-out border-t border-l border-background/10",
-    ownerColor ? "shadow-inner" : "bg-muted/30 hover:bg-muted/60",
+    "aspect-square transition-all duration-300 ease-in-out border border-border/10",
+    {
+      // Land
+      'bg-[#f0e6d2]': isLandTile && !ownerColor,
+      'hover:bg-[#e6dac8]': isLandTile && !ownerColor && isConquerable,
+      // Water
+      'bg-[#aadaff]': !isLandTile && !ownerColor,
+    },
+    { 'shadow-inner': ownerColor },
     isConquerable && "cursor-pointer ring-2 ring-offset-1 ring-offset-background ring-primary/70 z-10 hover:brightness-110",
-    !ownerColor && isConquerable && "bg-primary/20 hover:bg-primary/30",
   );
 
   return (
@@ -46,7 +55,7 @@ export default function WorldMap({ mapData, users, onTileClick, canConquer, zoom
   const userColorMap = new Map(users.map(u => [u.id, u.color]));
 
   return (
-    <div className="w-full h-full max-w-7xl rounded-lg border bg-card/80 p-2 shadow-inner backdrop-blur-sm md:p-4 overflow-auto">
+    <div className="h-full w-full max-w-7xl overflow-auto rounded-lg border bg-card/80 p-2 shadow-inner backdrop-blur-sm md:p-4">
       <div 
         className="grid touch-none select-none gap-0 transition-transform duration-300 ease-in-out"
         style={{

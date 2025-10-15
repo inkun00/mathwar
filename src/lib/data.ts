@@ -1,7 +1,5 @@
 import type { GameData, User, MapData, Tile } from "./types";
-
-const MAP_WIDTH = 36;
-const MAP_HEIGHT = 30;
+import { isLand, MAP_WIDTH, MAP_HEIGHT } from "./world-map-shape";
 
 const userColors = [
   "hsl(148, 64%, 58%)", // primary
@@ -39,6 +37,8 @@ const generateInitialMap = (): MapData => {
     while (!validPosition) {
       x = Math.floor(Math.random() * MAP_WIDTH);
       y = Math.floor(Math.random() * MAP_HEIGHT);
+
+      if (!isLand(x, y)) continue;
 
       if (assignedCoordinates.length === 0) {
         validPosition = true;
@@ -81,13 +81,18 @@ export const awardToken = (userId: string): GameData => {
   if (user) {
     user.tokens += 1;
   }
-  return deepCopy(gameData);
+  const copiedState = deepCopy(gameData);
+  // Return a new state object to trigger re-render
+  return {
+    ...copiedState,
+    users: [...copiedState.users]
+  };
 }
 
 export const conquerTile = (userId: string, x: number, y: number): GameData => {
   const user = gameData.users.find(u => u.id === userId);
   // This function is called for both player and AI, so tokens can be 0 for AI
-  if (!user || (user.id === "player1" && user.tokens <= 0)) {
+  if (!user || user.tokens <= 0) {
     return deepCopy(gameData);
   }
 

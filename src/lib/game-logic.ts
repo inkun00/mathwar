@@ -1,4 +1,5 @@
 import type { DecimalProblem, Tile, MapData, User } from './types';
+import { isLand } from './world-map-shape';
 
 // Generates a number with one decimal place.
 const randomDecimal = (max: number) => {
@@ -37,18 +38,35 @@ export const getAIMove = (ai: User, mapData: MapData): Tile | null => {
     if (ai.tokens <= 0) return null;
 
     const aiTiles = mapData.flat().filter(t => t.ownerId === ai.id);
-    if (aiTiles.length === 0) return null;
+    if (aiTiles.length === 0) {
+      // If AI has no tiles, find a random land tile to start
+      const emptyLandTiles = mapData.flat().filter(t => t.ownerId === null && isLand(t.x, t.y));
+      if (emptyLandTiles.length > 0) {
+        const randomIndex = Math.floor(Math.random() * emptyLandTiles.length);
+        return emptyLandTiles[randomIndex];
+      }
+      return null;
+    }
     
     const allTiles = mapData.flat();
     const conquerableTiles: Tile[] = [];
 
     for (const tile of allTiles) {
-        if (tile.ownerId !== ai.id && isAdjacent(tile.x, tile.y, aiTiles)) {
+        // AI can only conquer land tiles that are not its own
+        if (tile.ownerId !== ai.id && isLand(tile.x, tile.y) && isAdjacent(tile.x, tile.y, aiTiles)) {
             conquerableTiles.push(tile);
         }
     }
 
     if (conquerableTiles.length > 0) {
+        // Prioritize conquering tiles owned by others
+        const enemyTiles = conquerableTiles.filter(t => t.ownerId !== null);
+        if (enemyTiles.length > 0) {
+          const randomIndex = Math.floor(Math.random() * enemyTiles.length);
+          return enemyTiles[randomIndex];
+        }
+
+        // Otherwise, expand into empty territory
         const randomIndex = Math.floor(Math.random() * conquerableTiles.length);
         return conquerableTiles[randomIndex];
     }

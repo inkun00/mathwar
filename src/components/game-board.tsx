@@ -12,6 +12,7 @@ import Header from "./header";
 import WorldMap from "./world-map";
 import ProblemModal from "./problem-modal";
 import DemiseScreen from "./demise-screen";
+import { isLand } from "@/lib/world-map-shape";
 
 interface GameBoardProps {
   initialData: GameData;
@@ -69,7 +70,8 @@ export default function GameBoard({ initialData }: GameBoardProps) {
   };
 
   const handleCorrectAnswer = () => {
-    setGameState(awardToken(currentUser.id));
+    const newState = awardToken(currentUser.id);
+    setGameState(newState);
   };
 
   const handleTileClick = (x: number, y: number) => {
@@ -81,7 +83,8 @@ export default function GameBoard({ initialData }: GameBoardProps) {
       });
       return;
     }
-    setGameState(conquerTile(currentUser.id, x, y));
+    const newState = conquerTile(currentUser.id, x, y);
+    setGameState(newState);
   };
   
   const handleRestart = () => {
@@ -101,9 +104,9 @@ export default function GameBoard({ initialData }: GameBoardProps) {
       return false;
     }
 
-    // If player has no tiles, they can conquer any empty tile.
+    // If player has no tiles, they can conquer any empty LAND tile.
     if (userTiles.length === 0) {
-      return tile.ownerId === null;
+      return tile.ownerId === null && isLand(tile.x, tile.y);
     }
 
     // Otherwise, they must conquer adjacent tiles.
@@ -113,7 +116,7 @@ export default function GameBoard({ initialData }: GameBoardProps) {
   return (
     <div className="flex w-full flex-grow flex-col gap-6">
       <Header currentUser={currentUser} onSolveProblemClick={handleSolveProblemClick} />
-      <div className="relative w-full max-w-7xl flex-grow">
+      <div className="relative h-full w-full max-w-7xl flex-grow">
         <WorldMap mapData={mapData} users={users} onTileClick={handleTileClick} canConquer={canConquer} zoomLevel={zoomLevel} />
         <div className="absolute bottom-4 right-4 flex gap-2">
           <Button size="icon" onClick={handleZoomIn} aria-label="확대">
