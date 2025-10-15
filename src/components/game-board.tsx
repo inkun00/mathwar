@@ -93,7 +93,7 @@ export default function GameBoard({ initialData }: GameBoardProps) {
       });
   }
 
-  const handleZoomIn = () => setZoomLevel(prev => Math.min(prev + 0.2, 3));
+  const handleZoomIn = () => setZoomLevel(prev => Math.min(prev + 0.2, 10));
   const handleZoomOut = () => setZoomLevel(prev => Math.max(prev - 0.2, 0.5));
 
   const canConquer = (tile: Tile) => {
