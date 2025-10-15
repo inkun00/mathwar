@@ -21,15 +21,15 @@ const TileComponent = ({
   isConquerable: boolean;
 }) => {
   const tileClasses = cn(
-    "aspect-square rounded-[2px] transition-all duration-300 ease-in-out",
+    "aspect-square rounded-full transition-all duration-300 ease-in-out",
     ownerColor ? "shadow-inner" : "bg-muted/50",
-    isConquerable && "cursor-pointer ring-2 ring-offset-2 ring-offset-background ring-primary scale-110 z-10 hover:brightness-110",
+    isConquerable && "cursor-pointer ring-2 ring-offset-2 ring-offset-background ring-primary scale-125 z-10 hover:brightness-110",
     !ownerColor && isConquerable && "bg-primary/20",
   );
 
   return (
     <div 
-      className="relative flex items-center justify-center"
+      className="relative flex items-center justify-center p-0.5"
       onClick={isConquerable ? onClick : undefined}
       aria-label={`타일 ${tile.x}, ${tile.y}. ${ownerColor ? `플레이어 소유.` : '주인 없음.'} ${isConquerable ? '정복하려면 클릭하세요.' : ''}`}
     >
@@ -48,7 +48,7 @@ export default function WorldMap({ mapData, users, onTileClick, canConquer, zoom
   return (
     <div className="w-full max-w-7xl rounded-lg border bg-card/80 p-2 shadow-inner backdrop-blur-sm md:p-4 overflow-auto">
       <div 
-        className="grid touch-none select-none gap-1 transition-transform duration-300 ease-in-out"
+        className="grid touch-none select-none gap-0 transition-transform duration-300 ease-in-out"
         style={{
           gridTemplateColumns: `repeat(${mapData[0].length}, minmax(0, 1fr))`,
           transform: `scale(${zoomLevel})`,

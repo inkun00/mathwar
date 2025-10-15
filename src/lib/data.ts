@@ -1,7 +1,7 @@
 import type { GameData, User, MapData, Tile } from "./types";
 
-const MAP_WIDTH = 40;
-const MAP_HEIGHT = 22;
+const MAP_WIDTH = 36;
+const MAP_HEIGHT = 30;
 
 const userColors = [
   "hsl(148, 64%, 58%)", // primary
