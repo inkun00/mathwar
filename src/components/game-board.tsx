@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useMemo } from "react";
-import type { GameData, Tile, DecimalProblem } from "@/lib/types";
+import { useState, useMemo, useEffect } from "react";
+import type { GameData, Tile, DecimalProblem, User } from "@/lib/types";
 import { awardToken, conquerTile, restartPlayer } from "@/lib/data";
-import { generateDecimalProblem, isAdjacent } from "@/lib/game-logic";
+import { generateDecimalProblem, isAdjacent, getAIMove } from "@/lib/game-logic";
 import { useToast } from "@/hooks/use-toast";
 
 import Header from "./header";
@@ -29,7 +29,34 @@ export default function GameBoard({ initialData }: GameBoardProps) {
     [mapData, currentUser.id]
   );
   
-  const isDemise = userTiles.length === 0;
+  const isDemise = userTiles.length === 0 && users.some(u => u.id === currentUser.id);
+
+  useEffect(() => {
+    const gameLoop = setInterval(() => {
+      // AI players' turn
+      const aiUsers = users.filter(u => u.id !== currentUser.id);
+      aiUsers.forEach(ai => {
+        const allAiTiles = mapData.flat().filter(t => t.ownerId === ai.id);
+        if (allAiTiles.length === 0) return; // Skip if AI has no tiles
+
+        const move = getAIMove(ai, mapData);
+        if (move) {
+          // AI conquers a tile
+          const newState = conquerTile(ai.id, move.x, move.y);
+          
+          // Simple AI logic: also award tokens periodically to keep them competitive
+          if (Math.random() < 0.1) {
+            awardToken(ai.id);
+          }
+          
+          setGameState(newState);
+        }
+      });
+    }, 2000); // AI acts every 2 seconds
+
+    return () => clearInterval(gameLoop);
+  }, [users, mapData, currentUser.id]);
+
 
   const handleSolveProblemClick = () => {
     setCurrentProblem(generateDecimalProblem());
@@ -67,7 +94,9 @@ export default function GameBoard({ initialData }: GameBoardProps) {
     if (tile.ownerId === currentUser.id || currentUser.tokens <= 0) {
       return false;
     }
-    return isAdjacent(tile.x, tile.y, userTiles);
+    const playerTiles = mapData.flat().filter(t => t.ownerId === currentUser.id);
+    if (playerTiles.length === 0) return false;
+    return isAdjacent(tile.x, tile.y, playerTiles);
   };
 
   return (
