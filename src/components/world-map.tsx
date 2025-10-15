@@ -21,15 +21,15 @@ const TileComponent = ({
   isConquerable: boolean;
 }) => {
   const tileClasses = cn(
-    "aspect-square rounded-full transition-all duration-300 ease-in-out",
+    "aspect-square transition-all duration-300 ease-in-out",
     ownerColor ? "shadow-inner" : "bg-muted/50",
-    isConquerable && "cursor-pointer ring-2 ring-offset-2 ring-offset-background ring-primary scale-125 z-10 hover:brightness-110",
+    isConquerable && "cursor-pointer ring-2 ring-offset-2 ring-offset-background ring-primary scale-110 z-10 hover:brightness-110",
     !ownerColor && isConquerable && "bg-primary/20",
   );
 
   return (
     <div 
-      className="relative flex items-center justify-center p-0.5"
+      className="relative flex items-center justify-center p-px"
       onClick={isConquerable ? onClick : undefined}
       aria-label={`타일 ${tile.x}, ${tile.y}. ${ownerColor ? `플레이어 소유.` : '주인 없음.'} ${isConquerable ? '정복하려면 클릭하세요.' : ''}`}
     >

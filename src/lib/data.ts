@@ -32,21 +32,25 @@ const generateInitialMap = (): MapData => {
 
   users.forEach(user => {
     let validPosition = false;
+    let x = 0, y = 0;
     while (!validPosition) {
-      const x = Math.floor(Math.random() * MAP_WIDTH);
-      const y = Math.floor(Math.random() * MAP_HEIGHT);
+      x = Math.floor(Math.random() * MAP_WIDTH);
+      y = Math.floor(Math.random() * MAP_HEIGHT);
 
-      const tooClose = assignedCoordinates.some(coord => {
-        const dist = Math.sqrt(Math.pow(coord.x - x, 2) + Math.pow(coord.y - y, 2));
-        return dist < minDistance;
-      });
-
-      if (!tooClose) {
-        map[y][x].ownerId = user.id;
-        assignedCoordinates.push({ x, y });
+      if (assignedCoordinates.length === 0) {
         validPosition = true;
+      } else {
+        const tooClose = assignedCoordinates.some(coord => {
+          const dist = Math.sqrt(Math.pow(coord.x - x, 2) + Math.pow(coord.y - y, 2));
+          return dist < minDistance;
+        });
+        if (!tooClose) {
+          validPosition = true;
+        }
       }
     }
+    map[y][x].ownerId = user.id;
+    assignedCoordinates.push({ x, y });
   });
 
   return map;
@@ -61,11 +65,12 @@ let gameData: GameData = {
   currentPlayerId: "player1",
 };
 
-// Simulate API calls
+// This is a simple in-memory store.
+// A real app would use a database like Firestore.
+const deepCopy = <T>(obj: T): T => JSON.parse(JSON.stringify(obj));
+
 export const getGameData = (): GameData => {
-  // In a real app, this would be an API call to fetch data from Firestore.
-  // We return a deep copy to prevent direct mutation of the server state.
-  return JSON.parse(JSON.stringify(gameData));
+  return deepCopy(gameData);
 };
 
 export const awardToken = (userId: string): GameData => {
@@ -73,14 +78,14 @@ export const awardToken = (userId: string): GameData => {
   if (user) {
     user.tokens += 1;
   }
-  return getGameData();
+  return deepCopy(gameData);
 }
 
 export const conquerTile = (userId: string, x: number, y: number): GameData => {
   const user = gameData.users.find(u => u.id === userId);
-  if (!user || user.tokens <= 0) {
-    // Should not happen if UI is correct
-    return getGameData();
+  // This function is called for both player and AI, so tokens can be 0 for AI
+  if (!user || (user.id === "player1" && user.tokens <= 0)) {
+    return deepCopy(gameData);
   }
 
   if (mapData[y] && mapData[y][x]) {
@@ -88,12 +93,22 @@ export const conquerTile = (userId: string, x: number, y: number): GameData => {
     mapData[y][x].ownerId = userId;
   }
   
-  return getGameData();
+  return deepCopy(gameData);
 }
 
 export const restartPlayer = (userId: string): GameData => {
   const user = gameData.users.find(u => u.id === userId);
-  if (!user) return getGameData();
+  if (!user) return deepCopy(gameData);
+
+  // Remove all existing tiles for this user
+  mapData.forEach(row => {
+    row.forEach(tile => {
+      if (tile.ownerId === userId) {
+        tile.ownerId = null;
+      }
+    });
+  });
+
 
   user.tokens = 1;
 
@@ -108,5 +123,5 @@ export const restartPlayer = (userId: string): GameData => {
     }
   }
 
-  return getGameData();
+  return deepCopy(gameData);
 }

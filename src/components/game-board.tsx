@@ -38,27 +38,29 @@ export default function GameBoard({ initialData }: GameBoardProps) {
     const gameLoop = setInterval(() => {
       // AI players' turn
       const aiUsers = users.filter(u => u.id !== currentUser.id);
-      aiUsers.forEach(ai => {
-        const allAiTiles = mapData.flat().filter(t => t.ownerId === ai.id);
-        if (allAiTiles.length === 0) return; // Skip if AI has no tiles
+      
+      setGameState(prevState => {
+        let newState = { ...prevState };
+        aiUsers.forEach(ai => {
+          const allAiTiles = newState.mapData.flat().filter(t => t.ownerId === ai.id);
+          if (allAiTiles.length === 0) return;
 
-        const move = getAIMove(ai, mapData);
-        if (move) {
-          // AI conquers a tile
-          const newState = conquerTile(ai.id, move.x, move.y);
-          
-          // Simple AI logic: also award tokens periodically to keep them competitive
-          if (Math.random() < 0.1) {
-            awardToken(ai.id);
+          const move = getAIMove(ai, newState.mapData);
+          if (move) {
+            newState = conquerTile(ai.id, move.x, move.y);
+            
+            if (Math.random() < 0.1) {
+              newState = awardToken(ai.id);
+            }
           }
-          
-          setGameState(newState);
-        }
+        });
+        return newState;
       });
-    }, 2000); // AI acts every 2 seconds
+
+    }, 3000); // AI acts every 3 seconds
 
     return () => clearInterval(gameLoop);
-  }, [users, mapData, currentUser.id]);
+  }, [users, currentUser.id]);
 
 
   const handleSolveProblemClick = () => {
@@ -67,8 +69,7 @@ export default function GameBoard({ initialData }: GameBoardProps) {
   };
 
   const handleCorrectAnswer = () => {
-    const newState = awardToken(currentUser.id);
-    setGameState(newState);
+    setGameState(awardToken(currentUser.id));
   };
 
   const handleTileClick = (x: number, y: number) => {
@@ -80,8 +81,7 @@ export default function GameBoard({ initialData }: GameBoardProps) {
       });
       return;
     }
-    const newState = conquerTile(currentUser.id, x, y);
-    setGameState(newState);
+    setGameState(conquerTile(currentUser.id, x, y));
   };
   
   const handleRestart = () => {
