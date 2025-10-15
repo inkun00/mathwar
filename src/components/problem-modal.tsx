@@ -38,8 +38,8 @@ export default function ProblemModal({
     const userAnswer = parseFloat(answer);
     if (userAnswer === problem.answer) {
       toast({
-        title: "Correct!",
-        description: "You've earned an expansion token.",
+        title: "정답입니다!",
+        description: "확장 토큰을 획득했습니다.",
         className: 'border-green-500 bg-green-50 text-green-700 dark:bg-green-900/50 dark:text-green-300 dark:border-green-700',
         action: <CheckCircle className="text-green-500" />
       });
@@ -47,8 +47,8 @@ export default function ProblemModal({
     } else {
       toast({
         variant: 'destructive',
-        title: "Incorrect",
-        description: `The correct answer was ${problem.answer}. Try again!`,
+        title: "오답입니다",
+        description: `정답은 ${problem.answer} 입니다. 다시 시도해 보세요!`,
         action: <XCircle className="text-white" />
       });
     }
@@ -61,9 +61,9 @@ export default function ProblemModal({
       <DialogContent className="sm:max-w-[425px]">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
-            <DialogTitle>Solve the Problem</DialogTitle>
+            <DialogTitle>문제 풀기</DialogTitle>
             <DialogDescription>
-              Enter the correct answer to earn an expansion token.
+              정답을 입력하여 확장 토큰을 획득하세요.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
@@ -76,14 +76,14 @@ export default function ProblemModal({
               step="0.01"
               value={answer}
               onChange={(e) => setAnswer(e.target.value)}
-              placeholder="Your answer"
+              placeholder="정답을 입력하세요"
               required
               className="text-center text-lg"
-              aria-label="Math problem answer"
+              aria-label="수학 문제 정답"
             />
           </div>
           <DialogFooter>
-            <Button type="submit">Submit Answer</Button>
+            <Button type="submit">정답 제출</Button>
           </DialogFooter>
         </form>
       </DialogContent>

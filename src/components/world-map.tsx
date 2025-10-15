@@ -30,7 +30,7 @@ const TileComponent = ({
     <div 
       className="relative flex items-center justify-center"
       onClick={isConquerable ? onClick : undefined}
-      aria-label={`Tile at ${tile.x}, ${tile.y}. ${ownerColor ? `Owned by a player.` : 'Unclaimed.'} ${isConquerable ? 'Click to conquer.' : ''}`}
+      aria-label={`타일 ${tile.x}, ${tile.y}. ${ownerColor ? `플레이어 소유.` : '주인 없음.'} ${isConquerable ? '정복하려면 클릭하세요.' : ''}`}
     >
       <div
         className={tileClasses}

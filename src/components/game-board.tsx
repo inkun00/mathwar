@@ -45,8 +45,8 @@ export default function GameBoard({ initialData }: GameBoardProps) {
     if (currentUser.tokens <= 0) {
       toast({
         variant: "destructive",
-        title: "No Tokens!",
-        description: "Solve a problem to earn more expansion tokens.",
+        title: "토큰이 없습니다!",
+        description: "문제를 풀어 더 많은 확장 토큰을 획득하세요.",
       });
       return;
     }
@@ -58,8 +58,8 @@ export default function GameBoard({ initialData }: GameBoardProps) {
     const newState = restartPlayer(currentUser.id);
     setGameState(newState);
     toast({
-        title: "A Fresh Start!",
-        description: "Your conquest begins again.",
+        title: "새로운 시작!",
+        description: "정복이 다시 시작됩니다.",
       });
   }
 

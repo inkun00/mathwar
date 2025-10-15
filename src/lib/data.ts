@@ -12,9 +12,9 @@ const userColors = [
 ];
 
 let users: User[] = [
-  { id: "player1", name: "You", color: userColors[0], tokens: 1 },
-  { id: "player2", name: "AI Player A", color: userColors[1], tokens: 1 },
-  { id: "player3", name: "AI Player B", color: userColors[2], tokens: 1 },
+  { id: "player1", name: "나", color: userColors[0], tokens: 1 },
+  { id: "player2", name: "AI 플레이어 A", color: userColors[1], tokens: 1 },
+  { id: "player3", name: "AI 플레이어 B", color: userColors[2], tokens: 1 },
 ];
 
 const generateInitialMap = (): MapData => {

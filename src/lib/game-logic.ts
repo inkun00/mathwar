@@ -21,7 +21,7 @@ export const generateDecimalProblem = (): DecimalProblem => {
   const roundedAnswer = parseFloat(answer.toFixed(2));
 
   return {
-    problem: `What is ${problem}?`,
+    problem: `${problem}의 값은?`,
     answer: roundedAnswer,
   };
 };

@@ -16,7 +16,7 @@ export default function Header({ currentUser, onSolveProblemClick }: HeaderProps
         <div className="flex items-center gap-3">
           <Logo className="h-8 w-8 text-primary" />
           <h1 className="font-headline text-xl font-bold tracking-tight sm:text-2xl">
-            Decimal Conquest
+            소수 정복
           </h1>
         </div>
         <div className="flex items-center gap-4">
@@ -25,14 +25,14 @@ export default function Header({ currentUser, onSolveProblemClick }: HeaderProps
             <div className="text-right">
               <p className="font-semibold">{currentUser.name}</p>
               <p className="text-sm text-muted-foreground">
-                {currentUser.tokens} expansion {currentUser.tokens === 1 ? 'token' : 'tokens'}
+                확장 토큰 {currentUser.tokens}개
               </p>
             </div>
           </div>
           <Separator orientation="vertical" className="h-10 hidden sm:block" />
           <Button onClick={onSolveProblemClick}>
             <HelpCircle className="mr-2 h-4 w-4" />
-            Solve a Problem
+            문제 풀기
           </Button>
         </div>
       </div>
