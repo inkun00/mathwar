@@ -46,7 +46,7 @@ export default function WorldMap({ mapData, users, onTileClick, canConquer, zoom
   const userColorMap = new Map(users.map(u => [u.id, u.color]));
 
   return (
-    <div className="w-full max-w-7xl rounded-lg border bg-card/80 p-2 shadow-inner backdrop-blur-sm md:p-4 overflow-auto">
+    <div className="w-full h-full max-w-7xl rounded-lg border bg-card/80 p-2 shadow-inner backdrop-blur-sm md:p-4 overflow-auto">
       <div 
         className="grid touch-none select-none gap-0 transition-transform duration-300 ease-in-out"
         style={{

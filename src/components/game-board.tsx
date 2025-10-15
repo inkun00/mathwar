@@ -111,9 +111,9 @@ export default function GameBoard({ initialData }: GameBoardProps) {
   };
 
   return (
-    <div className="flex w-full flex-col gap-6">
+    <div className="flex w-full flex-grow flex-col gap-6">
       <Header currentUser={currentUser} onSolveProblemClick={handleSolveProblemClick} />
-      <div className="relative w-full max-w-7xl">
+      <div className="relative w-full max-w-7xl flex-grow">
         <WorldMap mapData={mapData} users={users} onTileClick={handleTileClick} canConquer={canConquer} zoomLevel={zoomLevel} />
         <div className="absolute bottom-4 right-4 flex gap-2">
           <Button size="icon" onClick={handleZoomIn} aria-label="확대">
