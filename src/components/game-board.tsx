@@ -32,7 +32,7 @@ export default function GameBoard({ initialData }: GameBoardProps) {
     [mapData, currentUser.id]
   );
   
-  const isDemise = userTiles.length === 0 && users.some(u => u.id === currentUser.id);
+  const isDemise = userTiles.length === 0 && users.some(u => u.id === currentUser.id) && currentUser.tokens === 0;
 
   useEffect(() => {
     const gameLoop = setInterval(() => {
@@ -100,9 +100,14 @@ export default function GameBoard({ initialData }: GameBoardProps) {
     if (tile.ownerId === currentUser.id || currentUser.tokens <= 0) {
       return false;
     }
-    const playerTiles = mapData.flat().filter(t => t.ownerId === currentUser.id);
-    if (playerTiles.length === 0) return false;
-    return isAdjacent(tile.x, tile.y, playerTiles);
+
+    // If player has no tiles, they can conquer any empty tile.
+    if (userTiles.length === 0) {
+      return tile.ownerId === null;
+    }
+
+    // Otherwise, they must conquer adjacent tiles.
+    return isAdjacent(tile.x, tile.y, userTiles);
   };
 
   return (

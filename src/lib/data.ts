@@ -31,6 +31,9 @@ const generateInitialMap = (): MapData => {
   const minDistance = 10;
 
   users.forEach(user => {
+    // Human player starts by choosing a tile
+    if (user.id === 'player1') return;
+
     let validPosition = false;
     let x = 0, y = 0;
     while (!validPosition) {
@@ -109,19 +112,9 @@ export const restartPlayer = (userId: string): GameData => {
     });
   });
 
-
   user.tokens = 1;
 
-  let validPosition = false;
-  while (!validPosition) {
-    const x = Math.floor(Math.random() * MAP_WIDTH);
-    const y = Math.floor(Math.random() * MAP_HEIGHT);
-
-    if (!mapData[y][x].ownerId) {
-      mapData[y][x].ownerId = userId;
-      validPosition = true;
-    }
-  }
-
+  // Don't assign a tile, let the user choose
+  
   return deepCopy(gameData);
 }
