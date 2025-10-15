@@ -6,6 +6,7 @@ interface WorldMapProps {
   users: User[];
   onTileClick: (x: number, y: number) => void;
   canConquer: (tile: Tile) => boolean;
+  zoomLevel: number;
 }
 
 const TileComponent = ({ 
@@ -41,15 +42,17 @@ const TileComponent = ({
 };
 
 
-export default function WorldMap({ mapData, users, onTileClick, canConquer }: WorldMapProps) {
+export default function WorldMap({ mapData, users, onTileClick, canConquer, zoomLevel }: WorldMapProps) {
   const userColorMap = new Map(users.map(u => [u.id, u.color]));
 
   return (
-    <div className="w-full max-w-7xl rounded-lg border bg-card/80 p-2 shadow-inner backdrop-blur-sm md:p-4">
+    <div className="w-full max-w-7xl rounded-lg border bg-card/80 p-2 shadow-inner backdrop-blur-sm md:p-4 overflow-auto">
       <div 
-        className="grid touch-none select-none gap-1"
+        className="grid touch-none select-none gap-1 transition-transform duration-300 ease-in-out"
         style={{
           gridTemplateColumns: `repeat(${mapData[0].length}, minmax(0, 1fr))`,
+          transform: `scale(${zoomLevel})`,
+          transformOrigin: 'center center',
         }}
       >
         {mapData.flat().map((tile) => (

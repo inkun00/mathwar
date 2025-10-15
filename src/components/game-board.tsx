@@ -5,6 +5,8 @@ import type { GameData, Tile, DecimalProblem, User } from "@/lib/types";
 import { awardToken, conquerTile, restartPlayer } from "@/lib/data";
 import { generateDecimalProblem, isAdjacent, getAIMove } from "@/lib/game-logic";
 import { useToast } from "@/hooks/use-toast";
+import { Button } from "@/components/ui/button";
+import { ZoomIn, ZoomOut } from "lucide-react";
 
 import Header from "./header";
 import WorldMap from "./world-map";
@@ -20,6 +22,7 @@ export default function GameBoard({ initialData }: GameBoardProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentProblem, setCurrentProblem] = useState<DecimalProblem | null>(null);
   const { toast } = useToast();
+  const [zoomLevel, setZoomLevel] = useState(1);
 
   const { users, mapData, currentPlayerId } = gameState;
   const currentUser = useMemo(() => users.find(u => u.id === currentPlayerId)!, [users, currentPlayerId]);
@@ -90,6 +93,9 @@ export default function GameBoard({ initialData }: GameBoardProps) {
       });
   }
 
+  const handleZoomIn = () => setZoomLevel(prev => Math.min(prev + 0.2, 3));
+  const handleZoomOut = () => setZoomLevel(prev => Math.max(prev - 0.2, 0.5));
+
   const canConquer = (tile: Tile) => {
     if (tile.ownerId === currentUser.id || currentUser.tokens <= 0) {
       return false;
@@ -102,7 +108,17 @@ export default function GameBoard({ initialData }: GameBoardProps) {
   return (
     <div className="flex w-full flex-col gap-6">
       <Header currentUser={currentUser} onSolveProblemClick={handleSolveProblemClick} />
-      <WorldMap mapData={mapData} users={users} onTileClick={handleTileClick} canConquer={canConquer} />
+      <div className="relative w-full max-w-7xl">
+        <WorldMap mapData={mapData} users={users} onTileClick={handleTileClick} canConquer={canConquer} zoomLevel={zoomLevel} />
+        <div className="absolute bottom-4 right-4 flex gap-2">
+          <Button size="icon" onClick={handleZoomIn} aria-label="확대">
+            <ZoomIn />
+          </Button>
+          <Button size="icon" onClick={handleZoomOut} aria-label="축소">
+            <ZoomOut />
+          </Button>
+        </div>
+      </div>
       <ProblemModal
         isOpen={isModalOpen}
         onOpenChange={setIsModalOpen}
