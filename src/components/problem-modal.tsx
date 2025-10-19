@@ -115,7 +115,7 @@ export default function ProblemModal({
             </div>
 
             {problem?.type === 'fraction' ? (
-                <div className="flex items-end justify-center gap-2">
+                <div className="flex items-center justify-center gap-2">
                     <div className="flex-shrink-0">
                         <Label htmlFor="integerPart" className="sr-only">자연수</Label>
                         <Input
