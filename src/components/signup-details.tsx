@@ -78,6 +78,8 @@ export default function SignUpDetails() {
         nickname,
         email: auth.currentUser.email,
         countryId,
+        tokens: 1, // Start with 1 token
+        color: `hsl(${Math.random() * 360}, 60%, 70%)` // Assign a random color
       });
 
       toast({ title: '프로필 생성 완료!', description: '이제 게임을 시작할 수 있습니다.' });
