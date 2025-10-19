@@ -62,7 +62,7 @@ export default function ProblemModal({
   const recordAttempt = async (isCorrect: boolean) => {
     if (!userId || !firestore || !problem) return;
     try {
-      // Path updated to reflect new top-level collection structure
+      // Path updated to reflect new top-level collection structure: problem_attempts/{userId}/attempts/{attemptId}
       await addDoc(collection(firestore, 'problem_attempts', userId, 'attempts'), {
         userId: userId,
         unit: problem.type,
