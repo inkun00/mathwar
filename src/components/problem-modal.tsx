@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import type { MathProblem } from '@/lib/types';
 import { useState, type FormEvent, useEffect } from 'react';
@@ -22,41 +23,10 @@ interface ProblemModalProps {
   onCorrectAnswer: () => void;
 }
 
-// Function to parse various answer formats (e.g., "1 1/2", "3/2", "1.5")
-const parseAnswer = (input: string): number | null => {
+// Function to parse a simple decimal/integer string
+const parseDecimalAnswer = (input: string): number | null => {
   input = input.trim();
   if (!input) return null;
-
-  // Case 1: Mixed fraction (e.g., "1 2/3")
-  if (input.includes(' ') && input.includes('/')) {
-    const parts = input.split(' ');
-    if (parts.length === 2) {
-      const integerPart = parseInt(parts[0], 10);
-      const fractionPart = parts[1];
-      const fractionParts = fractionPart.split('/');
-      if (fractionParts.length === 2) {
-        const numerator = parseInt(fractionParts[0], 10);
-        const denominator = parseInt(fractionParts[1], 10);
-        if (!isNaN(integerPart) && !isNaN(numerator) && !isNaN(denominator) && denominator !== 0) {
-          return integerPart + (numerator / denominator);
-        }
-      }
-    }
-  }
-
-  // Case 2: Simple fraction (e.g., "3/2")
-  if (!input.includes(' ') && input.includes('/')) {
-    const fractionParts = input.split('/');
-    if (fractionParts.length === 2) {
-      const numerator = parseInt(fractionParts[0], 10);
-      const denominator = parseInt(fractionParts[1], 10);
-      if (!isNaN(numerator) && !isNaN(denominator) && denominator !== 0) {
-        return numerator / denominator;
-      }
-    }
-  }
-
-  // Case 3: Decimal or integer (e.g., "1.5" or "2")
   const num = parseFloat(input);
   return isNaN(num) ? null : num;
 };
@@ -69,11 +39,17 @@ export default function ProblemModal({
   onCorrectAnswer,
 }: ProblemModalProps) {
   const [answer, setAnswer] = useState('');
+  const [integerPart, setIntegerPart] = useState('');
+  const [numeratorPart, setNumeratorPart] = useState('');
+  const [denominatorPart, setDenominatorPart] = useState('');
   const { toast } = useToast();
 
   useEffect(() => {
     if (isOpen) {
       setAnswer('');
+      setIntegerPart('');
+      setNumeratorPart('');
+      setDenominatorPart('');
     }
   }, [isOpen]);
 
@@ -81,7 +57,26 @@ export default function ProblemModal({
     e.preventDefault();
     if (!problem) return;
 
-    const userAnswer = parseAnswer(answer);
+    let userAnswer: number | null = null;
+
+    if (problem.type === 'fraction') {
+        const integer = parseInt(integerPart || '0', 10);
+        const numerator = parseInt(numeratorPart || '0', 10);
+        const denominator = parseInt(denominatorPart || '1', 10);
+
+        if (isNaN(integer) || isNaN(numerator) || isNaN(denominator) || denominator === 0) {
+             toast({
+                variant: 'destructive',
+                title: "입력 오류",
+                description: `유효한 숫자를 입력해주세요.`,
+            });
+            return;
+        }
+        userAnswer = integer + (numerator / denominator);
+
+    } else { // decimal
+        userAnswer = parseDecimalAnswer(answer);
+    }
     
     // Check if userAnswer is close enough to the correct answer to handle floating point issues
     if (userAnswer !== null && Math.abs(userAnswer - problem.answer) < 0.001) {
@@ -93,10 +88,6 @@ export default function ProblemModal({
       });
       onCorrectAnswer();
     } else {
-      const correctAnswerString = problem.type === 'fraction'
-        ? `정답은 ${problem.answer.toFixed(2)} 또는 분수 형태입니다.`
-        : `정답은 ${problem.answer} 입니다.`;
-
       toast({
         variant: 'destructive',
         title: "오답입니다",
@@ -104,7 +95,7 @@ export default function ProblemModal({
         action: <XCircle className="text-white" />
       });
     }
-    setAnswer('');
+    
     onOpenChange(false);
   };
 
@@ -115,23 +106,64 @@ export default function ProblemModal({
           <DialogHeader>
             <DialogTitle>문제 풀기</DialogTitle>
             <DialogDescription>
-              정답을 입력하여 확장 토큰을 획득하세요. 분수는 `1 1/2` 또는 `3/2` 형식으로 입력할 수 있습니다.
+              정답을 입력하여 확장 토큰을 획득하세요.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="text-center text-2xl font-bold font-code tracking-wider bg-muted p-4 rounded-md h-24 flex items-center justify-center">
               {problem?.problem}
             </div>
-            <Input
-              id="answer"
-              type="text"
-              value={answer}
-              onChange={(e) => setAnswer(e.target.value)}
-              placeholder="정답을 입력하세요 (예: 3.5 또는 7/2)"
-              required
-              className="text-center text-lg"
-              aria-label="수학 문제 정답"
-            />
+
+            {problem?.type === 'fraction' ? (
+                <div className="flex items-end justify-center gap-2">
+                    <div className="flex-shrink-0">
+                        <Label htmlFor="integerPart" className="sr-only">자연수</Label>
+                        <Input
+                        id="integerPart"
+                        type="number"
+                        value={integerPart}
+                        onChange={(e) => setIntegerPart(e.target.value)}
+                        placeholder="자연수"
+                        className="w-20 text-center text-lg"
+                        aria-label="자연수 부분"
+                        />
+                    </div>
+                    <div className="flex flex-col items-center">
+                        <Label htmlFor="numeratorPart" className="sr-only">분자</Label>
+                        <Input
+                        id="numeratorPart"
+                        type="number"
+                        value={numeratorPart}
+                        onChange={(e) => setNumeratorPart(e.target.value)}
+                        placeholder="분자"
+                        className="w-20 text-center text-lg"
+                        aria-label="분자 부분"
+                        />
+                        <div className="w-full h-px bg-foreground my-1"></div>
+                        <Label htmlFor="denominatorPart" className="sr-only">분모</Label>
+                        <Input
+                        id="denominatorPart"
+                        type="number"
+                        value={denominatorPart}
+                        onChange={(e) => setDenominatorPart(e.target.value)}
+                        placeholder="분모"
+                        className="w-20 text-center text-lg"
+                        aria-label="분모 부분"
+                        />
+                    </div>
+                </div>
+            ) : (
+                <Input
+                id="answer"
+                type="text"
+                value={answer}
+                onChange={(e) => setAnswer(e.target.value)}
+                placeholder="정답을 입력하세요 (예: 3.5)"
+                required
+                className="text-center text-lg"
+                aria-label="수학 문제 정답"
+                />
+            )}
           </div>
           <DialogFooter>
             <Button type="submit">정답 제출</Button>
