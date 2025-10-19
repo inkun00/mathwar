@@ -29,9 +29,9 @@ export default function Home() {
   }, [firestore]);
 
   const usersQuery = useMemoFirebase(() => {
-    if (!firestore) return null;
+    if (!firestore || !authUser) return null;
     return collection(firestore, 'users');
-  }, [firestore]);
+  }, [firestore, authUser]);
 
   const problemAttemptsQuery = useMemoFirebase(() => {
     if (!firestore || !authUser) return null;
