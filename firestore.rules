@@ -1,132 +1,140 @@
 /**
- * @fileoverview Firestore Security Rules for Decimal Conquest.
+ * @fileoverview Firestore Security Rules for the Decimal Conquest game.
  *
  * Core Philosophy:
- * This ruleset enforces a user-ownership model where users have full control over their own data,
- * combined with public read access to certain collections like 'problems' and 'land_tiles'.
+ * This ruleset enforces a user-ownership model for user profiles and territory expansions,
+ * and public read access for countries, land tiles, and problems.
  *
  * Data Structure:
- * - /users/{userId}: Stores individual user profiles, accessible only to the user themselves.
- * - /countries/{countryId}: Stores countries, accessible to all authenticated users.
- * - /land_tiles/{landTileId}: Stores land tiles, publicly readable but owner-writeable. Includes denormalized `ownerId`.
- * - /problems/{problemId}: Stores math problems, publicly readable.
- * - /users/{userId}/territory_expansions/{territoryExpansionId}: Stores user's territory expansion data, only accessible to the user.
+ * - /users/{userId}: Stores user profiles. Only the user can modify their profile.
+ * - /countries/{countryId}: Stores countries created by users. Accessible to all authenticated users.
+ * - /land_tiles/{landTileId}: Stores land tiles on the game map. Accessible to all users.
+ * - /problems/{problemId}: Stores math problems for the game. Accessible to all users.
+ * - /users/{userId}/territory_expansions/{territoryExpansionId}: Stores territory expansion events for each user.
+ *   Only the user can modify their own expansion records.
  *
  * Key Security Decisions:
- * - Users can only read/write their own user document.
- * - Listing users is disallowed.
- * - Land tiles are publicly listable, but only the owner can modify them.
- * - Problems are publicly accessible.
+ * - Users can only manage their own profile and territory expansion records.
+ * - Countries, land tiles, and problems are publicly readable.
+ * - No listing of users is allowed.
  *
  * Denormalization for Authorization:
- * - The `land_tiles` collection includes the `ownerId` field directly in each document.
- *   This allows security rules to efficiently validate ownership without needing extra reads.
+ * - LandTile documents include the `ownerId`, so security rules can validate ownership without needing to `get()` the user document.
  */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * @description Secures user profiles. Only the authenticated user can read/write their own profile.
+     * @description Controls access to user profiles. Only the user can read/write their own profile.
      * @path /users/{userId}
-     * @allow (create) - User with ID 'user123' can create their profile if request.auth.uid == 'user123'.
-     * @allow (get, update, delete) - User with ID 'user123' can get, update, or delete their profile if request.auth.uid == 'user123'.
-     * @deny (create) - User with ID 'user456' cannot create a profile with ID 'user123'.
-     * @deny (get, update, delete) - User with ID 'user456' cannot get, update, or delete the profile with ID 'user123'.
+     * @allow (create) - User with UID 'user_abc' can create a profile at /users/user_abc.
+     * @allow (get) - User with UID 'user_abc' can read their profile at /users/user_abc.
+     * @allow (update) - User with UID 'user_abc' can update their profile at /users/user_abc.
+     * @allow (delete) - User with UID 'user_abc' can delete their profile at /users/user_abc.
+     * @deny (create) - User with UID 'user_xyz' cannot create a profile at /users/user_abc.
+     * @deny (get) - User with UID 'user_xyz' cannot read the profile at /users/user_abc.
+     * @deny (update) - User with UID 'user_xyz' cannot update the profile at /users/user_abc.
+     * @deny (delete) - User with UID 'user_xyz' cannot delete the profile at /users/user_abc.
      * @principle Enforces document ownership for writes.
      */
     match /users/{userId} {
-      function isOwner(userId) {
-        return request.auth.uid == userId;
-      }
-
-      function isExistingOwner(userId) {
-        return isOwner(userId) && resource != null;
-      }
-
-      allow get: if isOwner(userId);
-      allow list: if false; // Listing users is not permitted.
-      allow create: if isOwner(userId) && request.resource.data.id == userId;
-      allow update: if isExistingOwner(userId) && request.resource.data.id == resource.data.id;
-      allow delete: if isExistingOwner(userId);
+      allow get: if isSignedIn() && isOwner(userId);
+      allow list: if false;
+      allow create: if isSignedIn() && isOwner(userId) && request.resource.data.id == userId;
+      allow update: if isSignedIn() && isExistingOwner(userId) && request.resource.data.id == resource.data.id;
+      allow delete: if isSignedIn() && isExistingOwner(userId);
     }
 
     /**
-     * @description Secures countries. All authenticated users can read and create countries.
+     * @description Controls access to countries. All authenticated users can read countries. Only the creator can modify.
      * @path /countries/{countryId}
-     * @allow (get, list, create) - Any authenticated user can read and create countries.
-     * @deny (update, delete) - Only the owner should be able to update or delete countries (not yet implemented).
-     * @principle Allows open reads and authenticated writes.
+     * @allow (get) - Any authenticated user can read a country.
+     * @allow (list) - Any authenticated user can list countries.
+     * @allow (create) - User with UID 'user_abc' can create a country. request.resource.data.createdBy must equal 'user_abc'.
+     * @allow (update) - User with UID 'user_abc' can update a country they created (resource.data.createdBy == 'user_abc').
+     * @allow (delete) - User with UID 'user_abc' can delete a country they created (resource.data.createdBy == 'user_abc').
+     * @deny (create) - User with UID 'user_xyz' cannot create a country with createdBy: 'user_abc'.
+     * @deny (update) - User with UID 'user_xyz' cannot update a country created by 'user_abc'.
+     * @deny (delete) - User with UID 'user_xyz' cannot delete a country created by 'user_abc'.
+     * @principle Allows public read access but restricts writes to the owner.
      */
     match /countries/{countryId} {
-       allow get, list: if isSignedIn();
-       allow create: if isSignedIn();
-       allow update, delete: if false;  // TODO: Add owner validation once the schema is updated with an ownership field.
+      allow get, list: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.createdBy == request.auth.uid;
+      allow update: if isSignedIn() && resource.data.createdBy == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.createdBy == request.auth.uid;
     }
 
     /**
-     * @description Secures land tiles. Land tiles are publicly readable, but only the owner can modify them.
+     * @description Controls access to land tiles. Land tiles are publicly readable, but only the owner can modify.
      * @path /land_tiles/{landTileId}
-     * @allow (get, list) - Any user can read all land tiles.
-     * @allow (create) - Only the owner can create a land tile, and the ownerId must match the authenticated user.
-     * @allow (update, delete) - Only the owner of the land tile can update or delete it.
-     * @deny (create) - A user cannot create a land tile for another user.
-     * @deny (update, delete) - A user cannot update or delete a land tile owned by another user.
-     * @principle Enforces document ownership for writes, allows public reads.
+     * @allow (get) - Any user can read a land tile.
+     * @allow (list) - Any user can list land tiles.
+     * @allow (create) - User with UID 'user_abc' can create a land tile with ownerId: 'user_abc'.
+     * @allow (update) - User with UID 'user_abc' can update a land tile they own (resource.data.ownerId == 'user_abc').
+     * @allow (delete) - User with UID 'user_abc' can delete a land tile they own (resource.data.ownerId == 'user_abc').
+     * @deny (create) - User with UID 'user_xyz' cannot create a land tile with ownerId: 'user_abc'.
+     * @deny (update) - User with UID 'user_xyz' cannot update a land tile owned by 'user_abc'.
+     * @deny (delete) - User with UID 'user_xyz' cannot delete a land tile owned by 'user_abc'.
+     * @principle Allows public read access but restricts writes to the owner.
      */
     match /land_tiles/{landTileId} {
-      function isOwner(ownerId) {
-        return request.auth.uid == ownerId;
-      }
-
-      function isExistingOwner(ownerId) {
-        return isOwner(ownerId) && resource != null;
-      }
-
       allow get, list: if true;
-      allow create: if isOwner(request.resource.data.ownerId) && request.resource.data.ownerId == request.auth.uid;
-      allow update: if isExistingOwner(resource.data.ownerId);
-      allow delete: if isExistingOwner(resource.data.ownerId);
+      allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
+      allow update: if isSignedIn() && isExistingOwner(resource.data.ownerId);
+      allow delete: if isSignedIn() && isExistingOwner(resource.data.ownerId);
     }
 
     /**
-     * @description Secures math problems. All users can read math problems. Write access is denied.
+     * @description Controls access to problems. Problems are publicly readable.
      * @path /problems/{problemId}
-     * @allow (get, list) - Any user can read math problems.
-     * @deny (create, update, delete) - No user can create, update, or delete math problems.
-     * @principle Allows open reads, denies all writes.
+     * @allow (get) - Any user can read a problem.
+     * @allow (list) - Any user can list problems.
+     * @allow (create) - User can create a problem.
+     * @allow (update) - User can update a problem.
+     * @allow (delete) - User can delete a problem.
+     * @principle Allows public read access and open write access.
      */
     match /problems/{problemId} {
       allow get, list: if true;
-      allow create, update, delete: if false;
+      allow create: if isSignedIn();
+      allow update: if isSignedIn();
+      allow delete: if isSignedIn();
     }
 
     /**
-     * @description Secures territory expansion events for each user. Only the user can read/write their own expansion records.
+     * @description Controls access to territory expansion events for each user. Only the user can manage their own expansion records.
      * @path /users/{userId}/territory_expansions/{territoryExpansionId}
-     * @allow (create) - User with ID 'user123' can create a territory expansion record if request.auth.uid == 'user123'.
-     * @allow (get, list, update, delete) - User with ID 'user123' can get, list, update, or delete their territory expansion records if request.auth.uid == 'user123'.
-     * @deny (create) - User with ID 'user456' cannot create a territory expansion record for user 'user123'.
-     * @deny (get, list, update, delete) - User with ID 'user456' cannot get, list, update, or delete territory expansion records for user 'user123'.
-     * @principle Enforces document ownership for writes.
+     * @allow (create) - User with UID 'user_abc' can create an expansion event at /users/user_abc/territory_expansions/{territoryExpansionId}.
+     * @allow (get) - User with UID 'user_abc' can read their expansion event at /users/user_abc/territory_expansions/{territoryExpansionId}.
+     * @allow (update) - User with UID 'user_abc' can update their expansion event at /users/user_abc/territory_expansions/{territoryExpansionId}.
+     * @allow (delete) - User with UID 'user_abc' can delete their expansion event at /users/user_abc/territory_expansions/{territoryExpansionId}.
+     * @deny (create) - User with UID 'user_xyz' cannot create an expansion event at /users/user_abc/territory_expansions/{territoryExpansionId}.
+     * @deny (get) - User with UID 'user_xyz' cannot read the expansion event at /users/user_abc/territory_expansions/{territoryExpansionId}.
+     * @deny (update) - User with UID 'user_xyz' cannot update the expansion event at /users/user_abc/territory_expansions/{territoryExpansionId}.
+     * @deny (delete) - User with UID 'user_xyz' cannot delete the expansion event at /users/user_abc/territory_expansions/{territoryExpansionId}.
+     * @principle Enforces document ownership for writes within a user's data tree.
      */
     match /users/{userId}/territory_expansions/{territoryExpansionId} {
-      function isOwner(userId) {
-        return request.auth.uid == userId;
-      }
-
-      function isExistingOwner(userId) {
-        return isOwner(userId) && resource != null;
-      }
-
-      allow get, list: if isOwner(userId);
-      allow create: if isOwner(userId) && request.resource.data.userId == userId;
-      allow update: if isExistingOwner(userId) && request.resource.data.userId == resource.data.userId;
-      allow delete: if isExistingOwner(userId);
+      allow get: if isSignedIn() && isOwner(userId);
+      allow list: if isSignedIn() && isOwner(userId);
+      allow create: if isSignedIn() && isOwner(userId) && request.resource.data.userId == userId;
+      allow update: if isSignedIn() && isExistingOwner(userId) && request.resource.data.userId == userId;
+      allow delete: if isSignedIn() && isExistingOwner(userId);
     }
+  }
 
-    function isSignedIn() {
-      return request.auth != null;
-    }
+  // Helper functions
+  function isSignedIn() {
+    return request.auth != null;
+  }
+
+  function isOwner(userId) {
+    return request.auth.uid == userId;
+  }
+
+  function isExistingOwner(userId) {
+    return isSignedIn() && isOwner(userId) && resource != null;
   }
 }
