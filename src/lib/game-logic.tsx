@@ -1,5 +1,5 @@
 'use client';
-import type { MathProblem, Tile, User } from './types';
+import type { MathProblem, Tile, User, ProblemSubType } from './types';
 import { isLand } from './world-map-shape';
 import React from 'react';
 
@@ -30,6 +30,7 @@ const generateDecimalProblem = (): MathProblem => {
   const operation = Math.random() > 0.5 ? 'add' : 'subtract';
   let num1 = round(Math.random() * (isAdvanced ? 50 : 20), isAdvanced ? 2 : 1);
   let num2 = round(Math.random() * (isAdvanced ? 50 : 20), isAdvanced ? 2 : 1);
+  let subType: ProblemSubType = operation === 'add' ? 'decimal-add' : 'decimal-subtract';
 
   if (operation === 'subtract' && num1 < num2) {
     [num1, num2] = [num2, num1]; // Ensure positive result
@@ -42,6 +43,7 @@ const generateDecimalProblem = (): MathProblem => {
     problem,
     answer: round(answer, 2),
     type: 'decimal',
+    subType: subType,
   };
 };
 
@@ -66,6 +68,8 @@ const simpleFractionCalc = (): MathProblem => {
     let num1 = randomInt(1, den - 1);
     let num2 = randomInt(1, den - 1);
     const op = Math.random() > 0.5 ? 'add' : 'subtract';
+    const subType: ProblemSubType = op === 'add' ? 'fraction-add-same-den' : 'fraction-subtract-same-den';
+
 
     if (op === 'subtract' && num1 < num2) {
         [num1, num2] = [num2, num1];
@@ -80,11 +84,12 @@ const simpleFractionCalc = (): MathProblem => {
         </span>
     );
     const answerNum = op === 'add' ? num1 + num2 : num1 - num2;
-    return { problem, answer: round(answerNum / den, 4), type: 'fraction' };
+    return { problem, answer: round(answerNum / den, 4), type: 'fraction', subType };
 }
 
 const mixedFractionCalc = (): MathProblem => {
     const op = Math.random() > 0.5 ? 'add' : 'subtract';
+    const subType: ProblemSubType = op === 'add' ? 'fraction-add-mixed' : 'fraction-subtract-mixed';
     const den = randomInt(5, 12);
 
     let int1 = randomInt(1, 5);
@@ -92,11 +97,12 @@ const mixedFractionCalc = (): MathProblem => {
     let int2 = randomInt(1, 5);
     let num2 = randomInt(1, den - 1);
     
-    const val1 = int1 + num1 / den;
-    const val2 = int2 + num2 / den;
+    let val1 = int1 + num1 / den;
+    let val2 = int2 + num2 / den;
 
     if (op === 'subtract' && val1 < val2) {
         [int1, num1, int2, num2] = [int2, num2, int1, num1];
+        [val1, val2] = [val2, val1];
     }
 
     const problem = (
@@ -109,7 +115,7 @@ const mixedFractionCalc = (): MathProblem => {
     );
     const answerVal = op === 'add' ? val1 + val2 : val1 - val2;
 
-    return { problem, answer: round(answerVal, 4), type: 'fraction' };
+    return { problem, answer: round(answerVal, 4), type: 'fraction', subType };
 }
 
 const integerFractionCalc = (): MathProblem => {
@@ -126,7 +132,7 @@ const integerFractionCalc = (): MathProblem => {
         </span>
     );
     const answer = int - (num/den);
-    return { problem, answer: round(answer, 4), type: 'fraction' };
+    return { problem, answer: round(answer, 4), type: 'fraction', subType: 'fraction-subtract-from-int' };
 }
 
 const commonDenominatorFractionCalc = (): MathProblem => {
@@ -135,12 +141,15 @@ const commonDenominatorFractionCalc = (): MathProblem => {
     let num1 = randomInt(1, den1 - 1);
     let num2 = randomInt(1, den2 - 1);
     const op = Math.random() > 0.5 ? 'add' : 'subtract';
+    const subType: ProblemSubType = op === 'add' ? 'fraction-add-diff-den' : 'fraction-subtract-diff-den';
 
-    const val1 = num1/den1;
-    const val2 = num2/den2;
+
+    let val1 = num1/den1;
+    let val2 = num2/den2;
 
     if (op === 'subtract' && val1 < val2) {
         [num1, den1, num2, den2] = [num2, den2, num1, den1];
+        [val1, val2] = [val2, val1];
     }
 
     const problem = (
@@ -153,7 +162,7 @@ const commonDenominatorFractionCalc = (): MathProblem => {
     );
     const answer = op === 'add' ? val1 + val2 : val1 - val2;
 
-    return { problem, answer: round(answer, 4), type: 'fraction' };
+    return { problem, answer: round(answer, 4), type: 'fraction', subType };
 }
 
 

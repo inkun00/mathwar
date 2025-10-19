@@ -1,15 +1,24 @@
+'use client';
+
 import { Logo } from "@/components/icons/logo";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import type { User } from "@/lib/types";
-import { UserCircle, HelpCircle } from "lucide-react";
+import { UserCircle, HelpCircle, User as UserIcon } from "lucide-react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import ProfileSheet from "./profile-sheet";
+import type { Country, ProblemAttempt } from "@/lib/types";
 
 interface HeaderProps {
   currentUser: User;
   onSolveProblemClick: () => void;
+  countries: Country[];
+  problemAttempts: ProblemAttempt[];
 }
 
-export default function Header({ currentUser, onSolveProblemClick }: HeaderProps) {
+export default function Header({ currentUser, onSolveProblemClick, countries, problemAttempts }: HeaderProps) {
+  const userCountry = countries.find(c => c.id === currentUser.countryId);
+
   return (
     <header className="w-full max-w-7xl rounded-lg border bg-card/80 p-4 shadow-md backdrop-blur-sm">
       <div className="flex items-center justify-between">
@@ -19,7 +28,7 @@ export default function Header({ currentUser, onSolveProblemClick }: HeaderProps
             소수 정복
           </h1>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 sm:gap-4">
           <div className="hidden items-center gap-3 sm:flex">
             <UserCircle className="h-6 w-6 text-muted-foreground" />
             <div className="text-right">
@@ -29,7 +38,27 @@ export default function Header({ currentUser, onSolveProblemClick }: HeaderProps
               </p>
             </div>
           </div>
-          <Separator orientation="vertical" className="h-10 hidden sm:block" />
+          
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button variant="ghost" size="icon">
+                <UserIcon className="h-5 w-5" />
+                <span className="sr-only">프로필 보기</span>
+              </Button>
+            </SheetTrigger>
+            <SheetContent>
+              <SheetHeader>
+                <SheetTitle>내 프로필</SheetTitle>
+              </SheetHeader>
+              <ProfileSheet 
+                currentUser={currentUser} 
+                userCountry={userCountry}
+                problemAttempts={problemAttempts}
+              />
+            </SheetContent>
+          </Sheet>
+
+          <Separator orientation="vertical" className="h-10" />
           <Button onClick={onSolveProblemClick}>
             <HelpCircle className="mr-2 h-4 w-4" />
             문제 풀기

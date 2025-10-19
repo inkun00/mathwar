@@ -15,12 +15,16 @@ import { useToast } from '@/hooks/use-toast';
 import type { MathProblem } from '@/lib/types';
 import { useState, type FormEvent, useEffect } from 'react';
 import { CheckCircle, XCircle } from 'lucide-react';
+import { useFirestore } from '@/firebase';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+
 
 interface ProblemModalProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
   problem: MathProblem | null;
   onCorrectAnswer: () => void;
+  userId?: string;
 }
 
 // Function to parse a simple decimal/integer string
@@ -37,12 +41,14 @@ export default function ProblemModal({
   onOpenChange,
   problem,
   onCorrectAnswer,
+  userId
 }: ProblemModalProps) {
   const [answer, setAnswer] = useState('');
   const [integerPart, setIntegerPart] = useState('');
   const [numeratorPart, setNumeratorPart] = useState('');
   const [denominatorPart, setDenominatorPart] = useState('');
   const { toast } = useToast();
+  const firestore = useFirestore();
 
   useEffect(() => {
     if (isOpen) {
@@ -53,11 +59,27 @@ export default function ProblemModal({
     }
   }, [isOpen]);
 
+  const recordAttempt = async (isCorrect: boolean) => {
+    if (!userId || !firestore || !problem) return;
+    try {
+      await addDoc(collection(firestore, 'users', userId, 'problem_attempts'), {
+        userId: userId,
+        unit: problem.type,
+        area: problem.subType,
+        correct: isCorrect,
+        timestamp: serverTimestamp(),
+      });
+    } catch (error) {
+      console.error("Error recording problem attempt:", error);
+    }
+  };
+
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (!problem) return;
 
     let userAnswer: number | null = null;
+    let isCorrect = false;
 
     if (problem.type === 'fraction') {
         const integer = parseInt(integerPart || '0', 10);
@@ -80,6 +102,7 @@ export default function ProblemModal({
     
     // Check if userAnswer is close enough to the correct answer to handle floating point issues
     if (userAnswer !== null && Math.abs(userAnswer - problem.answer) < 0.001) {
+      isCorrect = true;
       toast({
         title: "정답입니다!",
         description: "확장 토큰을 획득했습니다.",
@@ -88,6 +111,7 @@ export default function ProblemModal({
       });
       onCorrectAnswer();
     } else {
+      isCorrect = false;
       toast({
         variant: 'destructive',
         title: "오답입니다",
@@ -96,6 +120,7 @@ export default function ProblemModal({
       });
     }
     
+    recordAttempt(isCorrect);
     onOpenChange(false);
   };
 

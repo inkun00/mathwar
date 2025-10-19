@@ -7,7 +7,7 @@ import { useUser } from "@/firebase/auth/use-user";
 import { useDoc, useFirestore, useMemoFirebase, useCollection } from "@/firebase";
 import { doc, collection, query, where } from "firebase/firestore";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { User as GameUser, Country, Tile } from "@/lib/types";
+import type { User as GameUser, Country, Tile, ProblemAttempt } from "@/lib/types";
 
 export default function Home() {
   const { user: authUser, isUserLoading: isAuthUserLoading } = useUser();
@@ -33,13 +33,18 @@ export default function Home() {
     return collection(firestore, 'users');
   }, [firestore]);
 
+  const problemAttemptsQuery = useMemoFirebase(() => {
+    if (!firestore || !authUser) return null;
+    return collection(firestore, 'users', authUser.uid, 'problem_attempts');
+  }, [firestore, authUser]);
 
   const { data: userProfile, isLoading: isProfileLoading } = useDoc<GameUser>(userDocRef);
   const { data: countries, isLoading: areCountriesLoading } = useCollection<Country>(countriesQuery);
   const { data: landTiles, isLoading: areLandTilesLoading } = useCollection<Tile>(landTilesQuery);
   const { data: users, isLoading: areUsersLoading } = useCollection<GameUser>(usersQuery);
+  const { data: problemAttempts, isLoading: areAttemptsLoading } = useCollection<ProblemAttempt>(problemAttemptsQuery);
   
-  const isLoading = isAuthUserLoading || isProfileLoading || areCountriesLoading || areLandTilesLoading || areUsersLoading;
+  const isLoading = isAuthUserLoading || isProfileLoading || areCountriesLoading || areLandTilesLoading || areUsersLoading || areAttemptsLoading;
 
   if (isLoading) {
     return (
@@ -61,7 +66,7 @@ export default function Home() {
     return <SignUpDetails />;
   }
 
-  if (authUser && userProfile && countries && landTiles && users) {
+  if (authUser && userProfile && countries && landTiles && users && problemAttempts) {
     return (
       <div className="relative flex h-screen w-full flex-col items-center bg-background p-4 sm:p-6 md:p-8">
         <GameBoard 
@@ -69,6 +74,7 @@ export default function Home() {
           countries={countries}
           landTiles={landTiles}
           currentUserProfile={userProfile}
+          problemAttempts={problemAttempts}
         />
       </div>
     );

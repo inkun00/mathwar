@@ -27,9 +27,30 @@ export interface Tile {
 export type MapData = Tile[][];
 
 export type ProblemType = 'decimal' | 'fraction';
+export type ProblemSubType = 
+  | 'decimal-add' 
+  | 'decimal-subtract'
+  | 'fraction-add-same-den'
+  | 'fraction-subtract-same-den'
+  | 'fraction-add-mixed'
+  | 'fraction-subtract-mixed'
+  | 'fraction-subtract-from-int'
+  | 'fraction-add-diff-den'
+  | 'fraction-subtract-diff-den';
+
 
 export interface MathProblem {
   problem: ReactNode;
   answer: number; // All answers are handled as numbers, fractions will be converted.
   type: ProblemType;
+  subType: ProblemSubType;
+}
+
+export interface ProblemAttempt {
+    id: string;
+    userId: string;
+    unit: ProblemType;
+    area: ProblemSubType;
+    correct: boolean;
+    timestamp: any; // Firestore ServerTimestamp
 }

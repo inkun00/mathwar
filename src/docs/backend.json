@@ -1,0 +1,171 @@
+{
+  "entities": {
+    "User": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "User",
+      "type": "object",
+      "description": "Represents a user of the Decimal Conquest game.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the User entity."
+        },
+        "email": {
+          "type": "string",
+          "description": "User's email address.",
+          "format": "email"
+        },
+        "nickname": {
+          "type": "string",
+          "description": "The user's display name."
+        },
+        "countryId": {
+          "type": "string",
+          "description": "Reference to the Country this user belongs to."
+        }
+      },
+      "required": [
+        "id",
+        "email",
+        "nickname",
+        "countryId"
+      ]
+    },
+    "Country": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Country",
+      "type": "object",
+      "description": "Represents a country created by a user.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Country entity."
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the country."
+        },
+        "createdBy": {
+          "type": "string",
+          "description": "The UID of the user who created the country."
+        }
+      },
+      "required": ["id", "name", "createdBy"]
+    },
+    "LandTile": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "LandTile",
+      "type": "object",
+      "description": "Represents a single land tile on the game map.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the LandTile entity."
+        },
+        "x": {
+          "type": "number",
+          "description": "X-coordinate of the land tile on the map."
+        },
+        "y": {
+          "type": "number",
+          "description": "Y-coordinate of the land tile on the map."
+        },
+        "ownerId": {
+          "type": "string",
+          "description": "Reference to the User who owns this land tile. (Relationship: User 1:N LandTile)"
+        }
+      },
+      "required": [
+        "id",
+        "x",
+        "y",
+        "ownerId"
+      ]
+    },
+    "ProblemAttempt": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "title": "ProblemAttempt",
+        "type": "object",
+        "description": "Represents a user's attempt at solving a math problem.",
+        "properties": {
+            "id": { "type": "string" },
+            "userId": { "type": "string" },
+            "unit": { "type": "string", "enum": ["decimal", "fraction"] },
+            "area": { "type": "string" },
+            "correct": { "type": "boolean" },
+            "timestamp": { "type": "string", "format": "date-time" }
+        },
+        "required": ["userId", "unit", "area", "correct", "timestamp"]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/users/{userId}",
+        "definition": {
+          "entityName": "user",
+          "schema": {
+            "$ref": "#/backend/entities/User"
+          },
+          "description": "Stores user profiles. Path-based ownership ensures only the user can modify their own profile.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier of the user."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/countries/{countryId}",
+        "definition": {
+          "entityName": "country",
+          "schema": {
+            "$ref": "#/backend/entities/Country"
+          },
+          "description": "Stores all countries created by users. Accessible to all authenticated users.",
+          "params": [
+            {
+              "name": "countryId",
+              "description": "The unique identifier of the country."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/land_tiles/{landTileId}",
+        "definition": {
+          "entityName": "landTile",
+          "schema": {
+            "$ref": "#/backend/entities/LandTile"
+          },
+          "description": "Stores all land tiles on the game map. Includes denormalized 'ownerId' for authorization independence.",
+          "params": [
+            {
+              "name": "landTileId",
+              "description": "The unique identifier of the land tile."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/problem_attempts/{attemptId}",
+        "definition": {
+            "entityName": "problemAttempt",
+            "schema": { "$ref": "#/backend/entities/ProblemAttempt" },
+            "description": "Stores each attempt a user makes on a problem for analytics.",
+            "params": [
+                { "name": "userId", "description": "The UID of the user." },
+                { "name": "attemptId", "description": "The unique ID for the attempt." }
+            ]
+        }
+      }
+    ]
+  }
+}

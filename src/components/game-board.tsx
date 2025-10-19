@@ -1,12 +1,12 @@
 'use client';
 
 import { useState, useMemo, useEffect } from "react";
-import type { Tile, MathProblem, Country, User } from "@/lib/types";
+import type { Tile, MathProblem, Country, User, ProblemAttempt } from "@/lib/types";
 import { generateMathProblem, isAdjacent, getAIMove } from "@/lib/game-logic";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { ZoomIn, ZoomOut } from "lucide-react";
-import { useFirestore } from "@/firebase";
+import { useFirestore, useUser } from "@/firebase";
 import { doc, setDoc, updateDoc, writeBatch } from "firebase/firestore";
 
 import Header from "./header";
@@ -20,6 +20,7 @@ interface GameBoardProps {
   countries: Country[];
   landTiles: Tile[];
   currentUserProfile: User;
+  problemAttempts: ProblemAttempt[];
 }
 
 const aiUsers: Omit<User, 'uid' | 'countryId' | 'email'>[] = [
@@ -27,8 +28,9 @@ const aiUsers: Omit<User, 'uid' | 'countryId' | 'email'>[] = [
   { id: "player3", nickname: "AI 플레이어 B", color: "hsl(340, 80%, 60%)", tokens: 1 },
 ];
 
-export default function GameBoard({ users, countries, landTiles, currentUserProfile }: GameBoardProps) {
+export default function GameBoard({ users, countries, landTiles, currentUserProfile, problemAttempts }: GameBoardProps) {
   const firestore = useFirestore();
+  const { user: authUser } = useUser();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentProblem, setCurrentProblem] = useState<MathProblem | null>(null);
   const { toast } = useToast();
@@ -195,7 +197,12 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
 
   return (
     <div className="flex w-full flex-grow flex-col gap-6">
-      <Header currentUser={currentUser} onSolveProblemClick={handleSolveProblemClick} />
+      <Header 
+        currentUser={currentUser} 
+        onSolveProblemClick={handleSolveProblemClick} 
+        countries={countries}
+        problemAttempts={problemAttempts}
+      />
       <div className="relative h-full w-full max-w-7xl flex-grow">
         <WorldMap mapData={mapData} users={allUsers} countries={countries} onTileClick={handleTileClick} canConquer={canConquer} zoomLevel={zoomLevel} />
         <div className="absolute bottom-4 right-4 flex gap-2">
@@ -212,6 +219,7 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
         onOpenChange={setIsModalOpen}
         problem={currentProblem}
         onCorrectAnswer={handleCorrectAnswer}
+        userId={authUser?.uid}
       />
       {isDemise && <DemiseScreen onRestart={handleRestart} />}
     </div>
