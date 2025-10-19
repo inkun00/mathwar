@@ -1,98 +1,82 @@
 /**
- * @fileoverview Firestore Security Rules for the Decimal Conquest game.
+ * @fileoverview Firestore Security Rules for Decimal Conquest.
  *
  * Core Philosophy:
  * This ruleset enforces a user-ownership model for user profiles and territory expansions,
- * and public read access with owner-only writes for countries and land tiles.
+ * while allowing public read access to countries, land tiles, and problems.
+ * Authorization Independence is achieved through denormalization of ownership data
+ * directly on the secured documents. Data shape is not strictly validated during this prototyping phase.
  *
  * Data Structure:
- * - /users/{userId}: Stores user profiles; only the user can modify their own profile.
- * - /countries/{countryId}: Stores country data; publicly readable, but only the creator can modify.
- * - /land_tiles/{landTileId}: Stores land tile data; publicly readable, but only the owner can modify.
- * - /problems/{problemId}: Stores math problems; publicly readable.
- * - /users/{userId}/territory_expansions/{territoryExpansionId}: Stores territory expansion events; only the user can modify their own expansion records.
+ * - /users/{userId}: Stores user profiles. Only the user can modify their own profile.
+ * - /countries/{countryId}: Stores countries created by users. Publicly readable.
+ * - /land_tiles/{landTileId}: Stores land tiles. Publicly readable.
+ * - /problems/{problemId}: Stores math problems. Publicly readable.
+ * - /users/{userId}/territory_expansions/{territoryExpansionId}: Stores territory expansion events for each user. Only the user can modify their own expansion records.
  *
  * Key Security Decisions:
- * - Users can only read and write their own user documents and territory expansion records.
- * - Countries and land tiles are publicly readable, but only the owner can modify them.
- * - Problems are publicly readable.
- * - Listing all users is disallowed, but listing land tiles is allowed.
- *
- * Denormalization for Authorization:
- * - LandTile documents include the `ownerId` to allow security rules to validate ownership without needing to `get()` the user document.
+ * - User listing is disallowed.
+ * - Public read access is granted to countries, land tiles, and problems.
+ * - Ownership is enforced using the 'ownerId' and 'userId' fields.
  */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * @description Manages user profile data. Only the user can read/write their own profile.
+     * @description Protects user profiles. Only the user can read and write their own profile.
      * @path /users/{userId}
-     * @allow (create) - User 'test_user' (auth.uid: test_user) can create their own profile.
-     * @allow (update) - User 'test_user' (auth.uid: test_user) can update their own profile.
-     * @allow (delete) - User 'test_user' (auth.uid: test_user) can delete their own profile.
-     * @deny (create) - User 'other_user' (auth.uid: other_user) cannot create a profile with ID 'test_user'.
-     * @deny (update) - User 'other_user' (auth.uid: other_user) cannot update the profile of 'test_user'.
-     * @deny (delete) - User 'other_user' (auth.uid: other_user) cannot delete the profile of 'test_user'.
+     * @allow (create) User 'KumdUsQyzTbOTiOaD3oEVgXfZnA3' can create their profile if request.auth.uid == userId
+     * @allow (get, update, delete) User 'KumdUsQyzTbOTiOaD3oEVgXfZnA3' can get, update, or delete their profile if request.auth.uid == userId
+     * @deny (create) User 'KumdUsQyzTbOTiOaD3oEVgXfZnA3' cannot create a profile with a mismatched userId
+     * @deny (get, update, delete) User 'otherUserId' cannot get, update, or delete User 'KumdUsQyzTbOTiOaD3oEVgXfZnA3' profile
      * @principle Enforces document ownership for writes.
      */
     match /users/{userId} {
-      allow get: if isSignedIn();
+      allow get: if isOwner(userId);
       allow list: if false;
-      allow create: if isOwner(userId) && request.resource.data.id == userId;
-      allow update: if isExistingOwner(userId) && request.resource.data.id == resource.data.id;
+      allow create: if isOwner(userId);
+      allow update: if isExistingOwner(userId);
       allow delete: if isExistingOwner(userId);
     }
 
     /**
-     * @description Manages country data. Publicly readable, but only the creator can modify.
+     * @description Allows anyone to read countries. Only authenticated users can create a country. Only the creating user can update/delete.
      * @path /countries/{countryId}
-     * @allow (get) - Any signed-in user can read any country.
-     * @allow (list) - Any signed-in user can list countries.
-     * @allow (create) - User 'test_user' (auth.uid: test_user) can create a country with createdBy: 'test_user'.
-     * @allow (update) - User 'test_user' (auth.uid: test_user) can update a country where resource.data.createdBy == 'test_user'.
-     * @allow (delete) - User 'test_user' (auth.uid: test_user) can delete a country where resource.data.createdBy == 'test_user'.
-     * @deny (create) - User 'other_user' (auth.uid: other_user) cannot create a country with createdBy: 'test_user'.
-     * @deny (update) - User 'other_user' (auth.uid: other_user) cannot update a country where resource.data.createdBy == 'test_user'.
-     * @deny (delete) - User 'other_user' (auth.uid: other_user) cannot delete a country where resource.data.createdBy == 'test_user'.
-     * @principle Public read, owner-only writes.
+     * @allow (get, list) Any user can get and list countries.
+     * @allow (create) User 'KumdUsQyzTbOTiOaD3oEVgXfZnA3' can create a country.
+     * @allow (update, delete) User 'KumdUsQyzTbOTiOaD3oEVgXfZnA3' can update/delete a country they created.
+     * @deny (update, delete) User 'otherUserId' cannot update/delete a country created by User 'KumdUsQyzTbOTiOaD3oEVgXfZnA3'.
+     * @principle Allows public read access with owner-only writes.
      */
     match /countries/{countryId} {
-      allow get, list: if isSignedIn();
-      allow create: if isSignedIn() && request.resource.data.createdBy == request.auth.uid;
+      allow get, list: if true;
+      allow create: if isSignedIn();
       allow update: if isExistingOwner(resource.data.createdBy);
       allow delete: if isExistingOwner(resource.data.createdBy);
     }
 
     /**
-     * @description Manages land tile data. Publicly readable, but only the owner can modify.
+     * @description Allows anyone to read land tiles. Only the owner can update/delete, which is asserted via `ownerId`.
      * @path /land_tiles/{landTileId}
-     * @allow (get) - Any signed-in user can read any land tile.
-     * @allow (list) - Any signed-in user can list land tiles.
-     * @allow (create) - User 'test_user' (auth.uid: test_user) can create a land tile with ownerId: 'test_user'.
-     * @allow (update) - User 'test_user' (auth.uid: test_user) can update a land tile where resource.data.ownerId == 'test_user'.
-     * @allow (delete) - User 'test_user' (auth.uid: test_user) can delete a land tile where resource.data.ownerId == 'test_user'.
-     * @deny (create) - User 'other_user' (auth.uid: other_user) cannot create a land tile with ownerId: 'test_user'.
-     * @deny (update) - User 'other_user' (auth.uid: other_user) cannot update a land tile where resource.data.ownerId == 'test_user'.
-     * @deny (delete) - User 'other_user' (auth.uid: other_user) cannot delete a land tile where resource.data.ownerId == 'test_user'.
-     * @principle Public read, owner-only writes.
+     * @allow (get, list) Any user can get and list land tiles.
+     * @allow (create) Only the app/script to write data to Firestore, and it must contain an `ownerId`.
+     * @allow (update, delete) The user with `uid == ownerId` in the existing document, can modify it.
+     * @principle Allows public read access with owner-only writes.
      */
     match /land_tiles/{landTileId} {
       allow get, list: if true;
-      allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
+      allow create: if false;  // Only backend processes should create land tiles
       allow update: if isExistingOwner(resource.data.ownerId);
       allow delete: if isExistingOwner(resource.data.ownerId);
     }
 
     /**
-     * @description Manages math problem data. Publicly readable.
+     * @description Allows anyone to read problems. Problems are read-only, and only created by backend scripts.
      * @path /problems/{problemId}
-     * @allow (get) - Any signed-in user can read any problem.
-     * @allow (list) - Any signed-in user can list problems.
-     * @deny (create) - No one can create problems.
-     * @deny (update) - No one can update problems.
-     * @deny (delete) - No one can delete problems.
-     * @principle Public read, no writes.
+     * @allow (get, list) Any user can get and list problems.
+     * @deny (create, update, delete) No user can create, update, or delete problems.
+     * @principle Read-only collection.
      */
     match /problems/{problemId} {
       allow get, list: if true;
@@ -102,35 +86,47 @@ service cloud.firestore {
     }
 
     /**
-     * @description Manages territory expansion data for each user. Only the user can read/write their own expansion records.
+     * @description Protects territory expansion records. Only the user can read and write their own records.
      * @path /users/{userId}/territory_expansions/{territoryExpansionId}
-     * @allow (create) - User 'test_user' (auth.uid: test_user) can create a territory expansion record under their own user ID.
-     * @allow (update) - User 'test_user' (auth.uid: test_user) can update a territory expansion record under their own user ID.
-     * @allow (delete) - User 'test_user' (auth.uid: test_user) can delete a territory expansion record under their own user ID.
-     * @deny (create) - User 'other_user' (auth.uid: other_user) cannot create a territory expansion record under user ID 'test_user'.
-     * @deny (update) - User 'other_user' (auth.uid: other_user) cannot update a territory expansion record under user ID 'test_user'.
-     * @deny (delete) - User 'other_user' (auth.uid: other_user) cannot delete a territory expansion record under user ID 'test_user'.
+     * @allow (create) User 'KumdUsQyzTbOTiOaD3oEVgXfZnA3' can create a territory expansion if request.auth.uid == userId
+     * @allow (get, list, update, delete) User 'KumdUsQyzTbOTiOaD3oEVgXfZnA3' can get, list, update, or delete their territory expansion if request.auth.uid == userId
+     * @deny (create) User 'KumdUsQyzTbOTiOaD3oEVgXfZnA3' cannot create a territory expansion with a mismatched userId
+     * @deny (get, list, update, delete) User 'otherUserId' cannot get, list, update, or delete User 'KumdUsQyzTbOTiOaD3oEVgXfZnA3' territory expansion
      * @principle Enforces document ownership for writes.
      */
     match /users/{userId}/territory_expansions/{territoryExpansionId} {
-      allow get: if isOwner(userId);
-      allow list: if isOwner(userId);
-      allow create: if isOwner(userId) && request.resource.data.userId == userId;
-      allow update: if isExistingOwner(userId) && request.resource.data.userId == resource.data.userId;
+      allow get, list: if isOwner(userId);
+      allow create: if isOwner(userId);
+      allow update: if isExistingOwner(userId);
       allow delete: if isExistingOwner(userId);
     }
-  }
 
-  // Helper functions
-  function isSignedIn() {
-    return request.auth != null;
-  }
+    // ---- Helper functions ----
 
-  function isOwner(userId) {
-    return request.auth.uid == userId;
-  }
+    /**
+     * @description Checks if the current user is signed in.
+     * @return {bool} True if the user is signed in, false otherwise.
+     */
+    function isSignedIn() {
+      return request.auth != null;
+    }
 
-  function isExistingOwner(ownerId) {
-      return isSignedIn() && request.auth.uid == ownerId && resource != null;
+    /**
+     * @description Checks if the current user is the owner of the resource based on userId.
+     * @param {string} userId The user ID to compare against the request's auth UID.
+     * @return {bool} True if the user is the owner, false otherwise.
+     */
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    /**
+     * @description Checks if the current user is the owner of the resource and the resource exists.
+     * @param {string} userId The user ID to compare against the request's auth UID.
+     * @return {bool} True if the user is the owner and resource exists, false otherwise.
+     */
+    function isExistingOwner(userId) {
+        return isOwner(userId) && resource != null;
+    }
   }
 }
