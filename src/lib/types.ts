@@ -1,5 +1,6 @@
 export interface User {
-  id: string;
+  id: string; // Firebase UID for human, or some unique ID for AI
+  uid: string;
   name: string;
   color: string;
   tokens: number;

@@ -1,12 +1,13 @@
 'use client';
 
 import { useState, useMemo, useEffect } from "react";
-import type { GameData, Tile, DecimalProblem, User } from "@/lib/types";
+import type { GameData, Tile, DecimalProblem } from "@/lib/types";
 import { awardToken, conquerTile, restartPlayer } from "@/lib/data";
 import { generateDecimalProblem, isAdjacent, getAIMove } from "@/lib/game-logic";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { ZoomIn, ZoomOut } from "lucide-react";
+import { useUser } from "@/firebase/auth/use-user";
 
 import Header from "./header";
 import WorldMap from "./world-map";
@@ -19,6 +20,7 @@ interface GameBoardProps {
 }
 
 export default function GameBoard({ initialData }: GameBoardProps) {
+  const { user } = useUser();
   const [gameState, setGameState] = useState<GameData>(initialData);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentProblem, setCurrentProblem] = useState<DecimalProblem | null>(null);
@@ -112,6 +114,15 @@ export default function GameBoard({ initialData }: GameBoardProps) {
     // Otherwise, they must conquer adjacent tiles.
     return isAdjacent(tile.x, tile.y, userTiles);
   };
+
+  if (!currentUser || !user) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-background">
+        <p>사용자를 불러오는 중...</p>
+      </div>
+    )
+  }
+
 
   return (
     <div className="flex w-full flex-grow flex-col gap-6">

@@ -1,8 +1,8 @@
-export const MAP_WIDTH = 36;
-export const MAP_HEIGHT = 30;
+export const MAP_WIDTH = 72;
+export const MAP_HEIGHT = 60;
 
 // A 2D array representing a simple world shape. 1 = land, 0 = water.
-const mapShape = [
+const mapShapePattern = [
   "111111111111111111111111111111111111",
   "111111111111111111111111111111111111",
   "111111111111000000000111111111111111",
@@ -34,6 +34,18 @@ const mapShape = [
   "111111111111111111111111111111111111",
   "111111111111111111111111111111111111",
 ];
+
+const expandedMapShape = Array.from({ length: MAP_HEIGHT }, (_, y) => {
+  const rowPattern = mapShapePattern[y % mapShapePattern.length];
+  let row = '';
+  while (row.length < MAP_WIDTH) {
+    row += rowPattern;
+  }
+  return row.substring(0, MAP_WIDTH);
+});
+
+export const mapShape: string[] = expandedMapShape;
+
 
 export const isLand = (x: number, y: number): boolean => {
   if (y >= 0 && y < MAP_HEIGHT && x >= 0 && x < MAP_WIDTH) {

@@ -1,5 +1,6 @@
-import type { GameData, User, MapData, Tile } from "./types";
+import type { GameData, User, MapData } from "./types";
 import { isLand, MAP_WIDTH, MAP_HEIGHT } from "./world-map-shape";
+import type { User as FirebaseUser } from 'firebase/auth';
 
 const userColors = [
   "hsl(148, 64%, 58%)", // primary
@@ -9,13 +10,15 @@ const userColors = [
   "hsl(280, 80%, 60%)",
 ];
 
-let users: User[] = [
-  { id: "player1", name: "나", color: userColors[0], tokens: 1 },
+const aiUsers: Omit<User, 'uid'>[] = [
   { id: "player2", name: "AI 플레이어 A", color: userColors[1], tokens: 1 },
   { id: "player3", name: "AI 플레이어 B", color: userColors[2], tokens: 1 },
 ];
 
-const generateInitialMap = (): MapData => {
+let mapData: MapData | null = null;
+let gameData: GameData | null = null;
+
+const generateInitialMap = (allUsers: User[]): MapData => {
   const map: MapData = Array.from({ length: MAP_HEIGHT }, (_, y) =>
     Array.from({ length: MAP_WIDTH }, (__, x) => ({
       x,
@@ -28,15 +31,17 @@ const generateInitialMap = (): MapData => {
   const assignedCoordinates: { x: number; y: number }[] = [];
   const minDistance = 10;
 
-  users.forEach(user => {
+  allUsers.forEach(user => {
     // Human player starts by choosing a tile
-    if (user.id === 'player1') return;
+    if (user.id === user.uid) return;
 
     let validPosition = false;
     let x = 0, y = 0;
-    while (!validPosition) {
+    let attempts = 0;
+    while (!validPosition && attempts < 100) {
       x = Math.floor(Math.random() * MAP_WIDTH);
       y = Math.floor(Math.random() * MAP_HEIGHT);
+      attempts++;
 
       if (!isLand(x, y)) continue;
 
@@ -52,31 +57,54 @@ const generateInitialMap = (): MapData => {
         }
       }
     }
-    map[y][x].ownerId = user.id;
-    assignedCoordinates.push({ x, y });
+    if(validPosition) {
+      map[y][x].ownerId = user.id;
+      assignedCoordinates.push({ x, y });
+    }
   });
 
   return map;
 };
 
+const createNewGameData = (firebaseUser: FirebaseUser): GameData => {
+  const humanPlayer: User = {
+    id: firebaseUser.uid,
+    uid: firebaseUser.uid,
+    name: firebaseUser.displayName || '나',
+    color: userColors[0],
+    tokens: 1
+  };
+  
+  const allUsers = [humanPlayer, ...aiUsers.map(ai => ({ ...ai, uid: ai.id }))];
+  const newMapData = generateInitialMap(allUsers);
+  
+  return {
+    users: allUsers,
+    mapData: newMapData,
+    currentPlayerId: firebaseUser.uid,
+  };
+}
 
-let mapData: MapData = generateInitialMap();
-
-let gameData: GameData = {
-  users,
-  mapData,
-  currentPlayerId: "player1",
-};
 
 // This is a simple in-memory store.
 // A real app would use a database like Firestore.
 const deepCopy = <T>(obj: T): T => JSON.parse(JSON.stringify(obj));
 
-export const getGameData = (): GameData => {
+export const getGameData = (firebaseUser: FirebaseUser | null): GameData => {
+  if (!firebaseUser) {
+    // Should not happen if UI is controlled properly, but as a fallback
+    return { users: [], mapData: [], currentPlayerId: '' };
+  }
+  if (!gameData || gameData.currentPlayerId !== firebaseUser.uid) {
+    // Create new game data if it doesn't exist or if the user is different
+    gameData = createNewGameData(firebaseUser);
+    mapData = gameData.mapData;
+  }
   return deepCopy(gameData);
 };
 
 export const awardToken = (userId: string): GameData => {
+  if (!gameData) return getGameData(null);
   const user = gameData.users.find(u => u.id === userId);
   if (user) {
     user.tokens += 1;
@@ -90,6 +118,7 @@ export const awardToken = (userId: string): GameData => {
 }
 
 export const conquerTile = (userId: string, x: number, y: number): GameData => {
+  if (!gameData || !mapData) return getGameData(null);
   const user = gameData.users.find(u => u.id === userId);
   // This function is called for both player and AI, so tokens can be 0 for AI
   if (!user || user.tokens <= 0) {
@@ -105,6 +134,7 @@ export const conquerTile = (userId: string, x: number, y: number): GameData => {
 }
 
 export const restartPlayer = (userId: string): GameData => {
+  if (!gameData || !mapData) return getGameData(null);
   const user = gameData.users.find(u => u.id === userId);
   if (!user) return deepCopy(gameData);
 
