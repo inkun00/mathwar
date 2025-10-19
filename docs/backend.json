@@ -1,0 +1,195 @@
+{
+  "entities": {
+    "User": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "User",
+      "type": "object",
+      "description": "Represents a user of the Decimal Conquest game.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the User entity."
+        },
+        "email": {
+          "type": "string",
+          "description": "User's email address.",
+          "format": "email"
+        },
+        "username": {
+          "type": "string",
+          "description": "The user's display name."
+        }
+      },
+      "required": [
+        "id",
+        "email",
+        "username"
+      ]
+    },
+    "LandTile": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "LandTile",
+      "type": "object",
+      "description": "Represents a single land tile on the game map.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the LandTile entity."
+        },
+        "x": {
+          "type": "number",
+          "description": "X-coordinate of the land tile on the map."
+        },
+        "y": {
+          "type": "number",
+          "description": "Y-coordinate of the land tile on the map."
+        },
+        "ownerId": {
+          "type": "string",
+          "description": "Reference to the User who owns this land tile. (Relationship: User 1:N LandTile)"
+        }
+      },
+      "required": [
+        "id",
+        "x",
+        "y",
+        "ownerId"
+      ]
+    },
+    "Problem": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Problem",
+      "type": "object",
+      "description": "Represents a math problem presented to the user.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Problem entity."
+        },
+        "question": {
+          "type": "string",
+          "description": "The math problem question."
+        },
+        "answer": {
+          "type": "string",
+          "description": "The correct answer to the math problem."
+        }
+      },
+      "required": [
+        "id",
+        "question",
+        "answer"
+      ]
+    },
+    "TerritoryExpansion": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "TerritoryExpansion",
+      "type": "object",
+      "description": "Represents the action of a user expanding their territory.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the TerritoryExpansion entity."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to the User who performed the expansion. (Relationship: User 1:N TerritoryExpansion)"
+        },
+        "landTileId": {
+          "type": "string",
+          "description": "Reference to the LandTile that was claimed. (Relationship: LandTile 1:N TerritoryExpansion)"
+        },
+        "timestamp": {
+          "type": "string",
+          "description": "Timestamp of when the territory expansion occurred.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "landTileId",
+        "timestamp"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/users/{userId}",
+        "definition": {
+          "entityName": "user",
+          "schema": {
+            "$ref": "#/backend/entities/User"
+          },
+          "description": "Stores user profiles. Path-based ownership ensures only the user can modify their own profile.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier of the user."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/land_tiles/{landTileId}",
+        "definition": {
+          "entityName": "landTile",
+          "schema": {
+            "$ref": "#/backend/entities/LandTile"
+          },
+          "description": "Stores all land tiles on the game map. Includes denormalized 'ownerId' for authorization independence.",
+          "params": [
+            {
+              "name": "landTileId",
+              "description": "The unique identifier of the land tile."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/problems/{problemId}",
+        "definition": {
+          "entityName": "problem",
+          "schema": {
+            "$ref": "#/backend/entities/Problem"
+          },
+          "description": "Stores math problems for the game. Accessible to all users.",
+          "params": [
+            {
+              "name": "problemId",
+              "description": "The unique identifier of the math problem."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/territory_expansions/{territoryExpansionId}",
+        "definition": {
+          "entityName": "territoryExpansion",
+          "schema": {
+            "$ref": "#/backend/entities/TerritoryExpansion"
+          },
+          "description": "Stores territory expansion events for each user. Path-based ownership ensures only the user can modify their own expansion records.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier of the user."
+            },
+            {
+              "name": "territoryExpansionId",
+              "description": "The unique identifier of the territory expansion event."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "The Firestore data structure is designed to support the 'Decimal Conquest' game, focusing on scalability, security, and ease of management. The key principle is Authorization Independence, achieved through denormalization where necessary.  The structure is segregated to maintain a homogeneous security posture within each collection.  User authentication will be managed by Firebase Authentication. The game map consists of LandTiles owned by users, and TerritoryExpansions record when users claim new tiles.  Problems are stored globally and presented to users. \n\nAuthorization Independence:\nLandTile documents include the `ownerId`, so security rules can validate ownership without needing to `get()` the user document.  This supports atomic operations and avoids hierarchical dependencies. The TerritoryExpansion collection doesn't require special authorization beyond user authentication, since the security rules will check the validity of expansion requests against the current LandTile ownership and user's expansion tokens (handled in application logic).\n\nQAPs (Rules are not Filters):\n*   The `/land_tiles` collection allows listing all tiles. Security rules will ensure that data is read only.\n*   The segregation of `land_tiles` and `users/{userId}/territory_expansions` allows secure and efficient listing operations scoped to specific users and territories.\n\nInvariants:\n*   Ownership is maintained by the `ownerId` field in `land_tiles` and the `userId` field in `users/{userId}/territory_expansions`.\n*   Timestamps are automatically generated by the server in the `users/{userId}/territory_expansions` collection.\n"
+  }
+}
