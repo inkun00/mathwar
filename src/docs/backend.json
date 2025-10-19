@@ -155,7 +155,7 @@
         }
       },
       {
-        "path": "/users/{userId}/problem_attempts/{attemptId}",
+        "path": "/problem_attempts/{userId}/attempts/{attemptId}",
         "definition": {
             "entityName": "problemAttempt",
             "schema": { "$ref": "#/backend/entities/ProblemAttempt" },

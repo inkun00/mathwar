@@ -62,7 +62,8 @@ export default function ProblemModal({
   const recordAttempt = async (isCorrect: boolean) => {
     if (!userId || !firestore || !problem) return;
     try {
-      await addDoc(collection(firestore, 'users', userId, 'problem_attempts'), {
+      // Path updated to reflect new top-level collection structure
+      await addDoc(collection(firestore, 'problem_attempts', userId, 'attempts'), {
         userId: userId,
         unit: problem.type,
         area: problem.subType,
@@ -164,7 +165,7 @@ export default function ProblemModal({
                         className="w-20 text-center text-lg"
                         aria-label="분자 부분"
                         />
-                        <div className="w-full h-px bg-foreground my-1"></div>
+                        <div className="w-full h-px bg-current my-1"></div>
                         <Label htmlFor="denominatorPart" className="sr-only">분모</Label>
                         <Input
                         id="denominatorPart"

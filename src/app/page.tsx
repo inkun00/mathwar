@@ -35,7 +35,8 @@ export default function Home() {
 
   const problemAttemptsQuery = useMemoFirebase(() => {
     if (!firestore || !authUser) return null;
-    return collection(firestore, 'users', authUser.uid, 'problem_attempts');
+    // Path updated to reflect new top-level collection structure
+    return collection(firestore, 'problem_attempts', authUser.uid, 'attempts');
   }, [firestore, authUser]);
 
   const { data: userProfile, isLoading: isProfileLoading } = useDoc<GameUser>(userDocRef);
