@@ -1,113 +1,127 @@
+/**
+ * @fileoverview Firestore Security Rules for the Decimal Conquest game.
+ *
+ * Core Philosophy:
+ * This ruleset enforces a user-ownership model for user profiles and territory expansions.
+ * LandTiles and Problems are publicly readable.
+ *
+ * Data Structure:
+ * - /users/{userId}: Stores individual user profiles.
+ * - /countries/{countryId}: Stores countries created by users.
+ * - /land_tiles/{landTileId}: Stores land tiles with denormalized ownerId for efficient authorization.
+ * - /problems/{problemId}: Stores math problems.
+ * - /users/{userId}/territory_expansions/{territoryExpansionId}: Stores territory expansion records for each user.
+ *
+ * Key Security Decisions:
+ * - Users can only read/write their own profile data and territory expansions.
+ * - LandTiles and Problems are publicly readable but not writable (owner-only writes are missing due to schema).
+ * - Countries are publicly readable and writable by any authenticated user.
+ * - Listing all users is not permitted.
+ *
+ * Denormalization for Authorization:
+ * - LandTile documents include the `ownerId` field, enabling security rules to validate ownership without additional reads.
+ */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * @description Enforces user-ownership for user profiles.
+     * @description Controls access to user profile documents.
      * @path /users/{userId}
-     * @allow (create) - If the authenticated user's UID matches the userId.
-     * @allow (get, update, delete) - If the authenticated user's UID matches the userId and document exists.
-     * @deny (list) - Always denies listing users.
-     * @principle Enforces document ownership for all operations.
+     * @allow (create) User with UID 'user123' can create their own profile.
+     * @allow (get) User with UID 'user123' can read their own profile.
+     * @deny (create) User with UID 'user456' cannot create a profile for user 'user123'.
+     * @deny (update) User with UID 'user456' cannot update the profile of user 'user123'.
+     * @principle Enforces document ownership for writes.
      */
     match /users/{userId} {
       function isOwner(userId) {
         return request.auth != null && request.auth.uid == userId;
       }
 
-      function isExistingOwner(userId) {
-        return isOwner(userId) && existsAfter(/databases/$(database)/documents/users/$(userId));
-      }
-
       allow get: if isOwner(userId);
       allow list: if false;
-
-      allow create: if isOwner(userId);
-      allow update: if isExistingOwner(userId);
-      allow delete: if isExistingOwner(userId);
+      allow create: if isOwner(userId) && request.resource.data.id == userId;
+      allow update: if isOwner(userId) && resource.data.id == userId;
+      allow delete: if isOwner(userId) && resource.data.id == userId;
     }
 
     /**
-     * @description Allows public read access to countries and enforces ownership for writes.
+     * @description Controls access to country documents.
      * @path /countries/{countryId}
-     * @allow (get, list) - Any authenticated user can read all countries.
-     * @allow (create) - Only the creating user can create countries, and the `createdBy` field must match their UID.
-     * @allow (update, delete) - Only the owner (creator) of the country can modify/delete it.
-     * @deny (none) - No requests are denied if they meet the allow conditions.
-     * @principle Public read, owner-only writes with ownership validation.
+     * @allow (get) Any authenticated user can read a country.
+     * @allow (create) Any authenticated user can create a country.
+     * @deny (delete) Only the creating user can delete a country
+     * @principle Allows public read access to countries, but requires authentication for creation.
      */
     match /countries/{countryId} {
-      function isOwner(ownerId) {
-        return request.auth != null && request.auth.uid == ownerId;
-      }
-
-      function isExistingOwner(ownerId) {
-        return isOwner(ownerId) && existsAfter(/databases/$(database)/documents/countries/$(countryId));
+      function isSignedIn() {
+        return request.auth != null;
       }
 
       allow get, list: if true;
-      allow create: if request.auth != null;
-      allow update: if isExistingOwner(resource.data.createdBy);
-      allow delete: if isExistingOwner(resource.data.createdBy);
+      allow create: if isSignedIn();
+      allow update: if false;
+      allow delete: if isSignedIn() && resource.data.createdBy == request.auth.uid;
     }
 
     /**
-     * @description Allows public read access to land tiles and enforces ownership for writes.
+     * @description Controls access to land tile documents.
      * @path /land_tiles/{landTileId}
-     * @allow (get, list) - Any user can read any land tile.
-     * @allow (create) - Requires authentication, and the `ownerId` field must match the authenticated user's UID.
-     * @allow (update, delete) - Requires authentication, and the `ownerId` field must match the authenticated user's UID of the existing document.
-     * @principle Public read, owner-only writes with ownership validation.
+     * @allow (get) Any user can read a land tile.
+     * @deny (create) No user can create a land tile (creation should be handled by server-side logic).
+     * @principle Allows public read access to land tiles.
      */
     match /land_tiles/{landTileId} {
-      function isOwner(ownerId) {
-        return request.auth != null && request.auth.uid == ownerId;
-      }
-
-      function isExistingOwner(ownerId) {
-        return isOwner(ownerId) && existsAfter(/databases/$(database)/documents/land_tiles/$(landTileId));
-      }
-
       allow get, list: if true;
-      allow create: if request.auth != null;
-      allow update: if isExistingOwner(resource.data.ownerId);
-      allow delete: if isExistingOwner(resource.data.ownerId);
+      allow create, update, delete: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
     }
 
     /**
-     * @description Allows public read access to problems.
+     * @description Controls access to problem documents.
      * @path /problems/{problemId}
-     * @allow (get, list) - Any user can read any problem.
-     * @deny (create, update, delete) - No one can create, update, or delete problems.
-     * @principle Public read-only.
+     * @allow (get) Any user can read a problem.
+     * @deny (create) No user can create a problem (creation should be handled by server-side logic).
+     * @principle Allows public read access to problems.
      */
     match /problems/{problemId} {
       allow get, list: if true;
-      allow create, update, delete: if false;
+      allow create, update, delete: if false; // TODO: Add owner validation once the schema is updated with an ownership field.
     }
 
     /**
-     * @description Enforces user-ownership for territory expansion records.
+     * @description Controls access to territory expansion documents.
      * @path /users/{userId}/territory_expansions/{territoryExpansionId}
-     * @allow (create) - If the authenticated user's UID matches the userId.
-     * @allow (get, update, delete) - If the authenticated user's UID matches the userId.
-     * @deny (list) - If the authenticated user's UID does not match the userId.
-     * @principle Enforces document ownership for all operations within a user's territory expansions.
+     * @allow (create) User with UID 'user123' can create a territory expansion under their own profile.
+     * @allow (get) User with UID 'user123' can read their own territory expansion records.
+     * @deny (create) User with UID 'user456' cannot create a territory expansion under user 'user123'.
+     * @deny (update) User with UID 'user456' cannot update the territory expansion of user 'user123'.
+     * @principle Enforces document ownership for writes.
      */
     match /users/{userId}/territory_expansions/{territoryExpansionId} {
       function isOwner(userId) {
         return request.auth != null && request.auth.uid == userId;
       }
 
-      function isExistingOwner(userId) {
-        return isOwner(userId) && existsAfter(/databases/$(database)/documents/users/$(userId)/territory_expansions/$(territoryExpansionId));
+      allow get, list: if isOwner(userId);
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId);
+      allow delete: if isOwner(userId);
+    }
+    
+    /**
+     * @description Controls access to problem attempt documents.
+     * @path /users/{userId}/problem_attempts/{problemAttemptId}
+     */
+    match /users/{userId}/problem_attempts/{problemAttemptId} {
+          function isOwner(userId) {
+        return request.auth != null && request.auth.uid == userId;
       }
 
-      allow get: if isOwner(userId);
-      allow list: if isOwner(userId);
+      allow get, list: if isOwner(userId);
       allow create: if isOwner(userId);
-      allow update: if isExistingOwner(userId);
-      allow delete: if isExistingOwner(userId);
+      allow update: if isOwner(userId);
+      allow delete: if isOwner(userId);
     }
   }
 }
