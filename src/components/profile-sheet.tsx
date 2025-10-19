@@ -1,6 +1,6 @@
 'use client';
 
-import type { User, Country, ProblemAttempt, ProblemType, ProblemSubType } from "@/lib/types";
+import type { User, Country, ProblemAttempt, ProblemSubType } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -10,6 +10,10 @@ import {
 } from "@/components/ui/chart";
 import { Bar, BarChart, XAxis, YAxis } from "recharts";
 import { useMemo } from "react";
+import { Button } from "@/components/ui/button";
+import { LogOut } from "lucide-react";
+import { useAuth } from "@/firebase";
+import { signOut } from "firebase/auth";
 
 interface ProfileSheetProps {
   currentUser: User;
@@ -30,6 +34,12 @@ const areaLabels: Record<ProblemSubType, string> = {
 };
 
 export default function ProfileSheet({ currentUser, userCountry, problemAttempts }: ProfileSheetProps) {
+  const auth = useAuth();
+  
+  const handleLogout = () => {
+    signOut(auth);
+  };
+
   const { unitStats, areaStats } = useMemo(() => {
     const stats = {
       unit: {
@@ -77,65 +87,73 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
   }, [problemAttempts]);
 
   return (
-    <div className="mt-6 space-y-8">
-      <div>
-        <Card>
-          <CardHeader>
-            <CardTitle>기본 정보</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex justify-between">
-              <span className="font-medium text-muted-foreground">닉네임</span>
-              <span className="font-semibold">{currentUser.nickname}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="font-medium text-muted-foreground">국가</span>
-              <Badge variant="secondary">{userCountry?.name || '미지정'}</Badge>
-            </div>
-             <div className="flex justify-between">
-              <span className="font-medium text-muted-foreground">보유 토큰</span>
-              <span className="font-semibold">{currentUser.tokens}개</span>
-            </div>
-          </CardContent>
-        </Card>
+    <div className="mt-6 flex h-[calc(100%-3rem)] flex-col justify-between">
+      <div className="space-y-8">
+        <div>
+          <Card>
+            <CardHeader>
+              <CardTitle>기본 정보</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex justify-between">
+                <span className="font-medium text-muted-foreground">닉네임</span>
+                <span className="font-semibold">{currentUser.nickname}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="font-medium text-muted-foreground">국가</span>
+                <Badge variant="secondary">{userCountry?.name || '미지정'}</Badge>
+              </div>
+               <div className="flex justify-between">
+                <span className="font-medium text-muted-foreground">보유 토큰</span>
+                <span className="font-semibold">{currentUser.tokens}개</span>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="space-y-4">
+           <h3 className="text-lg font-semibold tracking-tight">정답률 현황</h3>
+           <Card>
+              <CardHeader>
+                  <CardTitle className="text-base">단원별 정답률</CardTitle>
+              </CardHeader>
+              <CardContent>
+                   <ChartContainer config={{}} className="h-[150px] w-full">
+                      <BarChart data={unitStats} layout="vertical" margin={{ left: 10, right: 10 }}>
+                          <XAxis type="number" dataKey="accuracy" domain={[0, 100]} tickFormatter={(v) => `${v}%`} hide />
+                          <YAxis type="category" dataKey="name" width={40} tickLine={false} axisLine={false} />
+                          <ChartTooltip content={<ChartTooltipContent />} />
+                          <Bar dataKey="accuracy" radius={4} fill="var(--color-primary)">
+                          </Bar>
+                      </BarChart>
+                  </ChartContainer>
+              </CardContent>
+           </Card>
+
+           <Card>
+              <CardHeader>
+                  <CardTitle className="text-base">문제 영역별 정답률</CardTitle>
+              </CardHeader>
+              <CardContent>
+                   <ChartContainer config={{}} className="h-[250px] w-full">
+                      <BarChart data={areaStats} layout="vertical" margin={{ left: 10, right: 10 }}>
+                          <XAxis type="number" dataKey="accuracy" domain={[0, 100]} tickFormatter={(v) => `${v}%`} hide />
+                          <YAxis type="category" dataKey="name" width={110} tickLine={false} axisLine={false} />
+                          <ChartTooltip content={<ChartTooltipContent />} />
+                          <Bar dataKey="accuracy" radius={4} fill="var(--color-accent)" />
+                      </BarChart>
+                  </ChartContainer>
+              </CardContent>
+           </Card>
+        </div>
       </div>
 
-      <div className="space-y-4">
-         <h3 className="text-lg font-semibold tracking-tight">정답률 현황</h3>
-         <Card>
-            <CardHeader>
-                <CardTitle className="text-base">단원별 정답률</CardTitle>
-            </CardHeader>
-            <CardContent>
-                 <ChartContainer config={{}} className="h-[150px] w-full">
-                    <BarChart data={unitStats} layout="vertical" margin={{ left: 10, right: 10 }}>
-                        <XAxis type="number" dataKey="accuracy" domain={[0, 100]} tickFormatter={(v) => `${v}%`} hide />
-                        <YAxis type="category" dataKey="name" width={40} tickLine={false} axisLine={false} />
-                        <ChartTooltip content={<ChartTooltipContent />} />
-                        <Bar dataKey="accuracy" radius={4} fill="var(--color-primary)">
-                        </Bar>
-                    </BarChart>
-                </ChartContainer>
-            </CardContent>
-         </Card>
-
-         <Card>
-            <CardHeader>
-                <CardTitle className="text-base">문제 영역별 정답률</CardTitle>
-            </CardHeader>
-            <CardContent>
-                 <ChartContainer config={{}} className="h-[250px] w-full">
-                    <BarChart data={areaStats} layout="vertical" margin={{ left: 10, right: 10 }}>
-                        <XAxis type="number" dataKey="accuracy" domain={[0, 100]} tickFormatter={(v) => `${v}%`} hide />
-                        <YAxis type="category" dataKey="name" width={110} tickLine={false} axisLine={false} />
-                        <ChartTooltip content={<ChartTooltipContent />} />
-                        <Bar dataKey="accuracy" radius={4} fill="var(--color-accent)" />
-                    </BarChart>
-                </ChartContainer>
-            </CardContent>
-         </Card>
+      <div className="mt-8">
+        <Button variant="outline" className="w-full" onClick={handleLogout}>
+          <LogOut className="mr-2 h-4 w-4" />
+          로그아웃
+        </Button>
       </div>
-
     </div>
   );
 }
