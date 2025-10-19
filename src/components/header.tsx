@@ -23,7 +23,7 @@ export default function Header({ currentUser, onSolveProblemClick }: HeaderProps
           <div className="hidden items-center gap-3 sm:flex">
             <UserCircle className="h-6 w-6 text-muted-foreground" />
             <div className="text-right">
-              <p className="font-semibold">{currentUser.name || '게이머'}</p>
+              <p className="font-semibold">{currentUser.nickname || '게이머'}</p>
               <p className="text-sm text-muted-foreground">
                 확장 토큰 {currentUser.tokens}개
               </p>

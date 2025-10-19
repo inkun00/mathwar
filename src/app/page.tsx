@@ -2,15 +2,28 @@
 
 import GameBoard from "@/components/game-board";
 import Login from "@/components/login";
+import SignUpDetails from "@/components/signup-details";
 import { getGameData } from "@/lib/data";
 import { useUser } from "@/firebase/auth/use-user";
+import { useDoc, useFirestore, useMemoFirebase } from "@/firebase";
+import { doc } from "firebase/firestore";
 import { Skeleton } from "@/components/ui/skeleton";
+import type { User as GameUser } from "@/lib/types";
 
 export default function Home() {
-  const { user, isUserLoading } = useUser();
-  const initialData = getGameData(user);
+  const { user: authUser, isUserLoading: isAuthUserLoading } = useUser();
+  const firestore = useFirestore();
+
+  const userDocRef = useMemoFirebase(() => {
+    if (!firestore || !authUser) return null;
+    return doc(firestore, "users", authUser.uid);
+  }, [firestore, authUser]);
+
+  const { data: userProfile, isLoading: isProfileLoading } = useDoc<GameUser>(userDocRef);
   
-  if (isUserLoading) {
+  const isLoading = isAuthUserLoading || isProfileLoading;
+
+  if (isLoading) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
@@ -21,13 +34,25 @@ export default function Home() {
     );
   }
 
-  if (!user) {
+  if (!authUser) {
     return <Login />;
   }
 
-  return (
-    <div className="relative flex h-screen w-full flex-col items-center bg-background p-4 sm:p-6 md:p-8">
-      <GameBoard initialData={initialData} />
-    </div>
-  );
+  // If user is authenticated but doesn't have a profile document yet
+  if (authUser && !userProfile) {
+    return <SignUpDetails />;
+  }
+
+  // If we have an authenticated user and their profile
+  if (authUser && userProfile) {
+    const initialData = getGameData(authUser, userProfile);
+    return (
+      <div className="relative flex h-screen w-full flex-col items-center bg-background p-4 sm:p-6 md:p-8">
+        <GameBoard initialData={initialData} />
+      </div>
+    );
+  }
+
+  // Fallback, should not be reached
+  return <Login />;
 }

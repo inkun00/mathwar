@@ -10,9 +10,9 @@ const userColors = [
   "hsl(280, 80%, 60%)",
 ];
 
-const aiUsers: Omit<User, 'uid'>[] = [
-  { id: "player2", name: "AI 플레이어 A", color: userColors[1], tokens: 1 },
-  { id: "player3", name: "AI 플레이어 B", color: userColors[2], tokens: 1 },
+const aiUsers: Omit<User, 'uid' | 'countryId' | 'email'>[] = [
+  { id: "player2", nickname: "AI 플레이어 A", color: userColors[1], tokens: 1 },
+  { id: "player3", nickname: "AI 플레이어 B", color: userColors[2], tokens: 1 },
 ];
 
 let mapData: MapData | null = null;
@@ -66,16 +66,25 @@ const generateInitialMap = (allUsers: User[]): MapData => {
   return map;
 };
 
-const createNewGameData = (firebaseUser: FirebaseUser): GameData => {
+const createNewGameData = (firebaseUser: FirebaseUser, userProfile: User): GameData => {
   const humanPlayer: User = {
+    ...userProfile,
     id: firebaseUser.uid,
     uid: firebaseUser.uid,
-    name: firebaseUser.displayName || '나',
     color: userColors[0],
     tokens: 1
   };
   
-  const allUsers = [humanPlayer, ...aiUsers.map(ai => ({ ...ai, uid: ai.id }))];
+  const allUsers: User[] = [
+    humanPlayer, 
+    ...aiUsers.map((ai, i) => ({ 
+      ...ai, 
+      uid: ai.id, 
+      id: ai.id, 
+      email: '', 
+      countryId: `ai-country-${i}` 
+    }))
+  ];
   const newMapData = generateInitialMap(allUsers);
   
   return {
@@ -90,21 +99,21 @@ const createNewGameData = (firebaseUser: FirebaseUser): GameData => {
 // A real app would use a database like Firestore.
 const deepCopy = <T>(obj: T): T => JSON.parse(JSON.stringify(obj));
 
-export const getGameData = (firebaseUser: FirebaseUser | null): GameData => {
-  if (!firebaseUser) {
+export const getGameData = (firebaseUser: FirebaseUser | null, userProfile: User | null): GameData => {
+  if (!firebaseUser || !userProfile) {
     // Should not happen if UI is controlled properly, but as a fallback
     return { users: [], mapData: [], currentPlayerId: '' };
   }
   if (!gameData || gameData.currentPlayerId !== firebaseUser.uid) {
     // Create new game data if it doesn't exist or if the user is different
-    gameData = createNewGameData(firebaseUser);
+    gameData = createNewGameData(firebaseUser, userProfile);
     mapData = gameData.mapData;
   }
   return deepCopy(gameData);
 };
 
 export const awardToken = (userId: string): GameData => {
-  if (!gameData) return getGameData(null);
+  if (!gameData) return getGameData(null, null);
   const user = gameData.users.find(u => u.id === userId);
   if (user) {
     user.tokens += 1;
@@ -118,7 +127,7 @@ export const awardToken = (userId: string): GameData => {
 }
 
 export const conquerTile = (userId: string, x: number, y: number): GameData => {
-  if (!gameData || !mapData) return getGameData(null);
+  if (!gameData || !mapData) return getGameData(null, null);
   const user = gameData.users.find(u => u.id === userId);
   // This function is called for both player and AI, so tokens can be 0 for AI
   if (!user || user.tokens <= 0) {
@@ -134,7 +143,7 @@ export const conquerTile = (userId: string, x: number, y: number): GameData => {
 }
 
 export const restartPlayer = (userId: string): GameData => {
-  if (!gameData || !mapData) return getGameData(null);
+  if (!gameData || !mapData) return getGameData(null, null);
   const user = gameData.users.find(u => u.id === userId);
   if (!user) return deepCopy(gameData);
 
