@@ -119,9 +119,9 @@ export default function ProblemModal({
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
-            <p className="text-center text-2xl font-bold font-code tracking-wider bg-muted p-4 rounded-md">
+            <div className="text-center text-2xl font-bold font-code tracking-wider bg-muted p-4 rounded-md h-24 flex items-center justify-center">
               {problem?.problem}
-            </p>
+            </div>
             <Input
               id="answer"
               type="text"

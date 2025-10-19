@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 export interface User {
   id: string; // Firebase UID for human, or some unique ID for AI
   uid: string;
@@ -33,7 +35,7 @@ export interface GameData {
 export type ProblemType = 'decimal' | 'fraction';
 
 export interface MathProblem {
-  problem: string;
+  problem: ReactNode;
   answer: number; // All answers are handled as numbers, fractions will be converted.
   type: ProblemType;
 }

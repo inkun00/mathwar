@@ -1,9 +1,29 @@
-import type { MathProblem, Tile, MapData, User } from './types';
+'use client';
+import type { MathProblem } from './types';
 import { isLand } from './world-map-shape';
+import type { User, MapData, Tile } from './types';
+import React from 'react';
 
 // --- Utility Functions ---
 const randomInt = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
 const round = (num: number, places: number) => parseFloat(num.toFixed(places));
+
+// --- Fraction Component ---
+const Fraction = ({ numerator, denominator }: { numerator: number, denominator: number }) => (
+    <span className="inline-flex flex-col items-center align-middle mx-1">
+        <span className="text-xl leading-none">{numerator}</span>
+        <span className="w-full h-px bg-current"></span>
+        <span className="text-xl leading-none">{denominator}</span>
+    </span>
+);
+
+const MixedFraction = ({ integer, numerator, denominator }: { integer: number, numerator: number, denominator: number }) => (
+     <span className="inline-flex items-center align-middle">
+        <span className="text-2xl mr-1">{integer}</span>
+        <Fraction numerator={numerator} denominator={denominator} />
+    </span>
+);
+
 
 // --- Decimal Problem Generation ---
 const generateDecimalProblem = (): MathProblem => {
@@ -16,7 +36,7 @@ const generateDecimalProblem = (): MathProblem => {
     [num1, num2] = [num2, num1]; // Ensure positive result
   }
 
-  const problem = `${num1} ${operation === 'add' ? '+' : '-'} ${num2}의 값은?`;
+  const problem = <span>{`${num1} ${operation === 'add' ? '+' : '-'} ${num2} 의 값은?`}</span>;
   const answer = operation === 'add' ? num1 + num2 : num1 - num2;
 
   return {
@@ -51,7 +71,15 @@ const simpleFractionCalc = (): MathProblem => {
     if (op === 'subtract' && num1 < num2) {
         [num1, num2] = [num2, num1];
     }
-    const problem = `${num1}/${den} ${op === 'add' ? '+' : '-'} ${num2}/${den}의 값은?`;
+
+    const problem = (
+        <span className="flex items-center justify-center">
+            <Fraction numerator={num1} denominator={den} />
+            <span className="mx-2 text-2xl">{op === 'add' ? '+' : '-'}</span>
+            <Fraction numerator={num2} denominator={den} />
+            <span className="ml-3 text-2xl">의 값은?</span>
+        </span>
+    );
     const answerNum = op === 'add' ? num1 + num2 : num1 - num2;
     return { problem, answer: round(answerNum / den, 4), type: 'fraction' };
 }
@@ -72,7 +100,14 @@ const mixedFractionCalc = (): MathProblem => {
         [int1, num1, int2, num2] = [int2, num2, int1, num1];
     }
 
-    const problem = `${int1}과 ${num1}/${den} ${op === 'add' ? '+' : '-'} ${int2}과 ${num2}/${den}의 값은?`;
+    const problem = (
+        <span className="flex items-center justify-center">
+            <MixedFraction integer={int1} numerator={num1} denominator={den} />
+            <span className="mx-2 text-2xl">{op === 'add' ? '+' : '-'}</span>
+            <MixedFraction integer={int2} numerator={num2} denominator={den} />
+            <span className="ml-3 text-2xl">의 값은?</span>
+        </span>
+    );
     const answerVal = op === 'add' ? val1 + val2 : val1 - val2;
 
     return { problem, answer: round(answerVal, 4), type: 'fraction' };
@@ -83,7 +118,14 @@ const integerFractionCalc = (): MathProblem => {
     const den = randomInt(3, 12);
     const num = randomInt(1, den - 1);
 
-    const problem = `${int} - ${num}/${den}의 값은?`;
+    const problem = (
+        <span className="flex items-center justify-center">
+            <span className="text-2xl">{int}</span>
+            <span className="mx-2 text-2xl">-</span>
+            <Fraction numerator={num} denominator={den} />
+            <span className="ml-3 text-2xl">의 값은?</span>
+        </span>
+    );
     const answer = int - (num/den);
     return { problem, answer: round(answer, 4), type: 'fraction' };
 }
@@ -102,7 +144,14 @@ const commonDenominatorFractionCalc = (): MathProblem => {
         [num1, den1, num2, den2] = [num2, den2, num1, den1];
     }
 
-    const problem = `${num1}/${den1} ${op === 'add' ? '+' : '-'} ${num2}/${den2}의 값은?`;
+    const problem = (
+         <span className="flex items-center justify-center">
+            <Fraction numerator={num1} denominator={den1} />
+            <span className="mx-2 text-2xl">{op === 'add' ? '+' : '-'}</span>
+            <Fraction numerator={num2} denominator={den2} />
+            <span className="ml-3 text-2xl">의 값은?</span>
+        </span>
+    );
     const answer = op === 'add' ? val1 + val2 : val1 - val2;
 
     return { problem, answer: round(answer, 4), type: 'fraction' };
