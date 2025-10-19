@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useMemo, useEffect } from "react";
-import type { GameData, Tile, DecimalProblem, Country } from "@/lib/types";
+import type { GameData, Tile, MathProblem, Country } from "@/lib/types";
 import { awardToken, conquerTile, restartPlayer } from "@/lib/data";
-import { generateDecimalProblem, isAdjacent, getAIMove } from "@/lib/game-logic";
+import { generateMathProblem, isAdjacent, getAIMove } from "@/lib/game-logic";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { ZoomIn, ZoomOut } from "lucide-react";
@@ -23,7 +23,7 @@ export default function GameBoard({ initialData }: GameBoardProps) {
   const { user } = useUser();
   const [gameState, setGameState] = useState<GameData>(initialData);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [currentProblem, setCurrentProblem] = useState<DecimalProblem | null>(null);
+  const [currentProblem, setCurrentProblem] = useState<MathProblem | null>(null);
   const { toast } = useToast();
   const [zoomLevel, setZoomLevel] = useState(1);
 
@@ -67,7 +67,7 @@ export default function GameBoard({ initialData }: GameBoardProps) {
 
 
   const handleSolveProblemClick = () => {
-    setCurrentProblem(generateDecimalProblem());
+    setCurrentProblem(generateMathProblem());
     setIsModalOpen(true);
   };
 

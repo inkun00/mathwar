@@ -11,16 +11,56 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import type { DecimalProblem } from '@/lib/types';
-import { useState, type FormEvent } from 'react';
+import type { MathProblem } from '@/lib/types';
+import { useState, type FormEvent, useEffect } from 'react';
 import { CheckCircle, XCircle } from 'lucide-react';
 
 interface ProblemModalProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
-  problem: DecimalProblem | null;
+  problem: MathProblem | null;
   onCorrectAnswer: () => void;
 }
+
+// Function to parse various answer formats (e.g., "1 1/2", "3/2", "1.5")
+const parseAnswer = (input: string): number | null => {
+  input = input.trim();
+  if (!input) return null;
+
+  // Case 1: Mixed fraction (e.g., "1 2/3")
+  if (input.includes(' ') && input.includes('/')) {
+    const parts = input.split(' ');
+    if (parts.length === 2) {
+      const integerPart = parseInt(parts[0], 10);
+      const fractionPart = parts[1];
+      const fractionParts = fractionPart.split('/');
+      if (fractionParts.length === 2) {
+        const numerator = parseInt(fractionParts[0], 10);
+        const denominator = parseInt(fractionParts[1], 10);
+        if (!isNaN(integerPart) && !isNaN(numerator) && !isNaN(denominator) && denominator !== 0) {
+          return integerPart + (numerator / denominator);
+        }
+      }
+    }
+  }
+
+  // Case 2: Simple fraction (e.g., "3/2")
+  if (!input.includes(' ') && input.includes('/')) {
+    const fractionParts = input.split('/');
+    if (fractionParts.length === 2) {
+      const numerator = parseInt(fractionParts[0], 10);
+      const denominator = parseInt(fractionParts[1], 10);
+      if (!isNaN(numerator) && !isNaN(denominator) && denominator !== 0) {
+        return numerator / denominator;
+      }
+    }
+  }
+
+  // Case 3: Decimal or integer (e.g., "1.5" or "2")
+  const num = parseFloat(input);
+  return isNaN(num) ? null : num;
+};
+
 
 export default function ProblemModal({
   isOpen,
@@ -31,12 +71,20 @@ export default function ProblemModal({
   const [answer, setAnswer] = useState('');
   const { toast } = useToast();
 
+  useEffect(() => {
+    if (isOpen) {
+      setAnswer('');
+    }
+  }, [isOpen]);
+
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (!problem) return;
 
-    const userAnswer = parseFloat(answer);
-    if (userAnswer === problem.answer) {
+    const userAnswer = parseAnswer(answer);
+    
+    // Check if userAnswer is close enough to the correct answer to handle floating point issues
+    if (userAnswer !== null && Math.abs(userAnswer - problem.answer) < 0.001) {
       toast({
         title: "정답입니다!",
         description: "확장 토큰을 획득했습니다.",
@@ -45,10 +93,14 @@ export default function ProblemModal({
       });
       onCorrectAnswer();
     } else {
+      const correctAnswerString = problem.type === 'fraction'
+        ? `정답은 ${problem.answer.toFixed(2)} 또는 분수 형태입니다.`
+        : `정답은 ${problem.answer} 입니다.`;
+
       toast({
         variant: 'destructive',
         title: "오답입니다",
-        description: `정답은 ${problem.answer} 입니다. 다시 시도해 보세요!`,
+        description: `다시 시도해 보세요!`,
         action: <XCircle className="text-white" />
       });
     }
@@ -63,7 +115,7 @@ export default function ProblemModal({
           <DialogHeader>
             <DialogTitle>문제 풀기</DialogTitle>
             <DialogDescription>
-              정답을 입력하여 확장 토큰을 획득하세요.
+              정답을 입력하여 확장 토큰을 획득하세요. 분수는 `1 1/2` 또는 `3/2` 형식으로 입력할 수 있습니다.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
@@ -72,11 +124,10 @@ export default function ProblemModal({
             </p>
             <Input
               id="answer"
-              type="number"
-              step="0.01"
+              type="text"
               value={answer}
               onChange={(e) => setAnswer(e.target.value)}
-              placeholder="정답을 입력하세요"
+              placeholder="정답을 입력하세요 (예: 3.5 또는 7/2)"
               required
               className="text-center text-lg"
               aria-label="수학 문제 정답"

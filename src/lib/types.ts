@@ -30,7 +30,10 @@ export interface GameData {
   currentPlayerId: string;
 }
 
-export interface DecimalProblem {
+export type ProblemType = 'decimal' | 'fraction';
+
+export interface MathProblem {
   problem: string;
-  answer: number;
+  answer: number; // All answers are handled as numbers, fractions will be converted.
+  type: ProblemType;
 }
