@@ -3,12 +3,11 @@
 import GameBoard from "@/components/game-board";
 import Login from "@/components/login";
 import SignUpDetails from "@/components/signup-details";
-import { getGameData } from "@/lib/data";
 import { useUser } from "@/firebase/auth/use-user";
 import { useDoc, useFirestore, useMemoFirebase, useCollection } from "@/firebase";
-import { doc, collection } from "firebase/firestore";
+import { doc, collection, query, where } from "firebase/firestore";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { User as GameUser, Country } from "@/lib/types";
+import type { User as GameUser, Country, Tile } from "@/lib/types";
 
 export default function Home() {
   const { user: authUser, isUserLoading: isAuthUserLoading } = useUser();
@@ -24,10 +23,23 @@ export default function Home() {
     return collection(firestore, 'countries');
   }, [firestore]);
 
+  const landTilesQuery = useMemoFirebase(() => {
+    if (!firestore) return null;
+    return collection(firestore, 'land_tiles');
+  }, [firestore]);
+
+  const usersQuery = useMemoFirebase(() => {
+    if (!firestore) return null;
+    return collection(firestore, 'users');
+  }, [firestore]);
+
+
   const { data: userProfile, isLoading: isProfileLoading } = useDoc<GameUser>(userDocRef);
   const { data: countries, isLoading: areCountriesLoading } = useCollection<Country>(countriesQuery);
+  const { data: landTiles, isLoading: areLandTilesLoading } = useCollection<Tile>(landTilesQuery);
+  const { data: users, isLoading: areUsersLoading } = useCollection<GameUser>(usersQuery);
   
-  const isLoading = isAuthUserLoading || isProfileLoading || areCountriesLoading;
+  const isLoading = isAuthUserLoading || isProfileLoading || areCountriesLoading || areLandTilesLoading || areUsersLoading;
 
   if (isLoading) {
     return (
@@ -49,12 +61,15 @@ export default function Home() {
     return <SignUpDetails />;
   }
 
-  // If we have an authenticated user and their profile
-  if (authUser && userProfile && countries) {
-    const initialData = getGameData(authUser, userProfile, countries);
+  if (authUser && userProfile && countries && landTiles && users) {
     return (
       <div className="relative flex h-screen w-full flex-col items-center bg-background p-4 sm:p-6 md:p-8">
-        <GameBoard initialData={initialData} />
+        <GameBoard 
+          users={users}
+          countries={countries}
+          landTiles={landTiles}
+          currentUserProfile={userProfile}
+        />
       </div>
     );
   }

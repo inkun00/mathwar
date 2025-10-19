@@ -1,7 +1,6 @@
 'use client';
-import type { MathProblem } from './types';
+import type { MathProblem, Tile, User } from './types';
 import { isLand } from './world-map-shape';
-import type { User, MapData, Tile } from './types';
 import React from 'react';
 
 // --- Utility Functions ---
@@ -177,42 +176,80 @@ export const isAdjacent = (tileX: number, tileY: number, userTiles: Tile[]) => {
     );
 };
 
-export const getAIMove = (ai: User, mapData: MapData): Tile | null => {
-    if (ai.tokens <= 0) return null;
+export const getAIMove = (
+  ai: User,
+  aiTiles: Tile[],
+  allTiles: Tile[],
+  allUsers: User[]
+): Tile | null => {
+  if (ai.tokens <= 0) return null;
 
-    const aiTiles = mapData.flat().filter(t => t.ownerId === ai.id);
-    if (aiTiles.length === 0) {
-      // If AI has no tiles, find a random land tile to start
-      const emptyLandTiles = mapData.flat().filter(t => t.ownerId === null && isLand(t.x, t.y));
-      if (emptyLandTiles.length > 0) {
-        const randomIndex = Math.floor(Math.random() * emptyLandTiles.length);
-        return emptyLandTiles[randomIndex];
-      }
-      return null;
+  if (aiTiles.length === 0) {
+    const emptyLandTiles = allTiles.filter(
+      (t) => t.ownerId === null && isLand(t.x, t.y)
+    );
+    if (emptyLandTiles.length > 0) {
+      const randomIndex = Math.floor(Math.random() * emptyLandTiles.length);
+      return emptyLandTiles[randomIndex];
     }
-    
-    const allTiles = mapData.flat();
-    const conquerableTiles: Tile[] = [];
-
-    for (const tile of allTiles) {
-        // AI can only conquer land tiles that are not its own
-        if (tile.ownerId !== ai.id && isLand(tile.x, tile.y) && isAdjacent(tile.x, tile.y, aiTiles)) {
-            conquerableTiles.push(tile);
-        }
-    }
-
-    if (conquerableTiles.length > 0) {
-        // Prioritize conquering tiles owned by others
-        const enemyTiles = conquerableTiles.filter(t => t.ownerId !== null);
-        if (enemyTiles.length > 0) {
-          const randomIndex = Math.floor(Math.random() * enemyTiles.length);
-          return enemyTiles[randomIndex];
-        }
-
-        // Otherwise, expand into empty territory
-        const randomIndex = Math.floor(Math.random() * conquerableTiles.length);
-        return conquerableTiles[randomIndex];
-    }
-
     return null;
-}
+  }
+
+  const conquerableTiles: Tile[] = [];
+  const neighborOffsets = [
+    { dx: -1, dy: 0 },
+    { dx: 1, dy: 0 },
+    { dx: 0, dy: -1 },
+    { dx: 0, dy: 1 },
+  ];
+
+  const aiTileSet = new Set(aiTiles.map((t) => `${t.x},${t.y}`));
+
+  for (const aiTile of aiTiles) {
+    for (const offset of neighborOffsets) {
+      const neighborX = aiTile.x + offset.dx;
+      const neighborY = aiTile.y + offset.dy;
+
+      if (aiTileSet.has(`${neighborX},${neighborY}`)) continue;
+
+      const neighborTile = allTiles.find(
+        (t) => t.x === neighborX && t.y === neighborY
+      );
+
+      if (
+        neighborTile &&
+        isLand(neighborX, neighborY) &&
+        neighborTile.ownerId !== ai.id
+      ) {
+        conquerableTiles.push(neighborTile);
+      }
+    }
+  }
+
+  if (conquerableTiles.length > 0) {
+    const enemyTiles = conquerableTiles.filter(
+      (t) => t.ownerId !== null && t.ownerId !== ai.id
+    );
+    if (enemyTiles.length > 0) {
+      // Prioritize tiles owned by users with the most land
+      const ownerTileCounts = allUsers.reduce((acc, user) => {
+        acc[user.id] = allTiles.filter((t) => t.ownerId === user.id).length;
+        return acc;
+      }, {} as Record<string, number>);
+
+      enemyTiles.sort((a, b) => {
+        const countA = a.ownerId ? ownerTileCounts[a.ownerId] : 0;
+        const countB = b.ownerId ? ownerTileCounts[b.ownerId] : 0;
+        return countB - countA; // Attack user with more tiles
+      });
+
+      return enemyTiles[0];
+    }
+
+    // Expand into empty territory
+    const randomIndex = Math.floor(Math.random() * conquerableTiles.length);
+    return conquerableTiles[randomIndex];
+  }
+
+  return null;
+};

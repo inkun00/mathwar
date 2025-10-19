@@ -8,6 +8,7 @@ export interface User {
   countryId: string;
   color: string;
   tokens: number;
+  isAI?: boolean;
 }
 
 export interface Country {
@@ -17,20 +18,13 @@ export interface Country {
 }
 
 export interface Tile {
+  id: string;
   x: number;
   y: number;
   ownerId: string | null;
 }
 
 export type MapData = Tile[][];
-
-export interface GameData {
-  users: User[];
-  mapData: MapData;
-  countries: Country[];
-  // The player playing the game.
-  currentPlayerId: string;
-}
 
 export type ProblemType = 'decimal' | 'fraction';
 
