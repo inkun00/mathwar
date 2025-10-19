@@ -5,10 +5,10 @@ import Login from "@/components/login";
 import SignUpDetails from "@/components/signup-details";
 import { getGameData } from "@/lib/data";
 import { useUser } from "@/firebase/auth/use-user";
-import { useDoc, useFirestore, useMemoFirebase } from "@/firebase";
-import { doc } from "firebase/firestore";
+import { useDoc, useFirestore, useMemoFirebase, useCollection } from "@/firebase";
+import { doc, collection } from "firebase/firestore";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { User as GameUser } from "@/lib/types";
+import type { User as GameUser, Country } from "@/lib/types";
 
 export default function Home() {
   const { user: authUser, isUserLoading: isAuthUserLoading } = useUser();
@@ -18,10 +18,16 @@ export default function Home() {
     if (!firestore || !authUser) return null;
     return doc(firestore, "users", authUser.uid);
   }, [firestore, authUser]);
+  
+  const countriesQuery = useMemoFirebase(() => {
+    if (!firestore) return null;
+    return collection(firestore, 'countries');
+  }, [firestore]);
 
   const { data: userProfile, isLoading: isProfileLoading } = useDoc<GameUser>(userDocRef);
+  const { data: countries, isLoading: areCountriesLoading } = useCollection<Country>(countriesQuery);
   
-  const isLoading = isAuthUserLoading || isProfileLoading;
+  const isLoading = isAuthUserLoading || isProfileLoading || areCountriesLoading;
 
   if (isLoading) {
     return (
@@ -44,8 +50,8 @@ export default function Home() {
   }
 
   // If we have an authenticated user and their profile
-  if (authUser && userProfile) {
-    const initialData = getGameData(authUser, userProfile);
+  if (authUser && userProfile && countries) {
+    const initialData = getGameData(authUser, userProfile, countries);
     return (
       <div className="relative flex h-screen w-full flex-col items-center bg-background p-4 sm:p-6 md:p-8">
         <GameBoard initialData={initialData} />

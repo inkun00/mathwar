@@ -1,4 +1,4 @@
-import type { GameData, User, MapData } from "./types";
+import type { GameData, User, MapData, Country } from "./types";
 import { isLand, MAP_WIDTH, MAP_HEIGHT } from "./world-map-shape";
 import type { User as FirebaseUser } from 'firebase/auth';
 
@@ -66,7 +66,7 @@ const generateInitialMap = (allUsers: User[]): MapData => {
   return map;
 };
 
-const createNewGameData = (firebaseUser: FirebaseUser, userProfile: User): GameData => {
+const createNewGameData = (firebaseUser: FirebaseUser, userProfile: User, countries: Country[]): GameData => {
   const humanPlayer: User = {
     ...userProfile,
     id: firebaseUser.uid,
@@ -91,6 +91,7 @@ const createNewGameData = (firebaseUser: FirebaseUser, userProfile: User): GameD
     users: allUsers,
     mapData: newMapData,
     currentPlayerId: firebaseUser.uid,
+    countries,
   };
 }
 
@@ -99,21 +100,23 @@ const createNewGameData = (firebaseUser: FirebaseUser, userProfile: User): GameD
 // A real app would use a database like Firestore.
 const deepCopy = <T>(obj: T): T => JSON.parse(JSON.stringify(obj));
 
-export const getGameData = (firebaseUser: FirebaseUser | null, userProfile: User | null): GameData => {
-  if (!firebaseUser || !userProfile) {
+export const getGameData = (firebaseUser: FirebaseUser | null, userProfile: User | null, countries: Country[] | null): GameData => {
+  if (!firebaseUser || !userProfile || !countries) {
     // Should not happen if UI is controlled properly, but as a fallback
-    return { users: [], mapData: [], currentPlayerId: '' };
+    return { users: [], mapData: [], currentPlayerId: '', countries: [] };
   }
   if (!gameData || gameData.currentPlayerId !== firebaseUser.uid) {
     // Create new game data if it doesn't exist or if the user is different
-    gameData = createNewGameData(firebaseUser, userProfile);
+    gameData = createNewGameData(firebaseUser, userProfile, countries);
     mapData = gameData.mapData;
   }
+  // Make sure countries are updated if they've changed
+  gameData.countries = countries;
   return deepCopy(gameData);
 };
 
 export const awardToken = (userId: string): GameData => {
-  if (!gameData) return getGameData(null, null);
+  if (!gameData) return getGameData(null, null, null);
   const user = gameData.users.find(u => u.id === userId);
   if (user) {
     user.tokens += 1;
@@ -127,7 +130,7 @@ export const awardToken = (userId: string): GameData => {
 }
 
 export const conquerTile = (userId: string, x: number, y: number): GameData => {
-  if (!gameData || !mapData) return getGameData(null, null);
+  if (!gameData || !mapData) return getGameData(null, null, null);
   const user = gameData.users.find(u => u.id === userId);
   // This function is called for both player and AI, so tokens can be 0 for AI
   if (!user || user.tokens <= 0) {
@@ -143,7 +146,7 @@ export const conquerTile = (userId: string, x: number, y: number): GameData => {
 }
 
 export const restartPlayer = (userId: string): GameData => {
-  if (!gameData || !mapData) return getGameData(null, null);
+  if (!gameData || !mapData) return getGameData(null, null, null);
   const user = gameData.users.find(u => u.id === userId);
   if (!user) return deepCopy(gameData);
 

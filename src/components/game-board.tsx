@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect } from "react";
-import type { GameData, Tile, DecimalProblem } from "@/lib/types";
+import type { GameData, Tile, DecimalProblem, Country } from "@/lib/types";
 import { awardToken, conquerTile, restartPlayer } from "@/lib/data";
 import { generateDecimalProblem, isAdjacent, getAIMove } from "@/lib/game-logic";
 import { useToast } from "@/hooks/use-toast";
@@ -27,7 +27,7 @@ export default function GameBoard({ initialData }: GameBoardProps) {
   const { toast } = useToast();
   const [zoomLevel, setZoomLevel] = useState(1);
 
-  const { users, mapData, currentPlayerId } = gameState;
+  const { users, mapData, currentPlayerId, countries } = gameState;
   const currentUser = useMemo(() => users.find(u => u.id === currentPlayerId)!, [users, currentPlayerId]);
 
   const userTiles = useMemo(() => 
@@ -128,7 +128,7 @@ export default function GameBoard({ initialData }: GameBoardProps) {
     <div className="flex w-full flex-grow flex-col gap-6">
       <Header currentUser={currentUser} onSolveProblemClick={handleSolveProblemClick} />
       <div className="relative h-full w-full max-w-7xl flex-grow">
-        <WorldMap mapData={mapData} users={users} onTileClick={handleTileClick} canConquer={canConquer} zoomLevel={zoomLevel} />
+        <WorldMap mapData={mapData} users={users} countries={countries} onTileClick={handleTileClick} canConquer={canConquer} zoomLevel={zoomLevel} />
         <div className="absolute bottom-4 right-4 flex gap-2">
           <Button size="icon" onClick={handleZoomIn} aria-label="확대">
             <ZoomIn />

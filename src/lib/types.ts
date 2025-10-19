@@ -25,6 +25,7 @@ export type MapData = Tile[][];
 export interface GameData {
   users: User[];
   mapData: MapData;
+  countries: Country[];
   // The player playing the game.
   currentPlayerId: string;
 }
