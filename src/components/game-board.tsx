@@ -7,7 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { ZoomIn, ZoomOut } from "lucide-react";
 import { useFirestore, useUser } from "@/firebase";
-import { doc, setDoc, updateDoc, writeBatch } from "firebase/firestore";
+import { doc, setDoc, updateDoc, writeBatch, increment } from "firebase/firestore";
 
 import Header from "./header";
 import WorldMap from "./world-map";
@@ -96,11 +96,11 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
             await setDoc(tileRef, { x: move.x, y: move.y, ownerId: ai.id }, { merge: true });
 
             const aiUserRef = doc(firestore, 'users', ai.id);
-            await updateDoc(aiUserRef, { tokens: ai.tokens - 1 });
+            await updateDoc(aiUserRef, { tokens: increment(-1) });
 
             // Randomly award token
             if (Math.random() < 0.1) {
-              await updateDoc(aiUserRef, { tokens: ai.tokens }); // (tokens-1)+1 = tokens
+              await updateDoc(aiUserRef, { tokens: increment(1) });
             }
 
           } catch (error) {
@@ -123,7 +123,7 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
     if (!currentUser) return;
     const userRef = doc(firestore, "users", currentUser.id);
     await updateDoc(userRef, {
-      tokens: (currentUser.tokens || 0) + 1,
+      tokens: increment(1),
     });
   };
 
@@ -143,7 +143,7 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
 
     const userRef = doc(firestore, "users", currentUser.id);
     await updateDoc(userRef, {
-      tokens: currentUser.tokens - 1,
+      tokens: increment(-1),
     });
   };
   
