@@ -46,7 +46,16 @@ export interface MathProblem {
   answer: number; // All answers are handled as numbers, fractions will be converted.
   type: ProblemType;
   subType: ProblemSubType;
+  storable: StorableProblem;
 }
+
+export interface StorableProblem {
+  type: ProblemType;
+  subType: ProblemSubType;
+  operands: number[];
+  operator: 'add' | 'subtract';
+}
+
 
 export interface ProblemAttempt {
     id: string;
@@ -55,7 +64,18 @@ export interface ProblemAttempt {
     area: ProblemSubType;
     correct: boolean;
     timestamp: any; // Firestore ServerTimestamp
+    isReview: boolean;
+    problem: string;
 }
+
+export interface WrongAnswer {
+  id: string;
+  userId: string;
+  problemData: StorableProblem;
+  problemString: string;
+  createdAt: any; // Firestore ServerTimestamp
+}
+
 
 export type InvasionTarget = {
     x: number;

@@ -97,9 +97,25 @@
             "unit": { "type": "string", "enum": ["decimal", "fraction"] },
             "area": { "type": "string" },
             "correct": { "type": "boolean" },
-            "timestamp": { "type": "string", "format": "date-time" }
+            "timestamp": { "type": "string", "format": "date-time" },
+            "isReview": { "type": "boolean" },
+            "problem": { "type": "string" }
         },
-        "required": ["userId", "unit", "area", "correct", "timestamp"]
+        "required": ["userId", "unit", "area", "correct", "timestamp", "isReview", "problem"]
+    },
+    "WrongAnswer": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "title": "WrongAnswer",
+        "type": "object",
+        "description": "Stores problems that a user answered incorrectly.",
+        "properties": {
+            "id": { "type": "string" },
+            "userId": { "type": "string" },
+            "problemData": { "type": "object" },
+            "problemString": { "type": "string" },
+            "createdAt": { "type": "string", "format": "date-time" }
+        },
+        "required": ["userId", "problemData", "problemString", "createdAt"]
     }
   },
   "auth": {
@@ -167,6 +183,17 @@
             "params": [
                 { "name": "userId", "description": "The UID of the user." },
                 { "name": "attemptId", "description": "The unique ID for the attempt." }
+            ]
+        }
+      },
+      {
+        "path": "/wrong_answers/{wrongAnswerId}",
+        "definition": {
+            "entityName": "wrongAnswer",
+            "schema": { "$ref": "#/backend/entities/WrongAnswer" },
+            "description": "Stores incorrect problems for user review.",
+             "params": [
+                { "name": "wrongAnswerId", "description": "The unique ID for the wrong answer entry." }
             ]
         }
       }

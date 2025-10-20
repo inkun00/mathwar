@@ -12,21 +12,24 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import type { MathProblem } from '@/lib/types';
+import type { MathProblem, StorableProblem } from '@/lib/types';
 import { useState, type FormEvent, useEffect } from 'react';
 import { CheckCircle, XCircle, Swords } from 'lucide-react';
 import { useFirestore } from '@/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { generateProblemFromData, problemNodeToString } from '@/lib/game-logic';
 
 
 interface ProblemModalProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
   problem: MathProblem | null;
-  onCorrectAnswer: () => void;
-  onWrongAnswer?: () => void;
+  onCorrectAnswer: (problem: MathProblem) => Promise<void> | void;
+  onWrongAnswer?: (problem: MathProblem) => Promise<void> | void;
   userId?: string;
   isInvasion?: boolean;
+  isReview?: boolean;
+  reviewProblem?: StorableProblem | null;
 }
 
 // Function to parse a simple decimal/integer string
@@ -41,11 +44,13 @@ const parseDecimalAnswer = (input: string): number | null => {
 export default function ProblemModal({
   isOpen,
   onOpenChange,
-  problem,
+  problem: initialProblem,
   onCorrectAnswer,
   onWrongAnswer,
   userId,
   isInvasion = false,
+  isReview = false,
+  reviewProblem = null,
 }: ProblemModalProps) {
   const [answer, setAnswer] = useState('');
   const [integerPart, setIntegerPart] = useState('');
@@ -53,6 +58,9 @@ export default function ProblemModal({
   const [denominatorPart, setDenominatorPart] = useState('');
   const { toast } = useToast();
   const firestore = useFirestore();
+
+  // The actual problem being solved, either newly generated or from a review.
+  const problem = reviewProblem ? generateProblemFromData(reviewProblem) : initialProblem;
 
   useEffect(() => {
     if (isOpen) {
@@ -73,13 +81,15 @@ export default function ProblemModal({
         area: problem.subType,
         correct: isCorrect,
         timestamp: serverTimestamp(),
+        isReview: isReview,
+        problem: problemNodeToString(problem.problem)
       });
     } catch (error) {
       console.error("Error recording problem attempt:", error);
     }
   };
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!problem) return;
 
@@ -114,44 +124,41 @@ export default function ProblemModal({
         className: 'border-green-500 bg-green-50 text-green-700 dark:bg-green-900/50 dark:text-green-300 dark:border-green-700',
         action: <CheckCircle className="text-green-500" />
       });
-      onCorrectAnswer();
+      await onCorrectAnswer(problem);
     } else {
       isCorrect = false;
       toast({
         variant: 'destructive',
         title: isInvasion ? "침략 실패" : "오답입니다",
-        description: isInvasion ? "토큰을 잃고 영토 획득에 실패했습니다." : `다시 시도해 보세요!`,
+        description: isInvasion ? "토큰을 잃고 영토 획득에 실패했습니다." : (isReview ? "오답노트에서 문제가 삭제됩니다." : `오답노트에 추가되었습니다.`),
         action: <XCircle className="text-white" />
       });
       if (onWrongAnswer) {
-        onWrongAnswer();
+        await onWrongAnswer(problem);
       }
     }
     
-    recordAttempt(isCorrect);
+    await recordAttempt(isCorrect);
     onOpenChange(false);
   };
 
+  const title = isInvasion ? '침략 문제' : (isReview ? '오답노트 문제' : '문제 풀기');
+  const description = isInvasion
+    ? '문제를 맞춰 적의 영토를 획득하세요!'
+    : (isReview ? '틀렸던 문제입니다. 다시 풀어보세요!' : '정답을 입력하여 확장 토큰을 획득하세요.');
+
+
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => {
-      onOpenChange(open);
-      if (!open && !isInvasion) {
-        if (onWrongAnswer) {
-            onWrongAnswer();
-        }
-      }
-    }}>
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px]">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
                 {isInvasion && <Swords className="text-destructive" />}
-                {isInvasion ? '침략 문제' : '문제 풀기'}
+                {title}
             </DialogTitle>
             <DialogDescription>
-              {isInvasion
-                ? '문제를 맞춰 적의 영토를 획득하세요!'
-                : '정답을 입력하여 확장 토큰을 획득하세요.'}
+              {description}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">

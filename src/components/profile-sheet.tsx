@@ -1,18 +1,22 @@
 'use client';
 
-import type { User, Country, ProblemAttempt, ProblemSubType } from "@/lib/types";
+import type { User, Country, ProblemAttempt, ProblemSubType, WrongAnswer, StorableProblem } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { LogOut } from "lucide-react";
-import { useAuth } from "@/firebase";
+import { LogOut, BookOpen, Trash2 } from "lucide-react";
+import { useAuth, useFirestore } from "@/firebase";
 import { signOut } from "firebase/auth";
+import ProblemModal from "./problem-modal";
+import { deleteWrongAnswer } from "@/firebase/firestore/data";
+import { doc, updateDoc, increment } from "firebase/firestore";
 
 interface ProfileSheetProps {
   currentUser: User;
   userCountry?: Country;
   problemAttempts: ProblemAttempt[];
+  wrongAnswers: WrongAnswer[];
 }
 
 const areaLabels: Record<ProblemSubType, string> = {
@@ -27,12 +31,41 @@ const areaLabels: Record<ProblemSubType, string> = {
   'fraction-subtract-diff-den': '분수 뺄셈 (다른 분모)',
 };
 
-export default function ProfileSheet({ currentUser, userCountry, problemAttempts }: ProfileSheetProps) {
+export default function ProfileSheet({ currentUser, userCountry, problemAttempts, wrongAnswers }: ProfileSheetProps) {
   const auth = useAuth();
+  const firestore = useFirestore();
+
+  const [isReviewModalOpen, setReviewModalOpen] = useState(false);
+  const [selectedReviewProblem, setSelectedReviewProblem] = useState<WrongAnswer | null>(null);
   
   const handleLogout = () => {
     signOut(auth);
   };
+
+  const handleReviewProblemClick = (problem: WrongAnswer) => {
+    setSelectedReviewProblem(problem);
+    setReviewModalOpen(true);
+  };
+
+  const handleCorrectReview = async () => {
+    if (!selectedReviewProblem || !firestore || !currentUser) return;
+    // 1. Delete from wrong answers
+    await deleteWrongAnswer(firestore, selectedReviewProblem.id);
+    // 2. Grant token
+    const userRef = doc(firestore, "users", currentUser.id);
+    await updateDoc(userRef, {
+      tokens: increment(1),
+    });
+    setSelectedReviewProblem(null);
+  };
+
+  const handleWrongReview = async () => {
+    if (!selectedReviewProblem || !firestore) return;
+    // Just delete from wrong answers
+    await deleteWrongAnswer(firestore, selectedReviewProblem.id);
+    setSelectedReviewProblem(null);
+  };
+
 
   const { unitStats, areaStats } = useMemo(() => {
     const stats = {
@@ -91,73 +124,117 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
     return { unitStats, areaStats };
   }, [problemAttempts]);
 
+  const userWrongAnswers = useMemo(() => {
+    return wrongAnswers.filter(wa => wa.userId === currentUser.id);
+  }, [wrongAnswers, currentUser.id]);
+
   return (
-    <div className="mt-6 flex h-[calc(100%-3rem)] flex-col justify-between">
-      <div className="space-y-8 overflow-y-auto pr-4">
-        <div>
-          <Card>
-            <CardHeader>
-              <CardTitle>기본 정보</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex justify-between">
-                <span className="font-medium text-muted-foreground">닉네임</span>
-                <span className="font-semibold">{currentUser.nickname}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="font-medium text-muted-foreground">국가</span>
-                <Badge variant="secondary" style={{ backgroundColor: userCountry?.color }}>{userCountry?.name || '미지정'}</Badge>
-              </div>
-               <div className="flex justify-between">
-                <span className="font-medium text-muted-foreground">보유 토큰</span>
-                <span className="font-semibold">{currentUser.tokens}개</span>
-              </div>
-            </CardContent>
-          </Card>
+    <>
+      <div className="mt-6 flex h-[calc(100%-3rem)] flex-col justify-between">
+        <div className="space-y-8 overflow-y-auto pr-4">
+          <div>
+            <Card>
+              <CardHeader>
+                <CardTitle>기본 정보</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex justify-between">
+                  <span className="font-medium text-muted-foreground">닉네임</span>
+                  <span className="font-semibold">{currentUser.nickname}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-medium text-muted-foreground">국가</span>
+                  <Badge variant="secondary" style={{ backgroundColor: userCountry?.color }}>{userCountry?.name || '미지정'}</Badge>
+                </div>
+                 <div className="flex justify-between">
+                  <span className="font-medium text-muted-foreground">보유 토큰</span>
+                  <span className="font-semibold">{currentUser.tokens}개</span>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="space-y-4">
+             <h3 className="text-lg font-semibold tracking-tight">정답률 현황</h3>
+             <Card>
+                <CardHeader>
+                    <CardTitle className="text-base">단원별 정답률</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2 text-sm">
+                  {unitStats.map(stat => (
+                    <div key={stat.name} className="flex justify-between">
+                      <span>{stat.name}</span>
+                      <span className="font-medium">{stat.correct}/{stat.total} ({Math.round(stat.accuracy)}%)</span>
+                    </div>
+                  ))}
+                </CardContent>
+             </Card>
+
+             <Card>
+                <CardHeader>
+                    <CardTitle className="text-base">문제 영역별 정답률</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2 text-sm">
+                   {areaStats.length > 0 ? (
+                      areaStats.map(stat => (
+                        <div key={stat.name} className="flex justify-between">
+                          <span>{stat.name}</span>
+                          <span className="font-medium">{stat.correct}/{stat.total} ({Math.round(stat.accuracy)}%)</span>
+                        </div>
+                      ))
+                   ) : (
+                      <p className="text-muted-foreground">아직 푼 문제가 없습니다.</p>
+                   )}
+                </CardContent>
+             </Card>
+          </div>
+
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold tracking-tight">오답노트</h3>
+            <Card>
+              <CardContent className="pt-4">
+                {userWrongAnswers.length > 0 ? (
+                  <ul className="space-y-2">
+                    {userWrongAnswers.map((wa) => (
+                      <li key={wa.id} className="flex items-center justify-between rounded-md bg-muted p-2">
+                        <span className="font-code text-sm">{wa.problemString}</span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleReviewProblemClick(wa)}
+                        >
+                          <BookOpen className="mr-2 h-4 w-4" />
+                          다시 풀기
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-center text-muted-foreground">틀린 문제가 없습니다!</p>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
         </div>
 
-        <div className="space-y-4">
-           <h3 className="text-lg font-semibold tracking-tight">정답률 현황</h3>
-           <Card>
-              <CardHeader>
-                  <CardTitle className="text-base">단원별 정답률</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                {unitStats.map(stat => (
-                  <div key={stat.name} className="flex justify-between">
-                    <span>{stat.name}</span>
-                    <span className="font-medium">{stat.correct}/{stat.total} ({Math.round(stat.accuracy)}%)</span>
-                  </div>
-                ))}
-              </CardContent>
-           </Card>
-
-           <Card>
-              <CardHeader>
-                  <CardTitle className="text-base">문제 영역별 정답률</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                 {areaStats.length > 0 ? (
-                    areaStats.map(stat => (
-                      <div key={stat.name} className="flex justify-between">
-                        <span>{stat.name}</span>
-                        <span className="font-medium">{stat.correct}/{stat.total} ({Math.round(stat.accuracy)}%)</span>
-                      </div>
-                    ))
-                 ) : (
-                    <p className="text-muted-foreground">아직 푼 문제가 없습니다.</p>
-                 )}
-              </CardContent>
-           </Card>
+        <div className="mt-8 pt-4 border-t">
+          <Button variant="outline" className="w-full" onClick={handleLogout}>
+            <LogOut className="mr-2 h-4 w-4" />
+            로그아웃
+          </Button>
         </div>
       </div>
-
-      <div className="mt-8 pt-4 border-t">
-        <Button variant="outline" className="w-full" onClick={handleLogout}>
-          <LogOut className="mr-2 h-4 w-4" />
-          로그아웃
-        </Button>
-      </div>
-    </div>
+      <ProblemModal
+        isOpen={isReviewModalOpen}
+        onOpenChange={setReviewModalOpen}
+        problem={null} // We pass reviewProblemData instead
+        reviewProblem={selectedReviewProblem?.problemData}
+        isReview={true}
+        onCorrectAnswer={handleCorrectReview}
+        onWrongAnswer={handleWrongReview}
+        userId={currentUser.id}
+      />
+    </>
   );
 }

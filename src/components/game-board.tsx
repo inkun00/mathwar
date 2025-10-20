@@ -1,13 +1,14 @@
 'use client';
 
 import { useState, useMemo, useEffect } from "react";
-import type { Tile, MathProblem, Country, User, ProblemAttempt, InvasionTarget } from "@/lib/types";
+import type { Tile, MathProblem, Country, User, ProblemAttempt, InvasionTarget, WrongAnswer } from "@/lib/types";
 import { generateMathProblem, isAdjacent, getAIMove } from "@/lib/game-logic";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { ZoomIn, ZoomOut } from "lucide-react";
 import { useFirestore, useUser } from "@/firebase";
 import { doc, setDoc, updateDoc, writeBatch, increment, collection } from "firebase/firestore";
+import { addWrongAnswer } from "@/firebase/firestore/data";
 
 import Header from "./header";
 import WorldMap from "./world-map";
@@ -21,6 +22,7 @@ interface GameBoardProps {
   landTiles: Tile[];
   currentUserProfile: User;
   problemAttempts: ProblemAttempt[];
+  wrongAnswers: WrongAnswer[];
 }
 
 const aiUsers: (Omit<User, 'uid' | 'email'> & {country: Omit<Country, 'id' | 'createdBy'>})[] = [
@@ -28,7 +30,7 @@ const aiUsers: (Omit<User, 'uid' | 'email'> & {country: Omit<Country, 'id' | 'cr
     { id: "player3", nickname: "AI 플레이어 B", tokens: 1, countryId: 'ai-country-b', country: { name: 'AI 제국 B', color: "hsl(340, 80%, 60%)"} },
 ];
 
-export default function GameBoard({ users, countries, landTiles, currentUserProfile, problemAttempts }: GameBoardProps) {
+export default function GameBoard({ users, countries, landTiles, currentUserProfile, problemAttempts, wrongAnswers }: GameBoardProps) {
   const firestore = useFirestore();
   const { user: authUser } = useUser();
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -352,6 +354,19 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
     setIsModalOpen(open);
   }
 
+  const handleWrongAnswer = async (problem: MathProblem) => {
+    if (invasionTarget) {
+      // Decrement token on wrong answer during an invasion
+      if (currentUser && firestore) {
+        const userRef = doc(firestore, "users", currentUser.id);
+        await updateDoc(userRef, { tokens: increment(-1) });
+      }
+    } else if (authUser && firestore) {
+      // Not an invasion, so add to wrong answer notes
+      await addWrongAnswer(firestore, authUser.uid, problem);
+    }
+    // No need to reset invasion target here, onOpenChange handles it.
+  };
 
   if (!currentUser) {
     return (
@@ -388,16 +403,9 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
         onOpenChange={handleProblemModalClose}
         problem={currentProblem}
         onCorrectAnswer={invasionTarget ? handleInvasionSuccess : handleGainToken}
+        onWrongAnswer={handleWrongAnswer}
         userId={authUser?.uid}
         isInvasion={!!invasionTarget}
-        onWrongAnswer={async () => {
-            if (invasionTarget && currentUser && firestore) {
-                // Only decrement token on wrong answer during an invasion
-                const userRef = doc(firestore, "users", currentUser.id);
-                await updateDoc(userRef, { tokens: increment(-1) });
-            }
-            // No need to reset invasion target here, onOpenChange handles it.
-        }}
       />
       {isDemise && <DemiseScreen onRestart={handleRestart} />}
     </div>

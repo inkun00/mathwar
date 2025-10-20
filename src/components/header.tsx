@@ -8,7 +8,8 @@ import { UserCircle, HelpCircle, User as UserIcon, Trophy } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import ProfileSheet from "./profile-sheet";
 import LeaderboardSheet from "./leaderboard-sheet";
-import type { Country, ProblemAttempt } from "@/lib/types";
+import type { Country, ProblemAttempt, WrongAnswer } from "@/lib/types";
+import { useToast } from "@/hooks/use-toast";
 
 interface HeaderProps {
   currentUser: User;
@@ -17,10 +18,32 @@ interface HeaderProps {
   problemAttempts: ProblemAttempt[];
   landTiles: Tile[];
   users: User[];
+  wrongAnswers: WrongAnswer[];
 }
 
-export default function Header({ currentUser, onSolveProblemClick, countries, problemAttempts, landTiles, users }: HeaderProps) {
+export default function Header({ currentUser, onSolveProblemClick, countries, problemAttempts, landTiles, users, wrongAnswers }: HeaderProps) {
   const userCountry = countries.find(c => c.id === currentUser.countryId);
+  const { toast } = useToast();
+
+  const handleSolveClick = () => {
+    const twentyFourHoursAgo = Date.now() - 24 * 60 * 60 * 1000;
+    const recentAttempts = problemAttempts.filter(
+      (attempt) =>
+        attempt.timestamp &&
+        attempt.timestamp.toDate() > new Date(twentyFourHoursAgo) &&
+        !attempt.isReview // Omit review problems from count
+    );
+
+    if (recentAttempts.length >= 10) {
+      toast({
+        variant: "destructive",
+        title: "일일 한도 초과",
+        description: "오늘의 문제 풀이 횟수를 모두 사용했습니다. 24시간 후에 다시 시도해 주세요.",
+      });
+    } else {
+      onSolveProblemClick();
+    }
+  };
 
   return (
     <header className="w-full max-w-7xl rounded-lg border bg-card/80 p-4 shadow-md backdrop-blur-sm">
@@ -57,6 +80,7 @@ export default function Header({ currentUser, onSolveProblemClick, countries, pr
                 currentUser={currentUser} 
                 userCountry={userCountry}
                 problemAttempts={problemAttempts}
+                wrongAnswers={wrongAnswers}
               />
             </SheetContent>
           </Sheet>
@@ -81,7 +105,7 @@ export default function Header({ currentUser, onSolveProblemClick, countries, pr
           </Sheet>
 
           <Separator orientation="vertical" className="h-10" />
-          <Button onClick={onSolveProblemClick}>
+          <Button onClick={handleSolveClick}>
             <HelpCircle className="mr-2 h-4 w-4" />
             문제 풀기
           </Button>
