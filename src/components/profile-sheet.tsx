@@ -171,7 +171,7 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
                               className="fill-foreground"
                               fontSize={12}
                               formatter={(value: number, entry: any) => {
-                                const { correct, total } = entry.payload;
+                                const { correct, total } = entry;
                                 if (total === 0) return "0/0 (0%)";
                                 return `${correct}/${total} (${Math.round(value)}%)`;
                               }}
@@ -199,7 +199,7 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
                                 className="fill-foreground"
                                 fontSize={12}
                                 formatter={(value: number, entry: any) => {
-                                  const { correct, total } = entry.payload;
+                                  const { correct, total } = entry;
                                   if (total === 0) return "0/0 (0%)";
                                   return `${correct}/${total} (${Math.round(value)}%)`;
                                 }}
