@@ -36,7 +36,9 @@ export type ProblemSubType =
   | 'fraction-subtract-same-den'
   | 'fraction-add-mixed'
   | 'fraction-subtract-mixed'
-  | 'fraction-subtract-from-int';
+  | 'fraction-subtract-from-int'
+  | 'fraction-add-diff-den'
+  | 'fraction-subtract-diff-den';
 
 
 export interface MathProblem {

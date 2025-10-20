@@ -49,15 +49,17 @@ const generateDecimalProblem = (): MathProblem => {
 
 // --- Fraction Problem Generation ---
 const generateFractionProblem = (): MathProblem => {
-    const type = randomInt(1, 3);
+    const type = randomInt(1, 4);
     switch (type) {
         case 1: // 진분수 덧셈/뺄셈 (동일 분모)
             return simpleFractionCalc();
         case 2: // 대분수 덧셈/뺄셈
             return mixedFractionCalc();
         case 3: // 자연수 - 분수
-        default:
             return integerFractionCalc();
+        case 4: // 다른 분모를 가진 분수의 덧셈/뺄셈
+        default:
+            return commonDenominatorFractionCalc();
     }
 }
 
