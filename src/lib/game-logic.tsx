@@ -80,15 +80,15 @@ const generateDecimalProblem = (): MathProblem => {
 
 // --- Fraction Problem Generation ---
 const generateFractionProblem = (): MathProblem => {
-    const type = randomInt(1, 4); // Adjusted from 6 to 4
+    const type = randomInt(1, 4); 
     switch (type) {
-        case 1: // 진분수 덧셈/뺄셈 (동일 분모)
+        case 1: 
             return simpleFractionCalc();
-        case 2: // 대분수 덧셈/뺄셈
+        case 2: 
             return mixedFractionCalc();
-        case 3: // 자연수 - 분수
+        case 3: 
             return integerFractionCalc();
-        case 4: // 문장제
+        case 4: 
         default:
             return fractionWordProblem();
     }
@@ -286,9 +286,13 @@ const fractionComparisonProblem = (): MathProblem => {
         }
 
     } else {
-        const num1 = randomInt(1, den - 2);
-        const num2 = randomInt(1, den - num1); // Ensure sum is not > 1
+        let num1 = randomInt(1, den - 1);
+        let num2 = randomInt(1, den - 1);
         const op = Math.random() > 0.5 ? 'add' : 'subtract';
+
+        if (op === 'subtract' && num1 < num2) {
+            [num1, num2] = [num2, num1];
+        }
         
         return {
             problem: (
@@ -569,7 +573,7 @@ export const generateMathProblem = (): MathProblem => {
   if (problemType < 0.7) { // 70% chance for decimal calculation
     return generateDecimalProblem();
   } else { // 30% chance for fraction/conversion
-    const subType = randomInt(1, 8); // Adjusted from 10 to 8
+    const subType = randomInt(1, 8); 
     switch(subType) {
         case 1:
         case 2:
