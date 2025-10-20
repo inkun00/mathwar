@@ -3,10 +3,11 @@
 import { Logo } from "@/components/icons/logo";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import type { User } from "@/lib/types";
-import { UserCircle, HelpCircle, User as UserIcon } from "lucide-react";
+import type { User, Tile } from "@/lib/types";
+import { UserCircle, HelpCircle, User as UserIcon, Trophy } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import ProfileSheet from "./profile-sheet";
+import LeaderboardSheet from "./leaderboard-sheet";
 import type { Country, ProblemAttempt } from "@/lib/types";
 
 interface HeaderProps {
@@ -14,9 +15,11 @@ interface HeaderProps {
   onSolveProblemClick: () => void;
   countries: Country[];
   problemAttempts: ProblemAttempt[];
+  landTiles: Tile[];
+  users: User[];
 }
 
-export default function Header({ currentUser, onSolveProblemClick, countries, problemAttempts }: HeaderProps) {
+export default function Header({ currentUser, onSolveProblemClick, countries, problemAttempts, landTiles, users }: HeaderProps) {
   const userCountry = countries.find(c => c.id === currentUser.countryId);
 
   return (
@@ -54,6 +57,25 @@ export default function Header({ currentUser, onSolveProblemClick, countries, pr
                 currentUser={currentUser} 
                 userCountry={userCountry}
                 problemAttempts={problemAttempts}
+              />
+            </SheetContent>
+          </Sheet>
+
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button variant="ghost" size="icon">
+                <Trophy className="h-5 w-5" />
+                <span className="sr-only">리더보드 보기</span>
+              </Button>
+            </SheetTrigger>
+            <SheetContent>
+              <SheetHeader>
+                <SheetTitle>리더보드</SheetTitle>
+              </SheetHeader>
+              <LeaderboardSheet
+                users={users}
+                countries={countries}
+                landTiles={landTiles}
               />
             </SheetContent>
           </Sheet>

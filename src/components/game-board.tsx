@@ -242,7 +242,9 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
         await batch.commit();
         
         // After commit, check for territory cuts
-        await handleTerritoryCut(invasionTarget.originalOwnerId);
+        if (invasionTarget.originalOwnerId) {
+            await handleTerritoryCut(invasionTarget.originalOwnerId);
+        }
     } catch (error) {
         console.error("Invasion failed:", error);
     } finally {
@@ -367,6 +369,8 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
         onSolveProblemClick={handleSolveProblemForToken} 
         countries={allCountries}
         problemAttempts={problemAttempts}
+        landTiles={landTiles}
+        users={allUsers}
       />
       <div className="relative h-full w-full max-w-7xl flex-grow">
         <WorldMap mapData={mapData} users={allUsers} countries={allCountries} onTileClick={handleTileClick} canConquer={canConquer} zoomLevel={zoomLevel} />

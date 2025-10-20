@@ -60,5 +60,21 @@ export interface ProblemAttempt {
 export type InvasionTarget = {
     x: number;
     y: number;
-    originalOwnerId: string;
+    originalOwnerId: string | null;
 } | null;
+
+
+export interface RankedUser {
+  rank: number;
+  id: string;
+  nickname: string;
+  tileCount: number;
+}
+
+export interface RankedCountry {
+  rank: number;
+  id: string;
+  name: string;
+  color: string;
+  tileCount: number;
+}
