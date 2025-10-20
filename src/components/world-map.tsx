@@ -1,7 +1,9 @@
+'use client';
 import type { MapData, User, Tile, Country } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { isLand } from "@/lib/world-map-shape";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import React from "react";
 
 interface WorldMapProps {
   mapData: MapData;
@@ -12,7 +14,7 @@ interface WorldMapProps {
   zoomLevel: number;
 }
 
-const TileComponent = ({ 
+const TileComponent = React.memo(({ 
   tile, 
   ownerColor, 
   onClick,
@@ -63,7 +65,8 @@ const TileComponent = ({
       </Tooltip>
     </TooltipProvider>
   )
-};
+});
+TileComponent.displayName = "TileComponent";
 
 
 export default function WorldMap({ mapData, users, countries, onTileClick, canConquer, zoomLevel }: WorldMapProps) {
