@@ -8,7 +8,7 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart";
-import { Bar, BarChart, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, LabelList, XAxis, YAxis } from "recharts";
 import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { LogOut } from "lucide-react";
@@ -33,6 +33,36 @@ const areaLabels: Record<ProblemSubType, string> = {
   'fraction-subtract-diff-den': '분수 뺄셈 (다른 분모)',
 };
 
+const CustomTooltipContent = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload;
+    return (
+      <div className="rounded-lg border bg-background p-2 shadow-sm">
+        <div className="grid grid-cols-2 gap-2">
+          <div className="flex flex-col space-y-1">
+            <span className="text-[0.70rem] uppercase text-muted-foreground">
+              {label}
+            </span>
+            <span className="font-bold text-muted-foreground">
+              {data.correct}/{data.total} 문제
+            </span>
+          </div>
+          <div className="flex flex-col space-y-1">
+             <span className="text-[0.70rem] uppercase text-muted-foreground">
+              정답률
+            </span>
+            <span className="font-bold text-muted-foreground">
+              {Math.round(data.accuracy)}%
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return null;
+};
+
 export default function ProfileSheet({ currentUser, userCountry, problemAttempts }: ProfileSheetProps) {
   const auth = useAuth();
   
@@ -51,6 +81,9 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
 
     problemAttempts.forEach(attempt => {
       // Unit stats
+      if (!stats.unit[attempt.unit]) {
+         stats.unit[attempt.unit] = { total: 0, correct: 0 };
+      }
       stats.unit[attempt.unit].total++;
       if (attempt.correct) {
         stats.unit[attempt.unit].correct++;
@@ -69,16 +102,22 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
     const unitStats = [
       {
         name: '소수',
+        total: stats.unit.decimal.total,
+        correct: stats.unit.decimal.correct,
         accuracy: stats.unit.decimal.total > 0 ? (stats.unit.decimal.correct / stats.unit.decimal.total) * 100 : 0,
       },
       {
         name: '분수',
+        total: stats.unit.fraction.total,
+        correct: stats.unit.fraction.correct,
         accuracy: stats.unit.fraction.total > 0 ? (stats.unit.fraction.correct / stats.unit.fraction.total) * 100 : 0,
       },
     ];
 
     const areaStats = Object.entries(stats.area).map(([area, data]) => ({
       name: areaLabels[area as ProblemSubType] || area,
+      total: data.total,
+      correct: data.correct,
       accuracy: data.total > 0 ? (data.correct / data.total) * 100 : 0,
     })).sort((a,b) => b.accuracy - a.accuracy);
 
@@ -119,11 +158,22 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
               </CardHeader>
               <CardContent>
                    <ChartContainer config={{}} className="h-[150px] w-full">
-                      <BarChart data={unitStats} layout="vertical" margin={{ left: 10, right: 10 }}>
+                      <BarChart data={unitStats} layout="vertical" margin={{ left: 10, right: 30 }}>
                           <XAxis type="number" dataKey="accuracy" domain={[0, 100]} tickFormatter={(v) => `${v}%`} hide />
                           <YAxis type="category" dataKey="name" width={40} tickLine={false} axisLine={false} />
-                          <ChartTooltip content={<ChartTooltipContent />} />
+                          <ChartTooltip content={<CustomTooltipContent />} />
                           <Bar dataKey="accuracy" radius={4} fill="var(--color-primary)">
+                            <LabelList
+                              position="right"
+                              offset={10}
+                              className="fill-foreground"
+                              fontSize={12}
+                              formatter={(value: number, props: any) => {
+                                const { correct, total } = props.payload;
+                                if (total === 0) return "0%";
+                                return `${correct}/${total} (${Math.round(value)}%)`;
+                              }}
+                            />
                           </Bar>
                       </BarChart>
                   </ChartContainer>
@@ -136,11 +186,23 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
               </CardHeader>
               <CardContent>
                    <ChartContainer config={{}} className="h-[250px] w-full">
-                      <BarChart data={areaStats} layout="vertical" margin={{ left: 10, right: 10 }}>
+                      <BarChart data={areaStats} layout="vertical" margin={{ left: 10, right: 30 }}>
                           <XAxis type="number" dataKey="accuracy" domain={[0, 100]} tickFormatter={(v) => `${v}%`} hide />
                           <YAxis type="category" dataKey="name" width={110} tickLine={false} axisLine={false} />
-                          <ChartTooltip content={<ChartTooltipContent />} />
-                          <Bar dataKey="accuracy" radius={4} fill="var(--color-accent)" />
+                          <ChartTooltip content={<CustomTooltipContent />} />
+                          <Bar dataKey="accuracy" radius={4} fill="var(--color-accent)">
+                            <LabelList
+                                position="right"
+                                offset={10}
+                                className="fill-foreground"
+                                fontSize={12}
+                                formatter={(value: number, props: any) => {
+                                  const { correct, total } = props.payload;
+                                  if (total === 0) return "0%";
+                                  return `${correct}/${total} (${Math.round(value)}%)`;
+                                }}
+                              />
+                          </Bar>
                       </BarChart>
                   </ChartContainer>
               </CardContent>
