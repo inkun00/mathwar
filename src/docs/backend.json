@@ -133,7 +133,8 @@
           "schema": {
             "$ref": "#/backend/entities/User"
           },
-          "description": "Stores user profiles. Path-based ownership ensures only the user can modify their own profile.",
+          "description": "Stores user profiles. Any authenticated user can read for game state, but only the user can modify their own profile.",
+          "allow": ["get", "list", "update"],
           "params": [
             {
               "name": "userId",
@@ -147,7 +148,8 @@
         "definition": {
             "entityName": "wrongAnswer",
             "schema": { "$ref": "#/backend/entities/WrongAnswer" },
-            "description": "Stores incorrect problems for a specific user to review.",
+            "description": "Stores incorrect problems for a specific user to review. Only accessible by that user.",
+             "allow": ["list", "get", "create", "update", "delete"],
              "params": [
                 { "name": "userId", "description": "The UID of the user." },
                 { "name": "wrongAnswerId", "description": "The unique ID for the wrong answer entry." }
@@ -162,6 +164,7 @@
             "$ref": "#/backend/entities/Country"
           },
           "description": "Stores all countries created by users. Accessible to all authenticated users.",
+          "allow": ["list", "get", "create"],
           "params": [
             {
               "name": "countryId",
@@ -177,7 +180,8 @@
           "schema": {
             "$ref": "#/backend/entities/LandTile"
           },
-          "description": "Stores all land tiles on the game map. Includes denormalized 'ownerId' for authorization independence.",
+          "description": "Stores all land tiles on the game map. Accessible to all authenticated users for gameplay.",
+           "allow": ["list", "get", "create", "update"],
           "params": [
             {
               "name": "landTileId",
@@ -191,7 +195,8 @@
         "definition": {
             "entityName": "problemAttempt",
             "schema": { "$ref": "#/backend/entities/ProblemAttempt" },
-            "description": "Stores each attempt a user makes on a problem for analytics.",
+            "description": "Stores each attempt a user makes on a problem for analytics. Only the user can create and list their own attempts.",
+            "allow": ["list", "get", "create"],
             "params": [
                 { "name": "userId", "description": "The UID of the user." },
                 { "name": "attemptId", "description": "The unique ID for the attempt." }
