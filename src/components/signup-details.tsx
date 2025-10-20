@@ -16,6 +16,7 @@ import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from './ui/command';
 import { cn } from '@/lib/utils';
 import { Check } from 'lucide-react';
+import { moderateText } from '@/ai/flows/moderate-text-flow';
 
 
 export default function SignUpDetails() {
@@ -55,9 +56,21 @@ export default function SignUpDetails() {
         return;
     }
 
-    let countryId = selectedCountryId;
-
     try {
+      // Moderate nickname
+      const nicknameModeration = await moderateText(nickname);
+      if (!nicknameModeration.isAppropriate) {
+        toast({
+          variant: 'destructive',
+          title: '부적절한 닉네임',
+          description: nicknameModeration.reason || '입력한 닉네임은 사용할 수 없습니다.',
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      let countryId = selectedCountryId;
+
       if (countryOption === 'new') {
         if (!newCountryName) {
             toast({ variant: 'destructive', title: '오류', description: '새 국가 이름을 입력해주세요.' });
@@ -69,6 +82,19 @@ export default function SignUpDetails() {
             setIsLoading(false);
             return;
         }
+        
+        // Moderate country name
+        const countryNameModeration = await moderateText(newCountryName);
+        if (!countryNameModeration.isAppropriate) {
+            toast({
+                variant: 'destructive',
+                title: '부적절한 국가 이름',
+                description: countryNameModeration.reason || '입력한 국가 이름은 사용할 수 없습니다.',
+            });
+            setIsLoading(false);
+            return;
+        }
+
         // Create new country
         const countryRef = await addDoc(collection(firestore, 'countries'), {
           name: newCountryName,
