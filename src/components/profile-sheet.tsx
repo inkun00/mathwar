@@ -63,6 +63,27 @@ const CustomTooltipContent = ({ active, payload, label }: any) => {
   return null;
 };
 
+const CustomLabel = (props: any) => {
+  const { x, y, width, value, correct, total } = props;
+
+  if (total === 0) {
+    return (
+      <text x={x + width / 2} y={y} dy={-4} fill="#666" fontSize={12} textAnchor="middle">
+        0/0 (0%)
+      </text>
+    );
+  }
+  
+  const labelText = `${correct}/${total} (${Math.round(value)}%)`;
+
+  return (
+    <text x={x + width / 2} y={y} dy={-4} fill="#000" fontSize={12} textAnchor="middle">
+      {labelText}
+    </text>
+  );
+};
+
+
 export default function ProfileSheet({ currentUser, userCountry, problemAttempts }: ProfileSheetProps) {
   const auth = useAuth();
   
@@ -165,14 +186,15 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
                           <YAxis type="category" dataKey="name" width={40} tickLine={false} axisLine={false} />
                           <ChartTooltip content={<CustomTooltipContent />} />
                           <Bar dataKey="accuracy" radius={4} fill="transparent">
-                            <LabelList
+                             <LabelList
                               position="right"
                               offset={10}
                               className="fill-foreground"
                               fontSize={12}
-                              formatter={(value: number, entry: any) => {
+                              formatter={(value: number, index: number) => {
+                                const entry = unitStats[index];
+                                if (!entry || entry.total === 0) return "0/0 (0%)";
                                 const { correct, total } = entry;
-                                if (total === 0) return "0/0 (0%)";
                                 return `${correct}/${total} (${Math.round(value)}%)`;
                               }}
                             />
@@ -198,9 +220,10 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
                                 offset={10}
                                 className="fill-foreground"
                                 fontSize={12}
-                                formatter={(value: number, entry: any) => {
+                                formatter={(value: number, index: number) => {
+                                  const entry = areaStats[index];
+                                  if (!entry || entry.total === 0) return "0/0 (0%)";
                                   const { correct, total } = entry;
-                                  if (total === 0) return "0/0 (0%)";
                                   return `${correct}/${total} (${Math.round(value)}%)`;
                                 }}
                               />
