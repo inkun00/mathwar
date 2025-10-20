@@ -90,12 +90,14 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
       }
 
       // Area stats
-      if (!stats.area[attempt.area]) {
+      if (attempt.area && !stats.area[attempt.area]) {
         stats.area[attempt.area] = { total: 0, correct: 0 };
       }
-      stats.area[attempt.area].total++;
-      if (attempt.correct) {
-        stats.area[attempt.area].correct++;
+       if (attempt.area) {
+        stats.area[attempt.area].total++;
+        if (attempt.correct) {
+          stats.area[attempt.area].correct++;
+        }
       }
     });
 
@@ -119,7 +121,7 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
       total: data.total,
       correct: data.correct,
       accuracy: data.total > 0 ? (data.correct / data.total) * 100 : 0,
-    })).sort((a,b) => b.accuracy - a.accuracy);
+    })).sort((a,b) => b.total - a.total);
 
 
     return { unitStats, areaStats };
@@ -140,7 +142,7 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
               </div>
               <div className="flex justify-between">
                 <span className="font-medium text-muted-foreground">국가</span>
-                <Badge variant="secondary">{userCountry?.name || '미지정'}</Badge>
+                <Badge variant="secondary" style={{ backgroundColor: userCountry?.color }}>{userCountry?.name || '미지정'}</Badge>
               </div>
                <div className="flex justify-between">
                 <span className="font-medium text-muted-foreground">보유 토큰</span>
@@ -157,21 +159,20 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
                   <CardTitle className="text-base">단원별 정답률</CardTitle>
               </CardHeader>
               <CardContent>
-                   <ChartContainer config={{}} className="h-[150px] w-full">
+                   <ChartContainer config={{}} className="h-[100px] w-full">
                       <BarChart data={unitStats} layout="vertical" margin={{ left: 10, right: 30 }}>
                           <XAxis type="number" dataKey="accuracy" domain={[0, 100]} tickFormatter={(v) => `${v}%`} hide />
                           <YAxis type="category" dataKey="name" width={40} tickLine={false} axisLine={false} />
                           <ChartTooltip content={<CustomTooltipContent />} />
-                          <Bar dataKey="accuracy" radius={4} fill="var(--color-primary)">
+                          <Bar dataKey="accuracy" radius={4} fill="transparent">
                             <LabelList
                               position="right"
                               offset={10}
                               className="fill-foreground"
                               fontSize={12}
-                              formatter={(value: number, props: any) => {
-                                if (!props) return '';
-                                const { correct, total } = props;
-                                if (total === 0) return "0%";
+                              formatter={(value: number, { payload }: any) => {
+                                const { correct, total } = payload;
+                                if (total === 0) return "0/0 (0%)";
                                 return `${correct}/${total} (${Math.round(value)}%)`;
                               }}
                             />
@@ -191,16 +192,15 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
                           <XAxis type="number" dataKey="accuracy" domain={[0, 100]} tickFormatter={(v) => `${v}%`} hide />
                           <YAxis type="category" dataKey="name" width={110} tickLine={false} axisLine={false} />
                           <ChartTooltip content={<CustomTooltipContent />} />
-                          <Bar dataKey="accuracy" radius={4} fill="var(--color-accent)">
+                          <Bar dataKey="accuracy" radius={4} fill="transparent">
                             <LabelList
                                 position="right"
                                 offset={10}
                                 className="fill-foreground"
                                 fontSize={12}
-                                formatter={(value: number, props: any) => {
-                                  if (!props) return '';
-                                  const { correct, total } = props;
-                                  if (total === 0) return "0%";
+                                formatter={(value: number, { payload }: any) => {
+                                  const { correct, total } = payload;
+                                  if (total === 0) return "0/0 (0%)";
                                   return `${correct}/${total} (${Math.round(value)}%)`;
                                 }}
                               />
