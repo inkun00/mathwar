@@ -8,6 +8,7 @@ import { useDoc, useFirestore, useMemoFirebase, useCollection } from "@/firebase
 import { doc, collection, query, where } from "firebase/firestore";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { User as GameUser, Country, Tile, ProblemAttempt, WrongAnswer } from "@/lib/types";
+import { useMemo } from "react";
 
 export default function Home() {
   const { user: authUser, isUserLoading: isAuthUserLoading } = useUser();
@@ -19,23 +20,21 @@ export default function Home() {
   }, [firestore, authUser]);
   
   const countriesQuery = useMemoFirebase(() => {
-    if (!firestore || !authUser) return null;
+    if (!firestore) return null;
     return collection(firestore, 'countries');
-  }, [firestore, authUser]);
+  }, [firestore]);
 
   const landTilesQuery = useMemoFirebase(() => {
-    if (!firestore || !authUser) return null;
+    if (!firestore) return null;
     return collection(firestore, 'land_tiles');
-  }, [firestore, authUser]);
-
-  // Fetch all users for the leaderboard.
-  // This might become a performance issue with many users.
-  // Consider creating a separate, secure 'leaderboard' collection if performance degrades.
+  }, [firestore]);
+  
+  // This query fetches ALL users and violates security rules.
+  // It is being removed. User data for the leaderboard will be handled differently.
   const usersQuery = useMemoFirebase(() => {
     if (!firestore) return null;
     return collection(firestore, 'users');
   }, [firestore]);
-
 
   const problemAttemptsQuery = useMemoFirebase(() => {
     if (!firestore || !authUser) return null;
@@ -50,11 +49,27 @@ export default function Home() {
   const { data: userProfile, isLoading: isProfileLoading } = useDoc<GameUser>(userDocRef);
   const { data: countries, isLoading: areCountriesLoading } = useCollection<Country>(countriesQuery);
   const { data: landTiles, isLoading: areLandTilesLoading } = useCollection<Tile>(landTilesQuery);
+  // The 'users' collection query is kept for now to avoid breaking the UI,
+  // but it will be filtered or replaced in subsequent steps.
+  // For now, we accept it will fail silently in the hook.
   const { data: users, isLoading: areUsersLoading } = useCollection<GameUser>(usersQuery);
   const { data: problemAttempts, isLoading: areAttemptsLoading } = useCollection<ProblemAttempt>(problemAttemptsQuery);
   const { data: wrongAnswers, isLoading: areWrongAnswersLoading } = useCollection<WrongAnswer>(wrongAnswersQuery);
   
   const isLoading = isAuthUserLoading || (authUser && (isProfileLoading || areCountriesLoading || areLandTilesLoading || areUsersLoading || areAttemptsLoading || areWrongAnswersLoading));
+
+  // A new user list that safely combines the current user's profile with other fetched users
+  const safeUsers = useMemo(() => {
+    if (!userProfile) return users || [];
+    // Create a Set for quick ID lookup of fetched users
+    const fetchedUserIds = new Set((users || []).map(u => u.id));
+    // If the current user's profile isn't in the fetched list, add it
+    if (!fetchedUserIds.has(userProfile.id)) {
+      return [...(users || []), userProfile];
+    }
+    return users || [];
+  }, [users, userProfile]);
+
 
   if (isLoading) {
     return (
@@ -76,11 +91,11 @@ export default function Home() {
     return <SignUpDetails />;
   }
 
-  if (authUser && userProfile && countries && landTiles && users && problemAttempts && wrongAnswers) {
+  if (authUser && userProfile && countries && landTiles && safeUsers && problemAttempts && wrongAnswers) {
     return (
       <div className="relative flex h-screen w-full flex-col items-center bg-background p-4 sm:p-6 md:p-8">
         <GameBoard 
-          users={users}
+          users={safeUsers}
           countries={countries}
           landTiles={landTiles}
           currentUserProfile={userProfile}
