@@ -4,7 +4,7 @@ import { Toaster } from "@/components/ui/toaster"
 import { FirebaseClientProvider } from '@/firebase';
 
 export const metadata: Metadata = {
-  title: '소수 정복',
+  title: '수학 전쟁',
   description: '소수 배우기 게임',
 };
 

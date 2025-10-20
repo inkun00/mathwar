@@ -56,7 +56,7 @@ export default function Header({ currentUser, onSolveProblemClick, countries, pr
         <div className="flex items-center gap-3">
           <Logo className="h-8 w-8 text-primary" />
           <h1 className="font-headline text-xl font-bold tracking-tight sm:text-2xl">
-            소수 정복
+            수학 전쟁
           </h1>
         </div>
         <div className="flex items-center gap-2 sm:gap-4">

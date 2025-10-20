@@ -92,7 +92,7 @@ export default function Login() {
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
             <Logo className="h-10 w-10 text-primary" />
           </div>
-          <CardTitle className="text-3xl font-bold">소수 정복</CardTitle>
+          <CardTitle className="text-3xl font-bold">수학 전쟁</CardTitle>
           <CardDescription className="text-lg">
             {isSignUp ? '새로운 계정을 만들어 영토를 정복하세요.' : '소수점 계산으로 영토를 확장하는 전략 게임'}
           </CardDescription>
@@ -156,5 +156,3 @@ export default function Login() {
     </div>
   );
 }
-
-    
