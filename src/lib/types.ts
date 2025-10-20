@@ -32,12 +32,17 @@ export type ProblemType = 'decimal' | 'fraction';
 export type ProblemSubType = 
   | 'decimal-add' 
   | 'decimal-subtract'
+  | 'decimal-multiply'
+  | 'decimal-divide'
   | 'fraction-add-same-den'
   | 'fraction-subtract-same-den'
   | 'fraction-add-mixed'
   | 'fraction-subtract-mixed'
-  | 'fraction-subtract-from-int';
-
+  | 'fraction-subtract-from-int'
+  | 'fraction-multiply'
+  | 'fraction-divide'
+  | 'fraction-word-problem'
+  | 'fraction-comparison';
 
 export interface MathProblem {
   problem: ReactNode;
@@ -50,8 +55,8 @@ export interface MathProblem {
 export interface StorableProblem {
   type: ProblemType;
   subType: ProblemSubType;
-  operands: number[];
-  operator: 'add' | 'subtract';
+  operands: (number | string)[];
+  operator: 'add' | 'subtract' | 'multiply' | 'divide' | 'compare';
 }
 
 

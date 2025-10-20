@@ -22,11 +22,17 @@ interface ProfileSheetProps {
 const areaLabels: Record<ProblemSubType, string> = {
   'decimal-add': '소수 덧셈',
   'decimal-subtract': '소수 뺄셈',
+  'decimal-multiply': '소수 곱셈',
+  'decimal-divide': '소수 나눗셈',
   'fraction-add-same-den': '분수 덧셈 (동일 분모)',
   'fraction-subtract-same-den': '분수 뺄셈 (동일 분모)',
   'fraction-add-mixed': '대분수 덧셈',
   'fraction-subtract-mixed': '대분수 뺄셈',
   'fraction-subtract-from-int': '자연수-분수',
+  'fraction-multiply': '분수 곱셈',
+  'fraction-divide': '분수 나눗셈',
+  'fraction-word-problem': '분수 문장제',
+  'fraction-comparison': '분수 크기 비교',
 };
 
 export default function ProfileSheet({ currentUser, userCountry, problemAttempts, wrongAnswers }: ProfileSheetProps) {
