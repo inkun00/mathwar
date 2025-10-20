@@ -185,18 +185,14 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
                           <XAxis type="number" dataKey="accuracy" domain={[0, 100]} tickFormatter={(v) => `${v}%`} hide />
                           <YAxis type="category" dataKey="name" width={40} tickLine={false} axisLine={false} />
                           <ChartTooltip content={<CustomTooltipContent />} />
-                          <Bar dataKey="accuracy" radius={4} fill="transparent">
+                          <Bar dataKey="accuracy" radius={4} fill="var(--color-accent)">
                              <LabelList
+                              dataKey="accuracy"
                               position="right"
                               offset={10}
                               className="fill-foreground"
                               fontSize={12}
-                              formatter={(value: number, index: number) => {
-                                const entry = unitStats[index];
-                                if (!entry || entry.total === 0) return "0/0 (0%)";
-                                const { correct, total } = entry;
-                                return `${correct}/${total} (${Math.round(value)}%)`;
-                              }}
+                              content={<CustomLabel />}
                             />
                           </Bar>
                       </BarChart>
@@ -214,18 +210,14 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
                           <XAxis type="number" dataKey="accuracy" domain={[0, 100]} tickFormatter={(v) => `${v}%`} hide />
                           <YAxis type="category" dataKey="name" width={110} tickLine={false} axisLine={false} />
                           <ChartTooltip content={<CustomTooltipContent />} />
-                          <Bar dataKey="accuracy" radius={4} fill="transparent">
+                          <Bar dataKey="accuracy" radius={4} fill="var(--color-accent)">
                             <LabelList
+                                dataKey="accuracy"
                                 position="right"
                                 offset={10}
                                 className="fill-foreground"
                                 fontSize={12}
-                                formatter={(value: number, index: number) => {
-                                  const entry = areaStats[index];
-                                  if (!entry || entry.total === 0) return "0/0 (0%)";
-                                  const { correct, total } = entry;
-                                  return `${correct}/${total} (${Math.round(value)}%)`;
-                                }}
+                                content={<CustomLabel />}
                               />
                           </Bar>
                       </BarChart>
