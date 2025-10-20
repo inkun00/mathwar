@@ -40,8 +40,8 @@ export default function Home() {
 
   const wrongAnswersQuery = useMemoFirebase(() => {
     if (!firestore || !authUser) return null;
-    // Query only for the current user's wrong answers
-    return query(collection(firestore, 'wrong_answers'), where("userId", "==", authUser.uid));
+    // Changed to subcollection query
+    return collection(firestore, 'users', authUser.uid, 'wrong_answers');
   }, [firestore, authUser]);
 
   const { data: userProfile, isLoading: isProfileLoading } = useDoc<GameUser>(userDocRef);

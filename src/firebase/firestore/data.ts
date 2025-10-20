@@ -23,7 +23,8 @@ export const addWrongAnswer = async (
   problem: MathProblem
 ): Promise<void> => {
   try {
-    await addDoc(collection(firestore, 'wrong_answers'), {
+    // Save to the 'wrong_answers' subcollection under the specific user
+    await addDoc(collection(firestore, 'users', userId, 'wrong_answers'), {
       userId: userId,
       problemData: problem.storable,
       problemString: problemNodeToString(problem.problem),
@@ -38,14 +39,17 @@ export const addWrongAnswer = async (
 /**
  * Deletes a problem from the user's wrong answer collection.
  * @param firestore - The Firestore instance.
+ * @param userId - The ID of the user.
  * @param wrongAnswerId - The ID of the wrong answer document to delete.
  */
 export const deleteWrongAnswer = async (
   firestore: Firestore,
+  userId: string,
   wrongAnswerId: string
 ): Promise<void> => {
   try {
-    await deleteDoc(doc(firestore, 'wrong_answers', wrongAnswerId));
+    // Delete from the 'wrong_answers' subcollection under the specific user
+    await deleteDoc(doc(firestore, 'users', userId, 'wrong_answers', wrongAnswerId));
   } catch (error) {
     console.error('Error deleting wrong answer:', error);
   }

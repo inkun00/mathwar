@@ -355,13 +355,13 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
   }
 
   const handleWrongAnswer = async (problem: MathProblem) => {
+    if (!authUser || !firestore) return;
+    
     if (invasionTarget) {
       // Decrement token on wrong answer during an invasion
-      if (currentUser && firestore) {
-        const userRef = doc(firestore, "users", currentUser.id);
-        await updateDoc(userRef, { tokens: increment(-1) });
-      }
-    } else if (authUser && firestore) {
+      const userRef = doc(firestore, "users", authUser.uid);
+      await updateDoc(userRef, { tokens: increment(-1) });
+    } else {
       // Not an invasion, so add to wrong answer notes
       await addWrongAnswer(firestore, authUser.uid, problem);
     }
@@ -386,6 +386,7 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
         problemAttempts={problemAttempts}
         landTiles={landTiles}
         users={allUsers}
+        wrongAnswers={wrongAnswers}
       />
       <div className="relative h-full w-full max-w-7xl flex-grow">
         <WorldMap mapData={mapData} users={allUsers} countries={allCountries} onTileClick={handleTileClick} canConquer={canConquer} zoomLevel={zoomLevel} />

@@ -50,7 +50,7 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
   const handleCorrectReview = async () => {
     if (!selectedReviewProblem || !firestore || !currentUser) return;
     // 1. Delete from wrong answers
-    await deleteWrongAnswer(firestore, selectedReviewProblem.id);
+    await deleteWrongAnswer(firestore, currentUser.id, selectedReviewProblem.id);
     // 2. Grant token
     const userRef = doc(firestore, "users", currentUser.id);
     await updateDoc(userRef, {
@@ -60,9 +60,9 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
   };
 
   const handleWrongReview = async () => {
-    if (!selectedReviewProblem || !firestore) return;
+    if (!selectedReviewProblem || !firestore || !currentUser) return;
     // Just delete from wrong answers
-    await deleteWrongAnswer(firestore, selectedReviewProblem.id);
+    await deleteWrongAnswer(firestore, currentUser.id, selectedReviewProblem.id);
     setSelectedReviewProblem(null);
   };
 
@@ -123,10 +123,6 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
 
     return { unitStats, areaStats };
   }, [problemAttempts]);
-
-  const userWrongAnswers = useMemo(() => {
-    return wrongAnswers.filter(wa => wa.userId === currentUser.id);
-  }, [wrongAnswers, currentUser.id]);
 
   return (
     <>
@@ -193,9 +189,9 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
             <h3 className="text-lg font-semibold tracking-tight">오답노트</h3>
             <Card>
               <CardContent className="pt-4">
-                {userWrongAnswers.length > 0 ? (
+                {wrongAnswers.length > 0 ? (
                   <ul className="space-y-2">
-                    {userWrongAnswers.map((wa) => (
+                    {wrongAnswers.map((wa) => (
                       <li key={wa.id} className="flex items-center justify-between rounded-md bg-muted p-2">
                         <span className="font-code text-sm">{wa.problemString}</span>
                         <Button
