@@ -19,12 +19,12 @@ export type ModerateTextInput = z.infer<typeof ModerateTextInputSchema>;
 const ModerateTextOutputSchema = z.object({
   isAppropriate: z
     .boolean()
-    .describe('Whether the text is appropriate or not.'),
+    .describe('주어진 텍스트가 적절한지 여부.'),
   reason: z
     .string()
     .optional()
     .describe(
-      'A brief explanation if the text is inappropriate, otherwise not provided.'
+      '텍스트가 부적절한 경우, 그에 대한 간단한 설명. 적절한 경우엔 제공되지 않음.'
     ),
 });
 export type ModerateTextOutput = z.infer<typeof ModerateTextOutputSchema>;
@@ -51,7 +51,7 @@ const moderationPrompt = ai.definePrompt({
 
     Analyze the following text: {{{text}}}
 
-    Based on your analysis, determine if the text is appropriate. If it is inappropriate, provide a very brief, general reason (e.g., "Contains inappropriate language", "Potentially offensive content").`,
+    Based on your analysis, determine if the text is appropriate. If it is inappropriate, provide a very brief, general reason in KOREAN (e.g., "부적절한 언어를 포함하고 있습니다", "공격적인 내용을 담고 있습니다").`,
 });
 
 const moderateTextFlow = ai.defineFlow(
@@ -65,3 +65,5 @@ const moderateTextFlow = ai.defineFlow(
     return output!;
   }
 );
+
+    

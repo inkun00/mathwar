@@ -39,13 +39,13 @@ export default function SignUpDetails() {
     setIsLoading(true);
 
     if (!auth.currentUser) {
-      toast({ variant: 'destructive', title: '오류', description: '사용자 인증 정보를 찾을 수 없습니다.' });
+      toast({ variant: 'destructive', title: '오류', description: '사용자 인증 정보를 찾을 수 없습니다. 다시 로그인해 주세요.' });
       setIsLoading(false);
       return;
     }
 
     if (!nickname) {
-        toast({ variant: 'destructive', title: '오류', description: '닉네임을 입력해주세요.' });
+        toast({ variant: 'destructive', title: '입력 오류', description: '닉네임을 입력해주세요.' });
         setIsLoading(false);
         return;
     }
@@ -63,7 +63,7 @@ export default function SignUpDetails() {
         toast({
           variant: 'destructive',
           title: '부적절한 닉네임',
-          description: nicknameModeration.reason || '입력한 닉네임은 사용할 수 없습니다.',
+          description: nicknameModeration.reason || '입력한 닉네임은 사용할 수 없습니다. 다른 이름을 시도해 보세요.',
         });
         setIsLoading(false);
         return;
@@ -73,7 +73,7 @@ export default function SignUpDetails() {
 
       if (countryOption === 'new') {
         if (!newCountryName) {
-            toast({ variant: 'destructive', title: '오류', description: '새 국가 이름을 입력해주세요.' });
+            toast({ variant: 'destructive', title: '입력 오류', description: '새 국가 이름을 입력해주세요.' });
             setIsLoading(false);
             return;
         }
@@ -89,7 +89,7 @@ export default function SignUpDetails() {
             toast({
                 variant: 'destructive',
                 title: '부적절한 국가 이름',
-                description: countryNameModeration.reason || '입력한 국가 이름은 사용할 수 없습니다.',
+                description: countryNameModeration.reason || '입력한 국가 이름은 사용할 수 없습니다. 다른 이름을 시도해 보세요.',
             });
             setIsLoading(false);
             return;
@@ -104,7 +104,7 @@ export default function SignUpDetails() {
         countryId = countryRef.id;
       } else {
          if (!selectedCountryId) {
-            toast({ variant: 'destructive', title: '오류', description: '기존 국가를 선택해주세요.' });
+            toast({ variant: 'destructive', title: '선택 오류', description: '기존 국가 중 하나를 선택해주세요.' });
             setIsLoading(false);
             return;
         }
@@ -123,8 +123,8 @@ export default function SignUpDetails() {
       toast({ title: '프로필 생성 완료!', description: '이제 게임을 시작할 수 있습니다.' });
       // The page should auto-refresh via the listener in page.tsx
     } catch (error: any) {
-      console.error('Error creating profile:', error);
-      toast({ variant: 'destructive', title: '프로필 생성 오류', description: error.message });
+      console.error('프로필 생성 오류:', error);
+      toast({ variant: 'destructive', title: '프로필 생성 오류', description: '프로필을 만드는 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.' });
     } finally {
       setIsLoading(false);
     }
@@ -180,7 +180,7 @@ export default function SignUpDetails() {
                     <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
                         <Command>
                             <CommandInput placeholder="국가 검색..." />
-                            <CommandEmpty>국가를 찾을 수 없습니다.</CommandEmpty>
+                            <CommandEmpty>생성된 국가가 없습니다.</CommandEmpty>
                             <CommandGroup>
                                 <CommandList>
                                     {countries?.map((country) => (
@@ -229,3 +229,5 @@ export default function SignUpDetails() {
     </div>
   );
 }
+
+    

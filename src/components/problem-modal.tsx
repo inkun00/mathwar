@@ -85,7 +85,7 @@ export default function ProblemModal({
         problem: problemNodeToString(problem.problem)
       });
     } catch (error) {
-      console.error("Error recording problem attempt:", error);
+      console.error("문제 풀이 기록 오류:", error);
     }
   };
 
@@ -105,7 +105,7 @@ export default function ProblemModal({
              toast({
                 variant: 'destructive',
                 title: "입력 오류",
-                description: `유효한 숫자를 입력해주세요.`,
+                description: `유효한 숫자를 입력해주세요. 분모는 0이 될 수 없습니다.`,
             });
             return;
         }
@@ -130,7 +130,7 @@ export default function ProblemModal({
       toast({
         variant: 'destructive',
         title: isInvasion ? "침략 실패" : "오답입니다",
-        description: isInvasion ? "토큰을 잃고 영토 획득에 실패했습니다." : (isReview ? "오답노트에서 문제가 삭제됩니다." : `오답노트에 추가되었습니다.`),
+        description: isInvasion ? "토큰을 잃고 영토 획득에 실패했습니다." : (isReview ? "오답노트에서 문제가 삭제됩니다." : `정답은 ${problem.answer} 입니다. 오답노트에 추가되었습니다.`),
         action: <XCircle className="text-white" />
       });
       if (onWrongAnswer) {
@@ -226,3 +226,5 @@ export default function ProblemModal({
     </Dialog>
   );
 }
+
+    

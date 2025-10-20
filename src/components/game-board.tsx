@@ -132,7 +132,7 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
             }
 
           } catch (error) {
-            console.error("AI move failed:", error);
+            console.error("AI 이동 실패:", error);
           }
         }
       }
@@ -248,7 +248,7 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
             await handleTerritoryCut(invasionTarget.originalOwnerId);
         }
     } catch (error) {
-        console.error("Invasion failed:", error);
+        console.error("침략 실패:", error);
     } finally {
         setInvasionTarget(null);
     }
@@ -291,7 +291,7 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
             setIsModalOpen(true);
         }
     } catch (error) {
-        console.error("Tile click action failed:", error);
+        console.error("타일 클릭 작업 실패:", error);
         toast({ variant: "destructive", title: "오류", description: "작업 처리 중 오류가 발생했습니다." });
     } finally {
         // For non-invasion clicks, stop processing here.
@@ -412,3 +412,5 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
     </div>
   );
 }
+
+    

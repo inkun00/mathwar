@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useAuth } from '@/firebase';
-import { signInAnonymously, createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
@@ -10,6 +10,7 @@ import { Label } from './ui/label';
 import { Logo } from './icons/logo';
 import { User, Mail, KeyRound } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
+import { signInAnonymously } from 'firebase/auth';
 
 export default function Login() {
   const auth = useAuth();
@@ -19,25 +20,29 @@ export default function Login() {
   const [isSignUp, setIsSignUp] = useState(false);
 
   const handleAuthError = (err: any) => {
-    let errorMessage = "오류가 발생했습니다. 다시 시도해 주세요.";
+    let errorMessage = "알 수 없는 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.";
     switch (err.code) {
       case 'auth/invalid-email':
-        errorMessage = '유효하지 않은 이메일 주소입니다.';
+        errorMessage = '유효하지 않은 이메일 주소 형식입니다.';
         break;
       case 'auth/user-not-found':
-        errorMessage = '존재하지 않는 사용자입니다. 회원가입을 먼저 진행해 주세요.';
+        errorMessage = '등록되지 않은 사용자입니다. 회원가입을 먼저 진행해 주세요.';
         break;
       case 'auth/wrong-password':
         errorMessage = '비밀번호가 일치하지 않습니다.';
         break;
       case 'auth/email-already-in-use':
-        errorMessage = '이미 사용 중인 이메일입니다. 로그인을 시도해 보세요.';
+        errorMessage = '이미 사용 중인 이메일입니다. 로그인해 주세요.';
         break;
       case 'auth/weak-password':
-          errorMessage = '비밀번호는 6자 이상이어야 합니다.';
+          errorMessage = '비밀번호는 6자리 이상이어야 합니다.';
+          break;
+      case 'auth/operation-not-allowed':
+          errorMessage = '서버 설정 오류입니다. 관리자에게 문의하세요.';
           break;
       default:
-        errorMessage = err.message || '알 수 없는 오류가 발생했습니다.';
+        console.error("Firebase Auth Error:", err);
+        errorMessage = '인증 처리 중 오류가 발생했습니다.';
         break;
     }
      toast({
@@ -46,7 +51,7 @@ export default function Login() {
       description: errorMessage,
     });
   };
-
+  
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -66,15 +71,16 @@ export default function Login() {
     }
   };
 
+
   const handleAnonymousLogin = async () => {
     try {
       await signInAnonymously(auth);
     } catch (error) {
-      console.error("익명 로그인 중 오류 발생:", error);
+      console.error("익명 로그인 오류:", error);
       toast({
         variant: "destructive",
-        title: "오류",
-        description: "익명 로그인 중 오류가 발생했습니다.",
+        title: "익명 로그인 오류",
+        description: "익명 로그인 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
       });
     }
   };
@@ -150,3 +156,5 @@ export default function Login() {
     </div>
   );
 }
+
+    
