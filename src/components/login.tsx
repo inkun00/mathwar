@@ -17,45 +17,52 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  const handleEmailLogin = async (e: React.FormEvent) => {
+  const handleAuthError = (err: any) => {
+    let errorMessage = "오류가 발생했습니다. 다시 시도해 주세요.";
+    switch (err.code) {
+      case 'auth/invalid-email':
+        errorMessage = '유효하지 않은 이메일 주소입니다.';
+        break;
+      case 'auth/user-not-found':
+        errorMessage = '존재하지 않는 사용자입니다. 회원가입을 먼저 진행해 주세요.';
+        break;
+      case 'auth/wrong-password':
+        errorMessage = '비밀번호가 일치하지 않습니다.';
+        break;
+      case 'auth/email-already-in-use':
+        errorMessage = '이미 사용 중인 이메일입니다. 로그인을 시도해 보세요.';
+        break;
+      case 'auth/weak-password':
+          errorMessage = '비밀번호는 6자 이상이어야 합니다.';
+          break;
+      default:
+        errorMessage = err.message || '알 수 없는 오류가 발생했습니다.';
+        break;
+    }
+     toast({
+      variant: "destructive",
+      title: isSignUp ? "회원가입 오류" : "로그인 오류",
+      description: errorMessage,
+    });
+  };
+
+  const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
     try {
-      if (isSignUp) {
-        await createUserWithEmailAndPassword(auth, email, password);
-        toast({ title: '회원가입 성공!', description: '게임에 오신 것을 환영합니다.' });
-      } else {
-        await signInWithEmailAndPassword(auth, email, password);
-      }
-    } catch (err: any) {
-      let errorMessage = "오류가 발생했습니다. 다시 시도해 주세요.";
-      switch (err.code) {
-        case 'auth/invalid-email':
-          errorMessage = '유효하지 않은 이메일 주소입니다.';
-          break;
-        case 'auth/user-not-found':
-          errorMessage = '존재하지 않는 사용자입니다. 회원가입을 먼저 진행해 주세요.';
-          break;
-        case 'auth/wrong-password':
-          errorMessage = '비밀번호가 일치하지 않습니다.';
-          break;
-        case 'auth/email-already-in-use':
-          errorMessage = '이미 사용 중인 이메일입니다. 로그인을 시도해 보세요.';
-          break;
-        case 'auth/weak-password':
-            errorMessage = '비밀번호는 6자 이상이어야 합니다.';
-            break;
-        default:
-          errorMessage = err.message;
-          break;
-      }
-       toast({
-        variant: "destructive",
-        title: "로그인/회원가입 오류",
-        description: errorMessage,
-      });
+      await signInWithEmailAndPassword(auth, email, password);
+    } catch (err) {
+      handleAuthError(err);
+    }
+  };
+
+  const handleSignUp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await createUserWithEmailAndPassword(auth, email, password);
+      toast({ title: '회원가입 성공!', description: '게임에 오신 것을 환영합니다.' });
+    } catch (err) {
+      handleAuthError(err);
     }
   };
 
@@ -85,7 +92,7 @@ export default function Login() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleEmailLogin} className="space-y-4 text-left">
+          <form onSubmit={isSignUp ? handleSignUp : handleSignIn} className="space-y-4 text-left">
             <div className="space-y-2">
               <Label htmlFor="email">이메일</Label>
               <div className="relative">
