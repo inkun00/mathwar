@@ -48,6 +48,12 @@ export default function SignUpDetails() {
         setIsLoading(false);
         return;
     }
+    
+    if (nickname.length > 6) {
+        toast({ variant: 'destructive', title: '입력 오류', description: '닉네임은 6글자 이하로만 만들 수 있습니다.' });
+        setIsLoading(false);
+        return;
+    }
 
     let countryId = selectedCountryId;
 
@@ -55,6 +61,11 @@ export default function SignUpDetails() {
       if (countryOption === 'new') {
         if (!newCountryName) {
             toast({ variant: 'destructive', title: '오류', description: '새 국가 이름을 입력해주세요.' });
+            setIsLoading(false);
+            return;
+        }
+        if (newCountryName.length > 6) {
+            toast({ variant: 'destructive', title: '입력 오류', description: '국가 이름은 6글자 이하로만 만들 수 있습니다.' });
             setIsLoading(false);
             return;
         }
@@ -108,7 +119,7 @@ export default function SignUpDetails() {
                 id="nickname"
                 value={nickname}
                 onChange={(e) => setNickname(e.target.value)}
-                placeholder="게임에서 사용할 이름"
+                placeholder="게임에서 사용할 이름 (6자 이하)"
                 required
               />
             </div>
@@ -177,7 +188,7 @@ export default function SignUpDetails() {
                   id="new-country"
                   value={newCountryName}
                   onChange={(e) => setNewCountryName(e.target.value)}
-                  placeholder="새로운 국가의 이름"
+                  placeholder="새로운 국가의 이름 (6자 이하)"
                   required={countryOption === 'new'}
                 />
               </div>
