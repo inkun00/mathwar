@@ -143,6 +143,18 @@
         }
       },
       {
+        "path": "/users/{userId}/wrong_answers/{wrongAnswerId}",
+        "definition": {
+            "entityName": "wrongAnswer",
+            "schema": { "$ref": "#/backend/entities/WrongAnswer" },
+            "description": "Stores incorrect problems for a specific user to review.",
+             "params": [
+                { "name": "userId", "description": "The UID of the user." },
+                { "name": "wrongAnswerId", "description": "The unique ID for the wrong answer entry." }
+            ]
+        }
+      },
+      {
         "path": "/countries/{countryId}",
         "definition": {
           "entityName": "country",
@@ -183,17 +195,6 @@
             "params": [
                 { "name": "userId", "description": "The UID of the user." },
                 { "name": "attemptId", "description": "The unique ID for the attempt." }
-            ]
-        }
-      },
-      {
-        "path": "/wrong_answers/{wrongAnswerId}",
-        "definition": {
-            "entityName": "wrongAnswer",
-            "schema": { "$ref": "#/backend/entities/WrongAnswer" },
-            "description": "Stores incorrect problems for user review.",
-             "params": [
-                { "name": "wrongAnswerId", "description": "The unique ID for the wrong answer entry." }
             ]
         }
       }
