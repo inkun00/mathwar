@@ -134,6 +134,7 @@
             "$ref": "#/backend/entities/User"
           },
           "description": "Stores user profiles. Path-based ownership ensures only the user can modify their own profile.",
+          "allow": ["get", "update"],
           "params": [
             {
               "name": "userId",
@@ -148,6 +149,7 @@
             "entityName": "wrongAnswer",
             "schema": { "$ref": "#/backend/entities/WrongAnswer" },
             "description": "Stores incorrect problems for a specific user to review.",
+             "allow": ["list", "get", "create", "update", "delete"],
              "params": [
                 { "name": "userId", "description": "The UID of the user." },
                 { "name": "wrongAnswerId", "description": "The unique ID for the wrong answer entry." }
@@ -162,6 +164,7 @@
             "$ref": "#/backend/entities/Country"
           },
           "description": "Stores all countries created by users. Accessible to all authenticated users.",
+          "allow": ["list", "get", "create"],
           "params": [
             {
               "name": "countryId",
@@ -178,6 +181,7 @@
             "$ref": "#/backend/entities/LandTile"
           },
           "description": "Stores all land tiles on the game map. Includes denormalized 'ownerId' for authorization independence.",
+           "allow": ["list", "get", "create", "update"],
           "params": [
             {
               "name": "landTileId",
@@ -192,6 +196,7 @@
             "entityName": "problemAttempt",
             "schema": { "$ref": "#/backend/entities/ProblemAttempt" },
             "description": "Stores each attempt a user makes on a problem for analytics.",
+            "allow": ["create"],
             "params": [
                 { "name": "userId", "description": "The UID of the user." },
                 { "name": "attemptId", "description": "The unique ID for the attempt." }

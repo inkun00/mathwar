@@ -28,10 +28,14 @@ export default function Home() {
     return collection(firestore, 'land_tiles');
   }, [firestore, authUser]);
 
+  // Fetch all users for the leaderboard.
+  // This might become a performance issue with many users.
+  // Consider creating a separate, secure 'leaderboard' collection if performance degrades.
   const usersQuery = useMemoFirebase(() => {
-    if (!firestore || !authUser) return null;
+    if (!firestore) return null;
     return collection(firestore, 'users');
-  }, [firestore, authUser]);
+  }, [firestore]);
+
 
   const problemAttemptsQuery = useMemoFirebase(() => {
     if (!firestore || !authUser) return null;
@@ -40,7 +44,6 @@ export default function Home() {
 
   const wrongAnswersQuery = useMemoFirebase(() => {
     if (!firestore || !authUser) return null;
-    // Changed to subcollection query
     return collection(firestore, 'users', authUser.uid, 'wrong_answers');
   }, [firestore, authUser]);
 
