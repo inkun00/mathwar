@@ -54,17 +54,15 @@ const generateDecimalProblem = (): MathProblem => {
 
 // --- Fraction Problem Generation ---
 const generateFractionProblem = (): MathProblem => {
-    const type = randomInt(1, 4);
+    const type = randomInt(1, 3);
     switch (type) {
         case 1: // 진분수 덧셈/뺄셈 (동일 분모)
             return simpleFractionCalc();
         case 2: // 대분수 덧셈/뺄셈
             return mixedFractionCalc();
         case 3: // 자연수 - 분수
-            return integerFractionCalc();
-        case 4: // 다른 분모를 가진 분수의 덧셈/뺄셈
         default:
-            return commonDenominatorFractionCalc();
+            return integerFractionCalc();
     }
 }
 
@@ -171,48 +169,6 @@ const integerFractionCalc = (): MathProblem => {
     };
 }
 
-const commonDenominatorFractionCalc = (): MathProblem => {
-    let den1 = randomInt(2, 7);
-    let den2 = randomInt(den1 + 1, 10); // Ensure different denominators
-    let num1 = randomInt(1, den1 - 1);
-    if (num1 === 0) num1 = 1;
-    let num2 = randomInt(1, den2 - 1);
-    if (num2 === 0) num2 = 1;
-    const op = Math.random() > 0.5 ? 'add' : 'subtract';
-    const subType: ProblemSubType = op === 'add' ? 'fraction-add-diff-den' : 'fraction-subtract-diff-den';
-
-
-    let val1 = num1/den1;
-    let val2 = num2/den2;
-
-    if (op === 'subtract' && val1 < val2) {
-        [num1, den1, num2, den2] = [num2, den2, num1, den1];
-        [val1, val2] = [val2, val1];
-    }
-
-    const answer = op === 'add' ? val1 + val2 : val1 - val2;
-
-    return {
-      problem: (
-         <span className="flex items-center justify-center">
-            <Fraction numerator={num1} denominator={den1} />
-            <span className="mx-2 text-2xl">{op === 'add' ? '+' : '-'}</span>
-            <Fraction numerator={num2} denominator={den2} />
-            <span className="ml-3 text-2xl">의 값은?</span>
-        </span>
-      ),
-      answer: round(answer, 4),
-      type: 'fraction',
-      subType,
-      storable: {
-        type: 'fraction',
-        subType,
-        operands: [num1, den1, num2, den2],
-        operator: op,
-      }
-    };
-}
-
 export const generateProblemFromData = (data: StorableProblem): MathProblem => {
     const { type, subType, operands, operator } = data;
     const opSymbol = operator === 'add' ? '+' : '-';
@@ -268,22 +224,6 @@ export const generateProblemFromData = (data: StorableProblem): MathProblem => {
                     </span>
                 ),
                 answer: round(operands[0] - (operands[1]/operands[2]), 4),
-                type: 'fraction', subType, storable: data
-            };
-        case 'fraction-add-diff-den':
-        case 'fraction-subtract-diff-den':
-            const v1 = operands[0] / operands[1];
-            const v2 = operands[2] / operands[3];
-            return {
-                 problem: (
-                    <span className="flex items-center justify-center">
-                        <Fraction numerator={operands[0]} denominator={operands[1]} />
-                        <span className="mx-2 text-2xl">{opSymbol}</span>
-                        <Fraction numerator={operands[2]} denominator={operands[3]} />
-                        <span className="ml-3 text-2xl">의 값은?</span>
-                    </span>
-                ),
-                answer: round(operator === 'add' ? v1 + v2 : v1 - v2, 4),
                 type: 'fraction', subType, storable: data
             };
         default:

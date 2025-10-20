@@ -27,8 +27,6 @@ const areaLabels: Record<ProblemSubType, string> = {
   'fraction-add-mixed': '대분수 덧셈',
   'fraction-subtract-mixed': '대분수 뺄셈',
   'fraction-subtract-from-int': '자연수-분수',
-  'fraction-add-diff-den': '분수 덧셈 (다른 분모)',
-  'fraction-subtract-diff-den': '분수 뺄셈 (다른 분모)',
 };
 
 export default function ProfileSheet({ currentUser, userCountry, problemAttempts, wrongAnswers }: ProfileSheetProps) {
