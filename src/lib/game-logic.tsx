@@ -15,6 +15,9 @@ const shuffle = <T,>(array: T[]): T[] => {
     }
     return array;
 }
+// Greatest Common Divisor
+const gcd = (a: number, b: number): number => b === 0 ? a : gcd(b, a % b);
+
 
 // --- Fraction Component ---
 const Fraction = ({ numerator, denominator }: { numerator: number, denominator: number }) => (
@@ -385,6 +388,82 @@ const fractionComparisonProblem = (): MathProblem => {
     }
 }
 
+const generateFractionToDecimalProblem = (): MathProblem => {
+    const isMixed = Math.random() > 0.5;
+    const den = Math.random() > 0.5 ? 100 : 10;
+    const num = randomInt(1, den-1);
+
+    if (isMixed) {
+        const int = randomInt(1, 9);
+        return {
+            problem: (
+                <span className="flex items-center justify-center">
+                    <span className="mr-2">다음 분수를 소수로 나타내 보세요:</span>
+                    <MixedFraction integer={int} numerator={num} denominator={den} />
+                </span>
+            ),
+            answer: round(int + num / den, 2),
+            type: 'conversion',
+            subType: 'fraction-to-decimal',
+            storable: {
+                type: 'conversion',
+                subType: 'fraction-to-decimal',
+                operands: [int, num, den],
+                operator: 'convert'
+            }
+        }
+    } else {
+        return {
+            problem: (
+                <span className="flex items-center justify-center">
+                    <span className="mr-2">다음 분수를 소수로 나타내 보세요:</span>
+                    <Fraction numerator={num} denominator={den} />
+                </span>
+            ),
+            answer: round(num / den, 2),
+            type: 'conversion',
+            subType: 'fraction-to-decimal',
+            storable: {
+                type: 'conversion',
+                subType: 'fraction-to-decimal',
+                operands: [num, den],
+                operator: 'convert'
+            }
+        }
+    }
+};
+
+const generateDecimalToFractionProblem = (): MathProblem => {
+    const places = Math.random() > 0.5 ? 2 : 1;
+    const num = round(Math.random() * 5, places);
+
+    let [intPart, decPart] = String(num).split('.');
+    if (!decPart) decPart = '0';
+    
+    const numerator = parseInt(decPart, 10);
+    const denominator = Math.pow(10, decPart.length);
+    const commonDivisor = gcd(numerator, denominator);
+    
+    // The answer is the decimal value, but the user must input a fraction.
+    // The modal will need to be adapted to accept fraction inputs.
+    return {
+        problem: (
+            <span className="flex items-center justify-center">
+                <span className="mr-2">다음 소수를 분수로 나타내 보세요:</span>
+                <span className="text-2xl">{num}</span>
+            </span>
+        ),
+        answer: num,
+        type: 'conversion',
+        subType: 'decimal-to-fraction',
+        storable: {
+            type: 'conversion',
+            subType: 'decimal-to-fraction',
+            operands: [num],
+            operator: 'convert'
+        }
+    }
+};
 
 
 export const generateProblemFromData = (data: StorableProblem): MathProblem => {
@@ -524,6 +603,45 @@ export const generateProblemFromData = (data: StorableProblem): MathProblem => {
                     type: 'fraction', subType, storable: data
                 }
             }
+        case 'fraction-to-decimal':
+            const ftd_operands = operands as number[];
+            if (ftd_operands.length === 3) { // Mixed
+                const [int, num, den] = ftd_operands;
+                return {
+                    problem: (
+                        <span className="flex items-center justify-center">
+                            <span className="mr-2">다음 분수를 소수로 나타내 보세요:</span>
+                            <MixedFraction integer={int} numerator={num} denominator={den} />
+                        </span>
+                    ),
+                    answer: round(int + num / den, 2),
+                    type: 'conversion', subType, storable: data
+                }
+            } else { // Proper
+                const [num, den] = ftd_operands;
+                return {
+                     problem: (
+                        <span className="flex items-center justify-center">
+                            <span className="mr-2">다음 분수를 소수로 나타내 보세요:</span>
+                            <Fraction numerator={num} denominator={den} />
+                        </span>
+                    ),
+                    answer: round(num / den, 2),
+                    type: 'conversion', subType, storable: data
+                }
+            }
+        case 'decimal-to-fraction':
+            const [dtf_num] = operands as number[];
+            return {
+                problem: (
+                    <span className="flex items-center justify-center">
+                        <span className="mr-2">다음 소수를 분수로 나타내 보세요:</span>
+                        <span className="text-2xl">{dtf_num}</span>
+                    </span>
+                ),
+                answer: dtf_num,
+                type: 'conversion', subType, storable: data
+            }
         default:
             // Fallback for any unhandled subtype
             return generateDecimalProblem();
@@ -544,28 +662,31 @@ export const problemNodeToString = (node: React.ReactNode): string => {
 // --- Main Problem Generation Function ---
 export const generateMathProblem = (): MathProblem => {
   const problemType = Math.random(); // 0 to 1
-  if (problemType < 0.7) { // 70% chance for decimal
+  if (problemType < 0.7) { // 70% chance for decimal calculation
     return generateDecimalProblem();
-  } else { // 30% chance for fraction
-    // Add more variety to fraction problems
-     const fractionType = randomInt(1, 8);
-    switch (fractionType) {
-      case 1:
-      case 2:
-        return simpleFractionCalc();
-      case 3:
-        return mixedFractionCalc();
-      case 4:
-        return integerFractionCalc();
-      case 5:
-        return fractionMultiplication();
-      case 6:
-        return fractionDivision();
-      case 7:
-          return fractionWordProblem();
-      case 8:
-      default:
-        return fractionComparisonProblem();
+  } else { // 30% chance for fraction/conversion
+    const subType = randomInt(1, 10);
+    switch(subType) {
+        case 1:
+        case 2:
+            return simpleFractionCalc();
+        case 3:
+            return mixedFractionCalc();
+        case 4:
+            return integerFractionCalc();
+        case 5:
+            return fractionMultiplication();
+        case 6:
+            return fractionDivision();
+        case 7:
+            return fractionWordProblem();
+        case 8:
+            return fractionComparisonProblem();
+        case 9:
+            return generateFractionToDecimalProblem();
+        case 10:
+        default:
+            return generateDecimalToFractionProblem();
     }
   }
 };

@@ -28,7 +28,7 @@ export interface Tile {
 
 export type MapData = Tile[][];
 
-export type ProblemType = 'decimal' | 'fraction';
+export type ProblemType = 'decimal' | 'fraction' | 'conversion';
 export type ProblemSubType = 
   | 'decimal-add' 
   | 'decimal-subtract'
@@ -42,7 +42,9 @@ export type ProblemSubType =
   | 'fraction-multiply'
   | 'fraction-divide'
   | 'fraction-word-problem'
-  | 'fraction-comparison';
+  | 'fraction-comparison'
+  | 'fraction-to-decimal'
+  | 'decimal-to-fraction';
 
 export interface MathProblem {
   problem: ReactNode;
@@ -56,7 +58,7 @@ export interface StorableProblem {
   type: ProblemType;
   subType: ProblemSubType;
   operands: (number | string)[];
-  operator: 'add' | 'subtract' | 'multiply' | 'divide' | 'compare';
+  operator: 'add' | 'subtract' | 'multiply' | 'divide' | 'compare' | 'convert';
 }
 
 

@@ -96,7 +96,7 @@ export default function ProblemModal({
     let userAnswer: number | null = null;
     let isCorrect = false;
 
-    if (problem.type === 'fraction') {
+    if (problem.type === 'fraction' || (problem.type === 'conversion' && problem.subType === 'decimal-to-fraction')) {
         const integer = parseInt(integerPart || '0', 10);
         const numerator = parseInt(numeratorPart || '0', 10);
         const denominator = parseInt(denominatorPart || '1', 10);
@@ -111,7 +111,7 @@ export default function ProblemModal({
         }
         userAnswer = integer + (numerator / denominator);
 
-    } else { // decimal
+    } else { // decimal or fraction-to-decimal
         userAnswer = parseDecimalAnswer(answer);
     }
     
@@ -147,6 +147,7 @@ export default function ProblemModal({
     ? '문제를 맞춰 적의 영토를 획득하세요!'
     : (isReview ? '틀렸던 문제입니다. 다시 풀어보세요!' : '정답을 입력하여 확장 토큰을 획득하세요.');
 
+  const isFractionInput = problem?.type === 'fraction' || problem?.subType === 'decimal-to-fraction';
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -162,11 +163,11 @@ export default function ProblemModal({
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
-            <div className="text-center text-2xl font-bold font-code tracking-wider bg-muted p-4 rounded-md h-24 flex items-center justify-center">
+            <div className="text-center text-xl font-bold font-code tracking-wider bg-muted p-4 rounded-md h-24 flex items-center justify-center">
               {problem?.problem}
             </div>
 
-            {problem?.type === 'fraction' ? (
+            {isFractionInput ? (
                 <div className="flex items-center justify-center gap-2">
                     <div className="flex-shrink-0">
                         <Label htmlFor="integerPart" className="sr-only">자연수</Label>

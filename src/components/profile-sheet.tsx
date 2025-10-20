@@ -33,6 +33,8 @@ const areaLabels: Record<ProblemSubType, string> = {
   'fraction-divide': '분수 나눗셈',
   'fraction-word-problem': '분수 문장제',
   'fraction-comparison': '분수 크기 비교',
+  'fraction-to-decimal': '분수->소수 변환',
+  'decimal-to-fraction': '소수->분수 변환',
 };
 
 export default function ProfileSheet({ currentUser, userCountry, problemAttempts, wrongAnswers }: ProfileSheetProps) {
@@ -76,6 +78,7 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
       unit: {
         decimal: { total: 0, correct: 0 },
         fraction: { total: 0, correct: 0 },
+        conversion: { total: 0, correct: 0 },
       },
       area: {} as Record<ProblemSubType, { total: number, correct: number }>
     };
@@ -114,6 +117,12 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
         total: stats.unit.fraction.total,
         correct: stats.unit.fraction.correct,
         accuracy: stats.unit.fraction.total > 0 ? (stats.unit.fraction.correct / stats.unit.fraction.total) * 100 : 0,
+      },
+       {
+        name: '변환',
+        total: stats.unit.conversion.total,
+        correct: stats.unit.conversion.correct,
+        accuracy: stats.unit.conversion.total > 0 ? (stats.unit.conversion.correct / stats.unit.conversion.total) * 100 : 0,
       },
     ];
 
@@ -161,7 +170,7 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
                     <CardTitle className="text-base">단원별 정답률</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2 text-sm">
-                  {unitStats.map(stat => (
+                  {unitStats.map(stat => stat.total > 0 && (
                     <div key={stat.name} className="flex justify-between">
                       <span>{stat.name}</span>
                       <span className="font-medium">{stat.correct}/{stat.total} ({Math.round(stat.accuracy)}%)</span>
