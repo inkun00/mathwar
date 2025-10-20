@@ -10,6 +10,8 @@ import ProfileSheet from "./profile-sheet";
 import LeaderboardSheet from "./leaderboard-sheet";
 import type { Country, ProblemAttempt, WrongAnswer } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
+import { useMemo } from "react";
+import { Badge } from "./ui/badge";
 
 interface HeaderProps {
   currentUser: User;
@@ -25,16 +27,19 @@ export default function Header({ currentUser, onSolveProblemClick, countries, pr
   const userCountry = countries.find(c => c.id === currentUser.countryId);
   const { toast } = useToast();
 
-  const handleSolveClick = () => {
+  const remainingProblems = useMemo(() => {
     const twentyFourHoursAgo = Date.now() - 24 * 60 * 60 * 1000;
     const recentAttempts = problemAttempts.filter(
       (attempt) =>
         attempt.timestamp &&
         attempt.timestamp.toDate() > new Date(twentyFourHoursAgo) &&
-        !attempt.isReview // Omit review problems from count
+        !attempt.isReview
     );
+    return 10 - recentAttempts.length;
+  }, [problemAttempts]);
 
-    if (recentAttempts.length >= 10) {
+  const handleSolveClick = () => {
+    if (remainingProblems <= 0) {
       toast({
         variant: "destructive",
         title: "일일 한도 초과",
@@ -47,7 +52,7 @@ export default function Header({ currentUser, onSolveProblemClick, countries, pr
 
   return (
     <header className="w-full max-w-7xl rounded-lg border bg-card/80 p-4 shadow-md backdrop-blur-sm">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-3">
           <Logo className="h-8 w-8 text-primary" />
           <h1 className="font-headline text-xl font-bold tracking-tight sm:text-2xl">
@@ -105,10 +110,16 @@ export default function Header({ currentUser, onSolveProblemClick, countries, pr
           </Sheet>
 
           <Separator orientation="vertical" className="h-10" />
-          <Button onClick={handleSolveClick}>
-            <HelpCircle className="mr-2 h-4 w-4" />
-            문제 풀기
-          </Button>
+          
+          <div className="flex flex-col items-end gap-1">
+            <Button onClick={handleSolveClick}>
+              <HelpCircle className="mr-2 h-4 w-4" />
+              문제 풀기
+            </Button>
+             <Badge variant={remainingProblems > 0 ? "secondary" : "destructive"}>
+              오늘 풀 수 있는 문제: {remainingProblems < 0 ? 0 : remainingProblems}/10
+            </Badge>
+          </div>
         </div>
       </div>
     </header>

@@ -244,10 +244,10 @@ export const problemNodeToString = (node: React.ReactNode): string => {
 
 // --- Main Problem Generation Function ---
 export const generateMathProblem = (): MathProblem => {
-  const problemType = Math.random() > 0.5 ? 'decimal' : 'fraction';
-  if (problemType === 'decimal') {
+  const problemType = Math.random(); // 0 to 1
+  if (problemType < 0.7) { // 70% chance for decimal
     return generateDecimalProblem();
-  } else {
+  } else { // 30% chance for fraction
     return generateFractionProblem();
   }
 };
