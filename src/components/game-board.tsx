@@ -1,13 +1,13 @@
 'use client';
 
 import { useState, useMemo, useEffect } from "react";
-import type { Tile, MathProblem, Country, User, ProblemAttempt } from "@/lib/types";
+import type { Tile, MathProblem, Country, User, ProblemAttempt, InvasionTarget } from "@/lib/types";
 import { generateMathProblem, isAdjacent, getAIMove } from "@/lib/game-logic";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { ZoomIn, ZoomOut } from "lucide-react";
 import { useFirestore, useUser } from "@/firebase";
-import { doc, setDoc, updateDoc, writeBatch, increment } from "firebase/firestore";
+import { doc, setDoc, updateDoc, writeBatch, increment, collection } from "firebase/firestore";
 
 import Header from "./header";
 import WorldMap from "./world-map";
@@ -33,6 +33,7 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
   const { user: authUser } = useUser();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentProblem, setCurrentProblem] = useState<MathProblem | null>(null);
+  const [invasionTarget, setInvasionTarget] = useState<InvasionTarget>(null);
   const { toast } = useToast();
   const [zoomLevel, setZoomLevel] = useState(1);
 
@@ -48,9 +49,13 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
   }, [users]);
   
   const allCountries = useMemo(() => {
-    const aiApiCountries = aiUsers.map(ai => ({...ai.country, id: ai.countryId, createdBy: 'ai'}));
-    return [...countries, ...aiApiCountries];
-  }, [countries]);
+    const aiApiCountries = aiUsers.map(ai => ({...ai.country, id: ai.countryId, createdBy: 'ai', color: ai.country.color}));
+    const humanCountries = countries.map(c => {
+      const countryUser = users.find(u => u.countryId === c.id);
+      return {...c, color: countryUser?.color || "hsl(0, 0%, 50%)"}
+    })
+    return [...humanCountries, ...aiApiCountries];
+  }, [countries, users]);
 
   const mapData = useMemo(() => {
     const map: Tile[][] = Array.from({ length: MAP_HEIGHT }, (_, y) =>
@@ -78,8 +83,9 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
   
   const isDemise = useMemo(() => {
       if (!currentUser) return false;
-      return userTiles.length === 0 && currentUser.tokens === 0;
-  }, [userTiles, currentUser]);
+      const hasLand = landTiles.some(tile => tile.ownerId === currentUser.id);
+      return !hasLand && currentUser.tokens === 0;
+  }, [landTiles, currentUser]);
 
 
   useEffect(() => {
@@ -89,22 +95,36 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
       const activeAIs = allUsers.filter(u => u.isAI);
 
       for (const ai of activeAIs) {
-        if (ai.tokens <= 0) continue;
+        // Find the AI's current data from the live user list
+        const currentAiData = allUsers.find(u => u.id === ai.id);
+        if (!currentAiData || currentAiData.tokens <= 0) continue;
 
         const allAiTiles = landTiles.filter(t => t.ownerId === ai.id);
         const move = getAIMove(ai, allAiTiles, landTiles, allUsers);
         
         if (move) {
           try {
+             // 70% chance to succeed without a problem
+            const successfulInvasion = move.ownerId === null || Math.random() < 0.7;
+
             const tileRef = doc(firestore, 'land_tiles', move.id || `${move.x}-${move.y}`);
-            await setDoc(tileRef, { x: move.x, y: move.y, ownerId: ai.id }, { merge: true });
-
             const aiUserRef = doc(firestore, 'users', ai.id);
-            await updateDoc(aiUserRef, { tokens: increment(-1) });
+            const batch = writeBatch(firestore);
 
-            // Randomly award token
-            if (Math.random() < 0.1) {
-              await updateDoc(aiUserRef, { tokens: increment(1) });
+            batch.update(aiUserRef, { tokens: increment(-1) });
+
+            if (successfulInvasion) {
+                batch.set(tileRef, { x: move.x, y: move.y, ownerId: ai.id }, { merge: true });
+                // Randomly award token
+                if (Math.random() < 0.1) {
+                    batch.update(aiUserRef, { tokens: increment(1) });
+                }
+            }
+            
+            await batch.commit();
+
+            if (successfulInvasion && move.ownerId && move.ownerId !== ai.id) {
+               await handleTerritoryCut(move.ownerId);
             }
 
           } catch (error) {
@@ -117,22 +137,114 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
     return () => clearInterval(gameLoop);
   }, [allUsers, landTiles, firestore]);
 
-
-  const handleSolveProblemClick = () => {
+  const handleSolveProblemForToken = () => {
+    setInvasionTarget(null);
     setCurrentProblem(generateMathProblem());
     setIsModalOpen(true);
   };
-
-  const handleCorrectAnswer = async () => {
-    if (!currentUser) return;
+  
+  const handleGainToken = async () => {
+    if (!currentUser || !firestore) return;
     const userRef = doc(firestore, "users", currentUser.id);
     await updateDoc(userRef, {
       tokens: increment(1),
     });
   };
 
+  const handleTerritoryCut = async (originalOwnerId: string) => {
+    if (!firestore) return;
+
+    // Get a fresh snapshot of land tiles
+    const tilesCollectionRef = collection(firestore, "land_tiles");
+    const landTilesSnapshot = await require('firebase/firestore').getDocs(tilesCollectionRef);
+    const currentLandTiles = landTilesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Tile));
+
+    const ownedTiles = currentLandTiles.filter(t => t.ownerId === originalOwnerId);
+    if (ownedTiles.length === 0) return;
+
+    const visited = new Set<string>();
+    const territories: Tile[][] = [];
+
+    // Find all contiguous territories
+    for (const tile of ownedTiles) {
+        const tileId = `${tile.x},${tile.y}`;
+        if (!visited.has(tileId)) {
+            const newTerritory: Tile[] = [];
+            const queue: Tile[] = [tile];
+            visited.add(tileId);
+
+            while (queue.length > 0) {
+                const current = queue.shift()!;
+                newTerritory.push(current);
+
+                const neighbors = [
+                    { x: current.x, y: current.y - 1 }, { x: current.x, y: current.y + 1 },
+                    { x: current.x - 1, y: current.y }, { x: current.x + 1, y: current.y }
+                ];
+
+                for (const n of neighbors) {
+                    const neighborId = `${n.x},${n.y}`;
+                    if (!visited.has(neighborId)) {
+                        const neighborTile = ownedTiles.find(t => t.x === n.x && t.y === n.y);
+                        if (neighborTile) {
+                            visited.add(neighborId);
+                            queue.push(neighborTile);
+                        }
+                    }
+                }
+            }
+            territories.push(newTerritory);
+        }
+    }
+
+    if (territories.length > 1) {
+        // Sort by size, descending
+        territories.sort((a, b) => b.length - a.length);
+
+        // Keep the largest, neutralize the rest
+        const tilesToNeutralize = territories.slice(1).flat();
+        
+        if (tilesToNeutralize.length > 0) {
+            const batch = writeBatch(firestore);
+            tilesToNeutralize.forEach(tile => {
+                const tileRef = doc(firestore, "land_tiles", tile.id);
+                batch.update(tileRef, { ownerId: null });
+            });
+            await batch.commit();
+
+            toast({
+                variant: "destructive",
+                title: "영토 분단!",
+                description: `상대방의 영토가 분단되어 일부가 미개척지가 되었습니다.`,
+            });
+        }
+    }
+  };
+
+
+  const handleInvasionSuccess = async () => {
+    if (!currentUser || !firestore || !invasionTarget) return;
+
+    const batch = writeBatch(firestore);
+
+    // Conquer the tile
+    const tileId = `${invasionTarget.x}-${invasionTarget.y}`;
+    const tileRef = doc(firestore, "land_tiles", tileId);
+    batch.set(tileRef, { x: invasionTarget.x, y: invasionTarget.y, ownerId: currentUser.id }, { merge: true });
+
+    // Decrement token
+    const userRef = doc(firestore, "users", currentUser.id);
+    batch.update(userRef, { tokens: increment(-1) });
+
+    await batch.commit();
+    setInvasionTarget(null);
+
+    // After commit, check for territory cuts
+    await handleTerritoryCut(invasionTarget.originalOwnerId);
+  };
+
   const handleTileClick = async (x: number, y: number) => {
-    if (!currentUser) {
+    if (!currentUser || !firestore) {
       return;
     }
     if (currentUser.tokens <= 0) {
@@ -144,14 +256,29 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
       return;
     }
     
-    const tileId = `${x}-${y}`;
-    const tileRef = doc(firestore, "land_tiles", tileId);
-    await setDoc(tileRef, { x, y, ownerId: currentUser.id }, { merge: true });
+    const clickedTile = mapData[y][x];
+    const originalOwnerId = clickedTile.ownerId;
 
-    const userRef = doc(firestore, "users", currentUser.id);
-    await updateDoc(userRef, {
-      tokens: increment(-1),
-    });
+    // Case 1: Conquering unowned land
+    if (originalOwnerId === null) {
+        const tileId = `${x}-${y}`;
+        const tileRef = doc(firestore, "land_tiles", tileId);
+        await setDoc(tileRef, { x, y, ownerId: currentUser.id }, { merge: true });
+
+        const userRef = doc(firestore, "users", currentUser.id);
+        await updateDoc(userRef, {
+        tokens: increment(-1),
+        });
+        toast({ title: "영토 확장!", description: "새로운 땅을 정복했습니다." });
+        return;
+    }
+
+    // Case 2: Attacking an enemy tile
+    if (originalOwnerId !== currentUser.id) {
+        setInvasionTarget({ x, y, originalOwnerId: originalOwnerId! });
+        setCurrentProblem(generateMathProblem());
+        setIsModalOpen(true);
+    }
   };
   
   const handleRestart = async () => {
@@ -188,6 +315,7 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
 
     if (tile.ownerId === currentUser.id) return false;
 
+    // If user has no tiles, they can only take unowned land
     if (userTiles.length === 0) {
       return tile.ownerId === null && isLand(tile.x, tile.y);
     }
@@ -208,7 +336,7 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
     <div className="flex w-full flex-grow flex-col gap-6">
       <Header 
         currentUser={currentUser} 
-        onSolveProblemClick={handleSolveProblemClick} 
+        onSolveProblemClick={handleSolveProblemForToken} 
         countries={allCountries}
         problemAttempts={problemAttempts}
       />
@@ -227,8 +355,17 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
         isOpen={isModalOpen}
         onOpenChange={setIsModalOpen}
         problem={currentProblem}
-        onCorrectAnswer={handleCorrectAnswer}
+        onCorrectAnswer={invasionTarget ? handleInvasionSuccess : handleGainToken}
         userId={authUser?.uid}
+        isInvasion={!!invasionTarget}
+        onWrongAnswer={async () => {
+            if (invasionTarget && currentUser && firestore) {
+                // Only decrement token on wrong answer during an invasion
+                const userRef = doc(firestore, "users", currentUser.id);
+                await updateDoc(userRef, { tokens: increment(-1) });
+            }
+            setInvasionTarget(null); // Reset invasion state
+        }}
       />
       {isDemise && <DemiseScreen onRestart={handleRestart} />}
     </div>

@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import type { MathProblem } from '@/lib/types';
 import { useState, type FormEvent, useEffect } from 'react';
-import { CheckCircle, XCircle } from 'lucide-react';
+import { CheckCircle, XCircle, Swords } from 'lucide-react';
 import { useFirestore } from '@/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 
@@ -24,7 +24,9 @@ interface ProblemModalProps {
   onOpenChange: (isOpen: boolean) => void;
   problem: MathProblem | null;
   onCorrectAnswer: () => void;
+  onWrongAnswer?: () => void;
   userId?: string;
+  isInvasion?: boolean;
 }
 
 // Function to parse a simple decimal/integer string
@@ -41,7 +43,9 @@ export default function ProblemModal({
   onOpenChange,
   problem,
   onCorrectAnswer,
-  userId
+  onWrongAnswer,
+  userId,
+  isInvasion = false,
 }: ProblemModalProps) {
   const [answer, setAnswer] = useState('');
   const [integerPart, setIntegerPart] = useState('');
@@ -105,8 +109,8 @@ export default function ProblemModal({
     if (userAnswer !== null && Math.abs(userAnswer - problem.answer) < 0.001) {
       isCorrect = true;
       toast({
-        title: "정답입니다!",
-        description: "확장 토큰을 획득했습니다.",
+        title: isInvasion ? "침략 성공!" : "정답입니다!",
+        description: isInvasion ? "적의 영토를 획득했습니다." : "확장 토큰을 획득했습니다.",
         className: 'border-green-500 bg-green-50 text-green-700 dark:bg-green-900/50 dark:text-green-300 dark:border-green-700',
         action: <CheckCircle className="text-green-500" />
       });
@@ -115,10 +119,13 @@ export default function ProblemModal({
       isCorrect = false;
       toast({
         variant: 'destructive',
-        title: "오답입니다",
-        description: `다시 시도해 보세요!`,
+        title: isInvasion ? "침략 실패" : "오답입니다",
+        description: isInvasion ? "토큰을 잃고 영토 획득에 실패했습니다." : `다시 시도해 보세요!`,
         action: <XCircle className="text-white" />
       });
+      if (onWrongAnswer) {
+        onWrongAnswer();
+      }
     }
     
     recordAttempt(isCorrect);
@@ -126,13 +133,23 @@ export default function ProblemModal({
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+    <Dialog open={isOpen} onOpenChange={(open) => {
+      if (!open && onWrongAnswer) {
+        onWrongAnswer(); // Also trigger onWrongAnswer logic if the modal is closed without submission
+      }
+      onOpenChange(open);
+    }}>
       <DialogContent className="sm:max-w-[425px]">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
-            <DialogTitle>문제 풀기</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+                {isInvasion && <Swords className="text-destructive" />}
+                {isInvasion ? '침략 문제' : '문제 풀기'}
+            </DialogTitle>
             <DialogDescription>
-              정답을 입력하여 확장 토큰을 획득하세요.
+              {isInvasion
+                ? '문제를 맞춰 적의 영토를 획득하세요!'
+                : '정답을 입력하여 확장 토큰을 획득하세요.'}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
