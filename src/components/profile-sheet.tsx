@@ -3,12 +3,6 @@
 import type { User, Country, ProblemAttempt, ProblemSubType } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import {
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-} from "@/components/ui/chart";
-import { Bar, BarChart, LabelList, XAxis, YAxis } from "recharts";
 import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { LogOut } from "lucide-react";
@@ -32,57 +26,6 @@ const areaLabels: Record<ProblemSubType, string> = {
   'fraction-add-diff-den': '분수 덧셈 (다른 분모)',
   'fraction-subtract-diff-den': '분수 뺄셈 (다른 분모)',
 };
-
-const CustomTooltipContent = ({ active, payload, label }: any) => {
-  if (active && payload && payload.length) {
-    const data = payload[0].payload;
-    return (
-      <div className="rounded-lg border bg-background p-2 shadow-sm">
-        <div className="grid grid-cols-2 gap-2">
-          <div className="flex flex-col space-y-1">
-            <span className="text-[0.70rem] uppercase text-muted-foreground">
-              {label}
-            </span>
-            <span className="font-bold text-muted-foreground">
-              {data.correct}/{data.total} 문제
-            </span>
-          </div>
-          <div className="flex flex-col space-y-1">
-             <span className="text-[0.70rem] uppercase text-muted-foreground">
-              정답률
-            </span>
-            <span className="font-bold text-muted-foreground">
-              {Math.round(data.accuracy)}%
-            </span>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return null;
-};
-
-const CustomLabel = (props: any) => {
-  const { x, y, width, value, correct, total } = props;
-
-  if (total === 0) {
-    return (
-      <text x={x + width / 2} y={y} dy={-4} fill="#666" fontSize={12} textAnchor="middle">
-        0/0 (0%)
-      </text>
-    );
-  }
-  
-  const labelText = `${correct}/${total} (${Math.round(value)}%)`;
-
-  return (
-    <text x={x + width / 2} y={y} dy={-4} fill="#000" fontSize={12} textAnchor="middle">
-      {labelText}
-    </text>
-  );
-};
-
 
 export default function ProfileSheet({ currentUser, userCountry, problemAttempts }: ProfileSheetProps) {
   const auth = useAuth();
@@ -150,7 +93,7 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
 
   return (
     <div className="mt-6 flex h-[calc(100%-3rem)] flex-col justify-between">
-      <div className="space-y-8">
+      <div className="space-y-8 overflow-y-auto pr-4">
         <div>
           <Card>
             <CardHeader>
@@ -179,24 +122,13 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
               <CardHeader>
                   <CardTitle className="text-base">단원별 정답률</CardTitle>
               </CardHeader>
-              <CardContent>
-                   <ChartContainer config={{}} className="h-[100px] w-full">
-                      <BarChart data={unitStats} layout="vertical" margin={{ left: 10, right: 30 }}>
-                          <XAxis type="number" dataKey="accuracy" domain={[0, 100]} tickFormatter={(v) => `${v}%`} hide />
-                          <YAxis type="category" dataKey="name" width={40} tickLine={false} axisLine={false} />
-                          <ChartTooltip content={<CustomTooltipContent />} />
-                          <Bar dataKey="accuracy" radius={4} fill="var(--color-accent)">
-                             <LabelList
-                              dataKey="accuracy"
-                              position="right"
-                              offset={10}
-                              className="fill-foreground"
-                              fontSize={12}
-                              content={<CustomLabel />}
-                            />
-                          </Bar>
-                      </BarChart>
-                  </ChartContainer>
+              <CardContent className="space-y-2 text-sm">
+                {unitStats.map(stat => (
+                  <div key={stat.name} className="flex justify-between">
+                    <span>{stat.name}</span>
+                    <span className="font-medium">{stat.correct}/{stat.total} ({Math.round(stat.accuracy)}%)</span>
+                  </div>
+                ))}
               </CardContent>
            </Card>
 
@@ -204,30 +136,23 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
               <CardHeader>
                   <CardTitle className="text-base">문제 영역별 정답률</CardTitle>
               </CardHeader>
-              <CardContent>
-                   <ChartContainer config={{}} className="h-[250px] w-full">
-                      <BarChart data={areaStats} layout="vertical" margin={{ left: 10, right: 30 }}>
-                          <XAxis type="number" dataKey="accuracy" domain={[0, 100]} tickFormatter={(v) => `${v}%`} hide />
-                          <YAxis type="category" dataKey="name" width={110} tickLine={false} axisLine={false} />
-                          <ChartTooltip content={<CustomTooltipContent />} />
-                          <Bar dataKey="accuracy" radius={4} fill="var(--color-accent)">
-                            <LabelList
-                                dataKey="accuracy"
-                                position="right"
-                                offset={10}
-                                className="fill-foreground"
-                                fontSize={12}
-                                content={<CustomLabel />}
-                              />
-                          </Bar>
-                      </BarChart>
-                  </ChartContainer>
+              <CardContent className="space-y-2 text-sm">
+                 {areaStats.length > 0 ? (
+                    areaStats.map(stat => (
+                      <div key={stat.name} className="flex justify-between">
+                        <span>{stat.name}</span>
+                        <span className="font-medium">{stat.correct}/{stat.total} ({Math.round(stat.accuracy)}%)</span>
+                      </div>
+                    ))
+                 ) : (
+                    <p className="text-muted-foreground">아직 푼 문제가 없습니다.</p>
+                 )}
               </CardContent>
            </Card>
         </div>
       </div>
 
-      <div className="mt-8">
+      <div className="mt-8 pt-4 border-t">
         <Button variant="outline" className="w-full" onClick={handleLogout}>
           <LogOut className="mr-2 h-4 w-4" />
           로그아웃
