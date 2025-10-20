@@ -23,9 +23,9 @@ interface GameBoardProps {
   problemAttempts: ProblemAttempt[];
 }
 
-const aiUsers: Omit<User, 'uid' | 'countryId' | 'email'>[] = [
-  { id: "player2", nickname: "AI 플레이어 A", color: "hsl(200, 80%, 60%)", tokens: 1 },
-  { id: "player3", nickname: "AI 플레이어 B", color: "hsl(340, 80%, 60%)", tokens: 1 },
+const aiUsers: (Omit<User, 'uid' | 'email'> & {country: Omit<Country, 'id' | 'createdBy'>})[] = [
+    { id: "player2", nickname: "AI 플레이어 A", tokens: 1, countryId: 'ai-country-a', country: { name: 'AI 제국 A', color: "hsl(200, 80%, 60%)"} },
+    { id: "player3", nickname: "AI 플레이어 B", tokens: 1, countryId: 'ai-country-b', country: { name: 'AI 제국 B', color: "hsl(340, 80%, 60%)"} },
 ];
 
 export default function GameBoard({ users, countries, landTiles, currentUserProfile, problemAttempts }: GameBoardProps) {
@@ -37,17 +37,21 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
   const [zoomLevel, setZoomLevel] = useState(1);
 
   const currentUser = users.find(u => u.id === currentUserProfile.id);
-
-  // Combine static AI info with dynamic user data from Firestore
+  
   const allUsers = useMemo(() => {
     const firestoreUsers = users.map(u => ({...u, isAI: false}));
     const aiWithDefaults = aiUsers.map(ai => {
       const existingAI = firestoreUsers.find(u => u.id === ai.id);
-      return existingAI ? {...ai, ...existingAI, isAI: true} : {...ai, email: '', uid: ai.id, countryId: `ai-country-${ai.id}`, isAI: true};
+      return existingAI ? {...ai, ...existingAI, isAI: true} : {...ai, email: '', uid: ai.id, isAI: true};
     });
     return [...firestoreUsers.filter(u => !aiUsers.some(ai => ai.id === u.id)), ...aiWithDefaults];
   }, [users]);
   
+  const allCountries = useMemo(() => {
+    const aiApiCountries = aiUsers.map(ai => ({...ai.country, id: ai.countryId, createdBy: 'ai'}));
+    return [...countries, ...aiApiCountries];
+  }, [countries]);
+
   const mapData = useMemo(() => {
     const map: Tile[][] = Array.from({ length: MAP_HEIGHT }, (_, y) =>
       Array.from({ length: MAP_WIDTH }, (__, x) => ({
@@ -128,7 +132,10 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
   };
 
   const handleTileClick = async (x: number, y: number) => {
-    if (!currentUser || currentUser.tokens <= 0) {
+    if (!currentUser) {
+      return;
+    }
+    if (currentUser.tokens <= 0) {
       toast({
         variant: "destructive",
         title: "토큰이 없습니다!",
@@ -175,9 +182,11 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
   const handleZoomOut = () => setZoomLevel(prev => Math.max(prev - 0.2, 0.5));
 
   const canConquer = (tile: Tile) => {
-    if (!currentUser || tile.ownerId === currentUser.id || currentUser.tokens <= 0) {
+    if (!currentUser || currentUser.tokens <= 0) {
       return false;
     }
+
+    if (tile.ownerId === currentUser.id) return false;
 
     if (userTiles.length === 0) {
       return tile.ownerId === null && isLand(tile.x, tile.y);
@@ -200,11 +209,11 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
       <Header 
         currentUser={currentUser} 
         onSolveProblemClick={handleSolveProblemClick} 
-        countries={countries}
+        countries={allCountries}
         problemAttempts={problemAttempts}
       />
       <div className="relative h-full w-full max-w-7xl flex-grow">
-        <WorldMap mapData={mapData} users={allUsers} countries={countries} onTileClick={handleTileClick} canConquer={canConquer} zoomLevel={zoomLevel} />
+        <WorldMap mapData={mapData} users={allUsers} countries={allCountries} onTileClick={handleTileClick} canConquer={canConquer} zoomLevel={zoomLevel} />
         <div className="absolute bottom-4 right-4 flex gap-2">
           <Button size="icon" onClick={handleZoomIn} aria-label="확대">
             <ZoomIn />

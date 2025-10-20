@@ -37,7 +37,7 @@ const TileComponent = React.memo(({
       'bg-[#f0e6d2]': isLandTile && !ownerColor,
       'hover:bg-[#e6dac8]': isLandTile && !ownerColor && isConquerable,
       // Water
-      'bg-[#aadaff]': !isLandTile && !ownerColor,
+      'bg-[#aadaff]': !isLandTile, // Water is always the same color
     },
     { 'shadow-inner': ownerColor },
     isConquerable && "cursor-pointer ring-2 ring-offset-1 ring-offset-background ring-primary/70 z-10 hover:brightness-110",
@@ -83,10 +83,12 @@ export default function WorldMap({ mapData, users, countries, onTileClick, canCo
   }
 
   const getTooltipContent = (tile: Tile): React.ReactNode => {
-    if (!tile.ownerId) return null;
-    const countryId = userCountryMap.get(tile.ownerId);
-    if (!countryId) return null;
-    return countryNameMap.get(countryId) || "알 수 없는 국가";
+    if (!tile.ownerId) return '미개척지';
+    const owner = users.find(u => u.id === tile.ownerId);
+    const countryId = owner?.countryId;
+    if (!countryId) return owner?.nickname || "알 수 없는 플레이어";
+    const countryName = countryNameMap.get(countryId);
+    return `${countryName} (${owner?.nickname})`;
   }
 
   return (
