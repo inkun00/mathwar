@@ -139,7 +139,9 @@ const commonDenominatorFractionCalc = (): MathProblem => {
     let den1 = randomInt(2, 7);
     let den2 = randomInt(den1 + 1, 10); // Ensure different denominators
     let num1 = randomInt(1, den1 - 1);
+    if (num1 === 0) num1 = 1;
     let num2 = randomInt(1, den2 - 1);
+    if (num2 === 0) num2 = 1;
     const op = Math.random() > 0.5 ? 'add' : 'subtract';
     const subType: ProblemSubType = op === 'add' ? 'fraction-add-diff-den' : 'fraction-subtract-diff-den';
 
