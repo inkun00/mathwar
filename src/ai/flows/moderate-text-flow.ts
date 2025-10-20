@@ -13,10 +13,10 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 
-export const ModerateTextInputSchema = z.string();
+const ModerateTextInputSchema = z.string();
 export type ModerateTextInput = z.infer<typeof ModerateTextInputSchema>;
 
-export const ModerateTextOutputSchema = z.object({
+const ModerateTextOutputSchema = z.object({
   isAppropriate: z
     .boolean()
     .describe('Whether the text is appropriate or not.'),
@@ -37,7 +37,7 @@ export async function moderateText(
 
 const moderationPrompt = ai.definePrompt({
   name: 'moderateTextPrompt',
-  input: { schema: ModerateTextInputSchema },
+  input: { schema: z.object({ text: ModerateTextInputSchema }) },
   output: { schema: ModerateTextOutputSchema },
   prompt: `You are a content moderator for a friendly, all-ages strategy game.
     Your task is to determine if the given text is appropriate for a user's nickname or a country's name.
