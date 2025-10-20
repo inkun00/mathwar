@@ -39,10 +39,10 @@ const MixedFraction = ({ integer, numerator, denominator }: { integer: number, n
 // --- Decimal Problem Generation ---
 const generateDecimalProblem = (): MathProblem => {
   const isAdvanced = Math.random() > 0.5;
-  const operations: ( 'add' | 'subtract' | 'multiply' | 'divide' )[] = ['add', 'subtract', 'multiply', 'divide'];
-  const operation = operations[randomInt(0,3)];
+  const operations: ( 'add' | 'subtract' )[] = ['add', 'subtract'];
+  const operation = operations[randomInt(0,1)];
   let num1 = round(Math.random() * (isAdvanced ? 50 : 20), isAdvanced ? 2 : 1);
-  let num2 = round(Math.random() * (isAdvanced ? (operation === 'multiply' || operation === 'divide' ? 10 : 50) : (operation === 'multiply' || operation === 'divide' ? 5 : 20) ), isAdvanced ? 2 : 1);
+  let num2 = round(Math.random() * (isAdvanced ? 50 : 20 ), isAdvanced ? 2 : 1);
   let subType: ProblemSubType;
   let answer: number;
   let problemText = '';
@@ -58,22 +58,6 @@ const generateDecimalProblem = (): MathProblem => {
         subType = 'decimal-subtract';
         answer = round(num1 - num2, 4);
         problemText = `${num1} - ${num2}`;
-        break;
-    case 'multiply':
-        num1 = round(Math.random() * 9 + 1, 1); // Keep numbers smaller for multiplication
-        num2 = round(Math.random() * 9 + 1, 1);
-        subType = 'decimal-multiply';
-        answer = round(num1 * num2, 4);
-        problemText = `${num1} × ${num2}`;
-        break;
-    case 'divide':
-        num1 = round( (Math.random() * 9 + 1) * (randomInt(2,5)) , 2); // Make num1 a multiple of a small int
-        num2 = round(num1 / (randomInt(2,5)), 2);
-        if (num1 < num2) [num1, num2] = [num2, num1];
-        if (num2 === 0) num2 = 0.5; // Avoid division by zero
-        subType = 'decimal-divide';
-        answer = round(num1 / num2, 4);
-        problemText = `${num1} ÷ ${num2}`;
         break;
   }
 
@@ -96,7 +80,7 @@ const generateDecimalProblem = (): MathProblem => {
 
 // --- Fraction Problem Generation ---
 const generateFractionProblem = (): MathProblem => {
-    const type = randomInt(1, 6);
+    const type = randomInt(1, 4); // Adjusted from 6 to 4
     switch (type) {
         case 1: // 진분수 덧셈/뺄셈 (동일 분모)
             return simpleFractionCalc();
@@ -104,11 +88,7 @@ const generateFractionProblem = (): MathProblem => {
             return mixedFractionCalc();
         case 3: // 자연수 - 분수
             return integerFractionCalc();
-        case 4: // 분수 곱셈
-            return fractionMultiplication();
-        case 5: // 분수 나눗셈
-            return fractionDivision();
-        case 6: // 문장제
+        case 4: // 문장제
         default:
             return fractionWordProblem();
     }
@@ -215,62 +195,6 @@ const integerFractionCalc = (): MathProblem => {
         operator: 'subtract',
       }
     };
-}
-
-const fractionMultiplication = (): MathProblem => {
-    const den1 = randomInt(2, 10);
-    const num1 = randomInt(1, den1);
-    const den2 = randomInt(2, 10);
-    const num2 = randomInt(1, den2);
-    const subType: ProblemSubType = 'fraction-multiply';
-
-    return {
-      problem: (
-        <span className="flex items-center justify-center">
-            <Fraction numerator={num1} denominator={den1} />
-            <span className="mx-2 text-2xl">×</span>
-            <Fraction numerator={num2} denominator={den2} />
-            <span className="ml-3 text-2xl">의 값은?</span>
-        </span>
-      ),
-      answer: round((num1/den1) * (num2/den2), 4),
-      type: 'fraction',
-      subType,
-      storable: {
-        type: 'fraction',
-        subType,
-        operands: [num1, den1, num2, den2],
-        operator: 'multiply',
-      }
-    }
-}
-
-const fractionDivision = (): MathProblem => {
-    const den1 = randomInt(2, 10);
-    const num1 = randomInt(1, den1);
-    const den2 = randomInt(2, 10);
-    const num2 = randomInt(1, den2);
-    const subType: ProblemSubType = 'fraction-divide';
-
-    return {
-        problem: (
-            <span className="flex items-center justify-center">
-                <Fraction numerator={num1} denominator={den1} />
-                <span className="mx-2 text-2xl">÷</span>
-                <Fraction numerator={num2} denominator={den2} />
-                <span className="ml-3 text-2xl">의 값은?</span>
-            </span>
-        ),
-        answer: round((num1 / den1) / (num2 / den2), 4),
-        type: 'fraction',
-        subType,
-        storable: {
-            type: 'fraction',
-            subType,
-            operands: [num1, den1, num2, den2],
-            operator: 'divide',
-        }
-    }
 }
 
 const fractionWordProblem = (): MathProblem => {
@@ -468,20 +392,16 @@ const generateDecimalToFractionProblem = (): MathProblem => {
 
 export const generateProblemFromData = (data: StorableProblem): MathProblem => {
     const { type, subType, operands, operator } = data;
-    const opSymbol = operator === 'add' ? '+' : operator === 'subtract' ? '-' : operator === 'multiply' ? '×' : '÷';
+    const opSymbol = operator === 'add' ? '+' : operator === 'subtract' ? '-' : '×';
 
     switch (subType) {
         // --- DECIMAL ---
         case 'decimal-add':
         case 'decimal-subtract':
-        case 'decimal-multiply':
-        case 'decimal-divide':
             const [d_num1, d_num2] = operands as number[];
             let d_answer: number;
             if (operator === 'add') d_answer = d_num1 + d_num2;
-            else if (operator === 'subtract') d_answer = d_num1 - d_num2;
-            else if (operator === 'multiply') d_answer = d_num1 * d_num2;
-            else d_answer = d_num1 / d_num2;
+            else d_answer = d_num1 - d_num2;
 
             return {
                 problem: <span>{`${d_num1} ${opSymbol} ${d_num2} 의 값은?`}</span>,
@@ -534,22 +454,6 @@ export const generateProblemFromData = (data: StorableProblem): MathProblem => {
                     </span>
                 ),
                 answer: round(fi_int - (fi_num/fi_den), 4),
-                type: 'fraction', subType, storable: data
-            };
-        case 'fraction-multiply':
-        case 'fraction-divide':
-            const [fmd_num1, fmd_den1, fmd_num2, fmd_den2] = operands as number[];
-            const fmd_answer = operator === 'multiply' ? (fmd_num1 / fmd_den1) * (fmd_num2 / fmd_den2) : (fmd_num1 / fmd_den1) / (fmd_num2 / fmd_den2);
-             return {
-                problem: (
-                    <span className="flex items-center justify-center">
-                        <Fraction numerator={fmd_num1} denominator={fmd_den1} />
-                        <span className="mx-2 text-2xl">{opSymbol}</span>
-                        <Fraction numerator={fmd_num2} denominator={fmd_den2} />
-                        <span className="ml-3 text-2xl">의 값은?</span>
-                    </span>
-                ),
-                answer: round(fmd_answer, 4),
                 type: 'fraction', subType, storable: data
             };
         case 'fraction-word-problem':
@@ -665,7 +569,7 @@ export const generateMathProblem = (): MathProblem => {
   if (problemType < 0.7) { // 70% chance for decimal calculation
     return generateDecimalProblem();
   } else { // 30% chance for fraction/conversion
-    const subType = randomInt(1, 10);
+    const subType = randomInt(1, 8); // Adjusted from 10 to 8
     switch(subType) {
         case 1:
         case 2:
@@ -675,16 +579,12 @@ export const generateMathProblem = (): MathProblem => {
         case 4:
             return integerFractionCalc();
         case 5:
-            return fractionMultiplication();
-        case 6:
-            return fractionDivision();
-        case 7:
             return fractionWordProblem();
-        case 8:
+        case 6:
             return fractionComparisonProblem();
-        case 9:
+        case 7:
             return generateFractionToDecimalProblem();
-        case 10:
+        case 8:
         default:
             return generateDecimalToFractionProblem();
     }

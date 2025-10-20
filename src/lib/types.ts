@@ -32,15 +32,11 @@ export type ProblemType = 'decimal' | 'fraction' | 'conversion';
 export type ProblemSubType = 
   | 'decimal-add' 
   | 'decimal-subtract'
-  | 'decimal-multiply'
-  | 'decimal-divide'
   | 'fraction-add-same-den'
   | 'fraction-subtract-same-den'
   | 'fraction-add-mixed'
   | 'fraction-subtract-mixed'
   | 'fraction-subtract-from-int'
-  | 'fraction-multiply'
-  | 'fraction-divide'
   | 'fraction-word-problem'
   | 'fraction-comparison'
   | 'fraction-to-decimal'
@@ -58,7 +54,7 @@ export interface StorableProblem {
   type: ProblemType;
   subType: ProblemSubType;
   operands: (number | string)[];
-  operator: 'add' | 'subtract' | 'multiply' | 'divide' | 'compare' | 'convert';
+  operator: 'add' | 'subtract' | 'compare' | 'convert';
 }
 
 
