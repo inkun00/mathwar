@@ -48,9 +48,13 @@
         "createdBy": {
           "type": "string",
           "description": "The UID of the user who created the country."
+        },
+        "color": {
+            "type": "string",
+            "description": "The HEX or HSL color string for the country."
         }
       },
-      "required": ["id", "name", "createdBy"]
+      "required": ["id", "name", "createdBy", "color"]
     },
     "LandTile": {
       "$schema": "http://json-schema.org/draft-07/schema#",

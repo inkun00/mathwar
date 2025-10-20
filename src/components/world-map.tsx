@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 import { isLand } from "@/lib/world-map-shape";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import React from "react";
+import { useMemo } from 'react';
 
 interface WorldMapProps {
   mapData: MapData;
@@ -70,9 +71,16 @@ TileComponent.displayName = "TileComponent";
 
 
 export default function WorldMap({ mapData, users, countries, onTileClick, canConquer, zoomLevel }: WorldMapProps) {
-  const userColorMap = new Map(users.map(u => [u.id, u.color]));
-  const userCountryMap = new Map(users.map(u => [u.id, u.countryId]));
-  const countryNameMap = new Map(countries.map(c => [c.id, c.name]));
+  const countryColorMap = useMemo(() => new Map(countries.map(c => [c.id, c.color])), [countries]);
+  const userCountryMap = useMemo(() => new Map(users.map(u => [u.id, u.countryId])), [users]);
+  const countryNameMap = useMemo(() => new Map(countries.map(c => [c.id, c.name])), [countries]);
+
+  const getTileOwnerColor = (ownerId: string | null): string | null => {
+    if (!ownerId) return null;
+    const countryId = userCountryMap.get(ownerId);
+    if (!countryId) return null;
+    return countryColorMap.get(countryId) || null;
+  }
 
   const getTooltipContent = (tile: Tile): React.ReactNode => {
     if (!tile.ownerId) return null;
@@ -95,7 +103,7 @@ export default function WorldMap({ mapData, users, countries, onTileClick, canCo
           <TileComponent
             key={`${tile.x}-${tile.y}`}
             tile={tile}
-            ownerColor={tile.ownerId ? userColorMap.get(tile.ownerId) ?? null : null}
+            ownerColor={getTileOwnerColor(tile.ownerId)}
             onClick={() => onTileClick(tile.x, tile.y)}
             isConquerable={canConquer(tile)}
             tooltipContent={getTooltipContent(tile)}

@@ -62,6 +62,7 @@ export default function SignUpDetails() {
         const countryRef = await addDoc(collection(firestore, 'countries'), {
           name: newCountryName,
           createdBy: auth.currentUser.uid,
+          color: `hsl(${Math.random() * 360}, 60%, 70%)` // Assign a random color to new country
         });
         countryId = countryRef.id;
       } else {
@@ -79,7 +80,7 @@ export default function SignUpDetails() {
         email: auth.currentUser.email,
         countryId,
         tokens: 1, // Start with 1 token
-        color: `hsl(${Math.random() * 360}, 60%, 70%)` // Assign a random color
+        color: `hsl(${Math.random() * 360}, 60%, 70%)` // This color is for the user avatar/icon, not the map
       });
 
       toast({ title: '프로필 생성 완료!', description: '이제 게임을 시작할 수 있습니다.' });

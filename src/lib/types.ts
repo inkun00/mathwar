@@ -1,3 +1,4 @@
+'use client';
 import type { ReactNode } from "react";
 
 export interface User {
@@ -15,6 +16,7 @@ export interface Country {
   id: string;
   name: string;
   createdBy: string;
+  color: string;
 }
 
 export interface Tile {
@@ -34,9 +36,7 @@ export type ProblemSubType =
   | 'fraction-subtract-same-den'
   | 'fraction-add-mixed'
   | 'fraction-subtract-mixed'
-  | 'fraction-subtract-from-int'
-  | 'fraction-add-diff-den'
-  | 'fraction-subtract-diff-den';
+  | 'fraction-subtract-from-int';
 
 
 export interface MathProblem {
