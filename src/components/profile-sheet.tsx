@@ -170,8 +170,8 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
                               offset={10}
                               className="fill-foreground"
                               fontSize={12}
-                              formatter={(value: number, { payload }: any) => {
-                                const { correct, total } = payload;
+                              formatter={(value: number, entry: any) => {
+                                const { correct, total } = entry.payload;
                                 if (total === 0) return "0/0 (0%)";
                                 return `${correct}/${total} (${Math.round(value)}%)`;
                               }}
@@ -198,8 +198,8 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
                                 offset={10}
                                 className="fill-foreground"
                                 fontSize={12}
-                                formatter={(value: number, { payload }: any) => {
-                                  const { correct, total } = payload;
+                                formatter={(value: number, entry: any) => {
+                                  const { correct, total } = entry.payload;
                                   if (total === 0) return "0/0 (0%)";
                                   return `${correct}/${total} (${Math.round(value)}%)`;
                                 }}
