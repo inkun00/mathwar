@@ -36,6 +36,8 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
   const [invasionTarget, setInvasionTarget] = useState<InvasionTarget>(null);
   const { toast } = useToast();
   const [zoomLevel, setZoomLevel] = useState(1);
+  const [isProcessingClick, setIsProcessingClick] = useState(false);
+
 
   const currentUser = users.find(u => u.id === currentUserProfile.id);
   
@@ -225,26 +227,31 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
   const handleInvasionSuccess = async () => {
     if (!currentUser || !firestore || !invasionTarget) return;
 
-    const batch = writeBatch(firestore);
+    try {
+        const batch = writeBatch(firestore);
 
-    // Conquer the tile
-    const tileId = `${invasionTarget.x}-${invasionTarget.y}`;
-    const tileRef = doc(firestore, "land_tiles", tileId);
-    batch.set(tileRef, { x: invasionTarget.x, y: invasionTarget.y, ownerId: currentUser.id }, { merge: true });
+        // Conquer the tile
+        const tileId = `${invasionTarget.x}-${invasionTarget.y}`;
+        const tileRef = doc(firestore, "land_tiles", tileId);
+        batch.set(tileRef, { x: invasionTarget.x, y: invasionTarget.y, ownerId: currentUser.id }, { merge: true });
 
-    // Decrement token
-    const userRef = doc(firestore, "users", currentUser.id);
-    batch.update(userRef, { tokens: increment(-1) });
+        // Decrement token
+        const userRef = doc(firestore, "users", currentUser.id);
+        batch.update(userRef, { tokens: increment(-1) });
 
-    await batch.commit();
-    setInvasionTarget(null);
-
-    // After commit, check for territory cuts
-    await handleTerritoryCut(invasionTarget.originalOwnerId);
+        await batch.commit();
+        
+        // After commit, check for territory cuts
+        await handleTerritoryCut(invasionTarget.originalOwnerId);
+    } catch (error) {
+        console.error("Invasion failed:", error);
+    } finally {
+        setInvasionTarget(null);
+    }
   };
 
   const handleTileClick = async (x: number, y: number) => {
-    if (!currentUser || !firestore) {
+    if (!currentUser || !firestore || isProcessingClick) {
       return;
     }
     if (currentUser.tokens <= 0) {
@@ -256,28 +263,38 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
       return;
     }
     
+    setIsProcessingClick(true);
     const clickedTile = mapData[y][x];
     const originalOwnerId = clickedTile.ownerId;
 
-    // Case 1: Conquering unowned land
-    if (originalOwnerId === null) {
-        const tileId = `${x}-${y}`;
-        const tileRef = doc(firestore, "land_tiles", tileId);
-        await setDoc(tileRef, { x, y, ownerId: currentUser.id }, { merge: true });
+    try {
+        // Case 1: Conquering unowned land
+        if (originalOwnerId === null) {
+            const tileId = `${x}-${y}`;
+            const tileRef = doc(firestore, "land_tiles", tileId);
+            await setDoc(tileRef, { x, y, ownerId: currentUser.id }, { merge: true });
 
-        const userRef = doc(firestore, "users", currentUser.id);
-        await updateDoc(userRef, {
-        tokens: increment(-1),
-        });
-        toast({ title: "영토 확장!", description: "새로운 땅을 정복했습니다." });
-        return;
-    }
-
-    // Case 2: Attacking an enemy tile
-    if (originalOwnerId !== currentUser.id) {
-        setInvasionTarget({ x, y, originalOwnerId: originalOwnerId! });
-        setCurrentProblem(generateMathProblem());
-        setIsModalOpen(true);
+            const userRef = doc(firestore, "users", currentUser.id);
+            await updateDoc(userRef, {
+            tokens: increment(-1),
+            });
+            toast({ title: "영토 확장!", description: "새로운 땅을 정복했습니다." });
+        }
+        // Case 2: Attacking an enemy tile
+        else if (originalOwnerId !== currentUser.id) {
+            setInvasionTarget({ x, y, originalOwnerId: originalOwnerId! });
+            setCurrentProblem(generateMathProblem());
+            setIsModalOpen(true);
+        }
+    } catch (error) {
+        console.error("Tile click action failed:", error);
+        toast({ variant: "destructive", title: "오류", description: "작업 처리 중 오류가 발생했습니다." });
+    } finally {
+        // For non-invasion clicks, stop processing here.
+        // For invasions, the modal's onOpenChange will handle it.
+        if (originalOwnerId === null || originalOwnerId === currentUser.id) {
+            setIsProcessingClick(false);
+        }
     }
   };
   
@@ -309,7 +326,7 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
   const handleZoomOut = () => setZoomLevel(prev => Math.max(prev - 0.2, 0.5));
 
   const canConquer = (tile: Tile) => {
-    if (!currentUser || currentUser.tokens <= 0) {
+    if (!currentUser || currentUser.tokens <= 0 || isProcessingClick) {
       return false;
     }
 
@@ -322,6 +339,17 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
 
     return isAdjacent(tile.x, tile.y, userTiles);
   };
+  
+  const handleProblemModalClose = (open: boolean) => {
+    if (!open) {
+      // This is called when the modal is closed, either by solving, failing, or clicking away.
+      // This is the right place to unlock clicking.
+      setIsProcessingClick(false);
+      setInvasionTarget(null); // Always reset invasion target on close
+    }
+    setIsModalOpen(open);
+  }
+
 
   if (!currentUser) {
     return (
@@ -353,7 +381,7 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
       </div>
       <ProblemModal
         isOpen={isModalOpen}
-        onOpenChange={setIsModalOpen}
+        onOpenChange={handleProblemModalClose}
         problem={currentProblem}
         onCorrectAnswer={invasionTarget ? handleInvasionSuccess : handleGainToken}
         userId={authUser?.uid}
@@ -364,7 +392,7 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
                 const userRef = doc(firestore, "users", currentUser.id);
                 await updateDoc(userRef, { tokens: increment(-1) });
             }
-            setInvasionTarget(null); // Reset invasion state
+            // No need to reset invasion target here, onOpenChange handles it.
         }}
       />
       {isDemise && <DemiseScreen onRestart={handleRestart} />}

@@ -134,10 +134,13 @@ export default function ProblemModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => {
-      if (!open && onWrongAnswer) {
-        onWrongAnswer(); // Also trigger onWrongAnswer logic if the modal is closed without submission
-      }
       onOpenChange(open);
+      if (!open && onWrongAnswer) {
+        // If the modal is closing for any reason (submit, click away, etc.)
+        // and a wrong answer handler exists, call it. This helps reset state
+        // in the parent component consistently.
+        onWrongAnswer();
+      }
     }}>
       <DialogContent className="sm:max-w-[425px]">
         <form onSubmit={handleSubmit}>
