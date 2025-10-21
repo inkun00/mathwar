@@ -9,6 +9,7 @@ import { ZoomIn, ZoomOut } from "lucide-react";
 import { useFirestore, useUser } from "@/firebase";
 import { doc, setDoc, updateDoc, writeBatch, increment, collection, getDocs, arrayUnion } from "firebase/firestore";
 import { addWrongAnswer } from "@/firebase/firestore/data";
+import { errorEmitter, FirestorePermissionError } from '@/firebase';
 
 import Header from "./header";
 import WorldMap from "./world-map";
@@ -107,34 +108,29 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
         const move = getAIMove(ai, allAiTiles, landTiles, allUsers);
         
         if (move) {
-          try {
-             // 70% chance to succeed without a problem
-            const successfulInvasion = move.ownerId === null || Math.random() < 0.7;
-            const originalOwnerId = move.ownerId;
+          const originalOwnerId = move.ownerId;
+          const tileData = { x: move.x, y: move.y, ownerId: ai.id };
+          const tileRef = doc(firestore, 'land_tiles', move.id || `${move.x}-${move.y}`);
+          const aiUserRef = doc(firestore, 'users', ai.id);
 
-            const tileRef = doc(firestore, 'land_tiles', move.id || `${move.x}-${move.y}`);
-            const aiUserRef = doc(firestore, 'users', ai.id);
-            const batch = writeBatch(firestore);
-
-            batch.update(aiUserRef, { tokens: increment(-1) });
-
-            if (successfulInvasion) {
-                batch.set(tileRef, { x: move.x, y: move.y, ownerId: ai.id }, { merge: true });
-                // Randomly award token
-                if (Math.random() < 0.1) {
-                    batch.update(aiUserRef, { tokens: increment(1) });
-                }
-            }
-            
-            await batch.commit();
-
-            if (successfulInvasion && originalOwnerId && originalOwnerId !== ai.id) {
-               await handleTerritoryCut(originalOwnerId, ai.id);
-            }
-
-          } catch (error) {
-            console.error("AI 이동 실패:", error);
-          }
+          writeBatch(firestore)
+            .update(aiUserRef, { tokens: increment(-1) })
+            .set(tileRef, tileData, { merge: true })
+            .commit()
+            .then(async () => {
+              if (originalOwnerId && originalOwnerId !== ai.id) {
+                await handleTerritoryCut(originalOwnerId, ai.id);
+              }
+            })
+            .catch(error => {
+              console.error("AI 이동 실패:", error);
+              const permissionError = new FirestorePermissionError({
+                path: tileRef.path,
+                operation: 'write',
+                requestResourceData: tileData,
+              });
+              errorEmitter.emit('permission-error', permissionError);
+            });
         }
       }
     }, 3000); // AI acts every 3 seconds
@@ -148,146 +144,162 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
     setIsModalOpen(true);
   };
   
-  const handleGainToken = async () => {
+  const handleGainToken = () => {
     if (!currentUser || !firestore) return;
     const userRef = doc(firestore, "users", currentUser.id);
-    await updateDoc(userRef, {
-      tokens: increment(1),
+    const updateData = { tokens: increment(1) };
+    updateDoc(userRef, updateData).catch(error => {
+        console.error("토큰 획득 실패:", error);
+        const permissionError = new FirestorePermissionError({
+            path: userRef.path,
+            operation: 'update',
+            requestResourceData: updateData,
+        });
+        errorEmitter.emit('permission-error', permissionError);
     });
   };
 
   const handleTerritoryCut = async (originalOwnerId: string, conquerorId: string | null) => {
     if (!firestore) return;
 
-    const tilesCollectionRef = collection(firestore, "land_tiles");
-    const landTilesSnapshot = await getDocs(tilesCollectionRef);
-    const currentLandTiles = landTilesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Tile));
+    try {
+        const tilesCollectionRef = collection(firestore, "land_tiles");
+        const landTilesSnapshot = await getDocs(tilesCollectionRef);
+        const currentLandTiles = landTilesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Tile));
 
-    const ownedTiles = currentLandTiles.filter(t => t.ownerId === originalOwnerId);
-    if (ownedTiles.length === 0) {
-      // This means the player has no tiles left, they are demised.
-      if (conquerorId) {
-        const originalOwner = allUsers.find(u => u.id === originalOwnerId);
-        const conquerorRef = doc(firestore, "users", conquerorId);
-        if (originalOwner) {
-          // Add conquered country to conqueror's profile
-          await updateDoc(conquerorRef, {
-            conqueredCountries: arrayUnion(originalOwner.countryId)
-          });
-
-          // Mark country as demised
-          const demisedCountryRef = doc(firestore, "countries", originalOwner.countryId);
-          await updateDoc(demisedCountryRef, { demised: true });
+        const ownedTiles = currentLandTiles.filter(t => t.ownerId === originalOwnerId);
+        if (ownedTiles.length === 0) {
+          if (conquerorId) {
+            const originalOwner = allUsers.find(u => u.id === originalOwnerId);
+            if (originalOwner) {
+                const conquerorRef = doc(firestore, "users", conquerorId);
+                const countryRef = doc(firestore, "countries", originalOwner.countryId);
+                const batch = writeBatch(firestore);
+                batch.update(conquerorRef, { conqueredCountries: arrayUnion(originalOwner.countryId) });
+                batch.update(countryRef, { demised: true });
+                await batch.commit().catch(error => {
+                    console.error("정복/멸망 처리 실패:", error);
+                    errorEmitter.emit('permission-error', new FirestorePermissionError({ path: conquerorRef.path, operation: 'update'}));
+                });
+            }
+          }
+          return;
         }
-      }
-      return;
-    }
 
-    const visited = new Set<string>();
-    const territories: Tile[][] = [];
+        const visited = new Set<string>();
+        const territories: Tile[][] = [];
 
-    for (const tile of ownedTiles) {
-        const tileId = `${tile.x},${tile.y}`;
-        if (!visited.has(tileId)) {
-            const newTerritory: Tile[] = [];
-            const queue: Tile[] = [tile];
-            visited.add(tileId);
+        for (const tile of ownedTiles) {
+            const tileId = `${tile.x},${tile.y}`;
+            if (!visited.has(tileId)) {
+                const newTerritory: Tile[] = [];
+                const queue: Tile[] = [tile];
+                visited.add(tileId);
 
-            while (queue.length > 0) {
-                const current = queue.shift()!;
-                newTerritory.push(current);
-
-                const neighbors = [
-                    { x: current.x, y: current.y - 1 }, { x: current.x, y: current.y + 1 },
-                    { x: current.x - 1, y: current.y }, { x: current.x + 1, y: current.y }
-                ];
-
-                for (const n of neighbors) {
-                    const neighborId = `${n.x},${n.y}`;
-                    if (!visited.has(neighborId)) {
-                        const neighborTile = ownedTiles.find(t => t.x === n.x && t.y === n.y);
-                        if (neighborTile) {
-                            visited.add(neighborId);
-                            queue.push(neighborTile);
+                while (queue.length > 0) {
+                    const current = queue.shift()!;
+                    newTerritory.push(current);
+                    const neighbors = [
+                        { x: current.x, y: current.y - 1 }, { x: current.x, y: current.y + 1 },
+                        { x: current.x - 1, y: current.y }, { x: current.x + 1, y: current.y }
+                    ];
+                    for (const n of neighbors) {
+                        const neighborId = `${n.x},${n.y}`;
+                        if (!visited.has(neighborId)) {
+                            const neighborTile = ownedTiles.find(t => t.x === n.x && t.y === n.y);
+                            if (neighborTile) {
+                                visited.add(neighborId);
+                                queue.push(neighborTile);
+                            }
                         }
                     }
                 }
+                territories.push(newTerritory);
             }
-            territories.push(newTerritory);
         }
-    }
 
-    if (territories.length > 1) {
-        territories.sort((a, b) => b.length - a.length);
+        if (territories.length > 1) {
+            territories.sort((a, b) => b.length - a.length);
+            const tilesToNeutralize = territories.slice(1).flat();
+            
+            if (tilesToNeutralize.length > 0) {
+                const batch = writeBatch(firestore);
+                tilesToNeutralize.forEach(tile => {
+                    const tileRef = doc(firestore, "land_tiles", tile.id);
+                    batch.update(tileRef, { ownerId: null });
+                });
 
-        const tilesToNeutralize = territories.slice(1).flat();
-        
-        if (tilesToNeutralize.length > 0) {
-            const batch = writeBatch(firestore);
-            tilesToNeutralize.forEach(tile => {
-                const tileRef = doc(firestore, "land_tiles", tile.id);
-                batch.update(tileRef, { ownerId: null });
-            });
+                const tokensToCompensate = Math.round(tilesToNeutralize.length / 2);
+                if (tokensToCompensate > 0) {
+                  const originalOwnerRef = doc(firestore, "users", originalOwnerId);
+                  batch.update(originalOwnerRef, { tokens: increment(tokensToCompensate) });
+                }
 
-            const tokensToCompensate = Math.round(tilesToNeutralize.length / 2);
-            if (tokensToCompensate > 0) {
-              const originalOwnerRef = doc(firestore, "users", originalOwnerId);
-              batch.update(originalOwnerRef, { tokens: increment(tokensToCompensate) });
+                await batch.commit().catch(error => {
+                    console.error("영토 분단 처리 실패:", error);
+                    errorEmitter.emit('permission-error', new FirestorePermissionError({ path: 'land_tiles or users', operation: 'update'}));
+                });
+
+                const ownerIsCurrentUser = originalOwnerId === currentUser?.id;
+                const toastTitle = ownerIsCurrentUser ? "영토 분단!" : "공격 성공!";
+                let toastDescription = `상대방의 영토가 분단되어 일부가 미개척지가 되었습니다.`;
+                if(ownerIsCurrentUser) {
+                  toastDescription = `영토가 분단되어 타일 ${tilesToNeutralize.length}개를 잃고 토큰 ${tokensToCompensate}개를 얻었습니다.`
+                } else {
+                  const originalOwner = allUsers.find(u => u.id === originalOwnerId);
+                  const ownerName = originalOwner?.nickname || '상대방';
+                  toastDescription = `${ownerName}의 영토가 분단되었습니다. ${tokensToCompensate > 0 ? `보상으로 토큰 ${tokensToCompensate}개가 지급되었습니다.` : ''}`
+                }
+
+                toast({
+                    variant: ownerIsCurrentUser ? "destructive" : "default",
+                    title: toastTitle,
+                    description: toastDescription,
+                });
             }
-
-            await batch.commit();
-
-            const ownerIsCurrentUser = originalOwnerId === currentUser?.id;
-            const toastTitle = ownerIsCurrentUser ? "영토 분단!" : "공격 성공!";
-            let toastDescription = `상대방의 영토가 분단되어 일부가 미개척지가 되었습니다.`;
-            if(ownerIsCurrentUser) {
-              toastDescription = `영토가 분단되어 타일 ${tilesToNeutralize.length}개를 잃고 토큰 ${tokensToCompensate}개를 얻었습니다.`
-            } else {
-              const originalOwner = allUsers.find(u => u.id === originalOwnerId);
-              const ownerName = originalOwner?.nickname || '상대방';
-              toastDescription = `${ownerName}의 영토가 분단되었습니다. ${tokensToCompensate > 0 ? `보상으로 토큰 ${tokensToCompensate}개가 지급되었습니다.` : ''}`
-            }
-
-            toast({
-                variant: ownerIsCurrentUser ? "destructive" : "default",
-                title: toastTitle,
-                description: toastDescription,
-            });
         }
+    } catch(error) {
+         console.error("An error occurred in handleTerritoryCut:", error);
     }
   };
 
 
-  const handleInvasionSuccess = async () => {
+  const handleInvasionSuccess = () => {
     if (!currentUser || !firestore || !invasionTarget) return;
 
-    try {
-        const batch = writeBatch(firestore);
-        const originalOwnerId = invasionTarget.originalOwnerId;
+    const originalOwnerId = invasionTarget.originalOwnerId;
+    const tileId = `${invasionTarget.x}-${invasionTarget.y}`;
+    const tileRef = doc(firestore, "land_tiles", tileId);
+    const tileData = { x: invasionTarget.x, y: invasionTarget.y, ownerId: currentUser.id };
+    const userRef = doc(firestore, "users", currentUser.id);
 
-        const tileId = `${invasionTarget.x}-${invasionTarget.y}`;
-        const tileRef = doc(firestore, "land_tiles", tileId);
-        batch.set(tileRef, { x: invasionTarget.x, y: invasionTarget.y, ownerId: currentUser.id }, { merge: true });
+    const batch = writeBatch(firestore);
+    batch.set(tileRef, tileData, { merge: true });
+    batch.update(userRef, { tokens: increment(-1) });
 
-        const userRef = doc(firestore, "users", currentUser.id);
-        batch.update(userRef, { tokens: increment(-1) });
-
-        await batch.commit();
-        
-        if (originalOwnerId) {
-            await handleTerritoryCut(originalOwnerId, currentUser.id);
-        }
-    } catch (error) {
-        console.error("침략 실패:", error);
-    } finally {
-        setInvasionTarget(null);
-    }
+    batch.commit()
+        .then(() => {
+            if (originalOwnerId) {
+                handleTerritoryCut(originalOwnerId, currentUser.id);
+            }
+        })
+        .catch(error => {
+            console.error("침략 실패:", error);
+            const permissionError = new FirestorePermissionError({
+                path: tileRef.path,
+                operation: 'write',
+                requestResourceData: tileData,
+            });
+            errorEmitter.emit('permission-error', permissionError);
+        })
+        .finally(() => {
+            setInvasionTarget(null);
+        });
   };
 
-  const handleTileClick = async (x: number, y: number) => {
-    if (!currentUser || !firestore || isProcessingClick) {
-      return;
-    }
+  const handleTileClick = (x: number, y: number) => {
+    if (!currentUser || !firestore || isProcessingClick) return;
+
     if (currentUser.tokens <= 0) {
       toast({
         variant: "destructive",
@@ -301,34 +313,43 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
     const clickedTile = mapData[y][x];
     const originalOwnerId = clickedTile.ownerId;
 
-    try {
-        if (originalOwnerId === null) {
-            const tileId = `${x}-${y}`;
-            const tileRef = doc(firestore, "land_tiles", tileId);
-            await setDoc(tileRef, { x, y, ownerId: currentUser.id }, { merge: true });
+    if (originalOwnerId === null) {
+        const tileId = `${x}-${y}`;
+        const tileRef = doc(firestore, "land_tiles", tileId);
+        const tileData = { x, y, ownerId: currentUser.id };
+        const userRef = doc(firestore, "users", currentUser.id);
 
-            const userRef = doc(firestore, "users", currentUser.id);
-            await updateDoc(userRef, {
-            tokens: increment(-1),
+        const batch = writeBatch(firestore);
+        batch.set(tileRef, tileData, { merge: true });
+        batch.update(userRef, { tokens: increment(-1) });
+
+        batch.commit()
+            .then(() => {
+                toast({ title: "영토 확장!", description: "새로운 땅을 정복했습니다." });
+            })
+            .catch(error => {
+                console.error("타일 클릭 작업 실패:", error);
+                const permissionError = new FirestorePermissionError({
+                    path: tileRef.path,
+                    operation: 'write',
+                    requestResourceData: tileData,
+                });
+                errorEmitter.emit('permission-error', permissionError);
+            })
+            .finally(() => {
+                setIsProcessingClick(false);
             });
-            toast({ title: "영토 확장!", description: "새로운 땅을 정복했습니다." });
-        }
-        else if (originalOwnerId !== currentUser.id) {
-            setInvasionTarget({ x, y, originalOwnerId: originalOwnerId! });
-            setCurrentProblem(generateMathProblem());
-            setIsModalOpen(true);
-        }
-    } catch (error) {
-        console.error("타일 클릭 작업 실패:", error);
-        toast({ variant: "destructive", title: "오류", description: "작업 처리 중 오류가 발생했습니다." });
-    } finally {
-        if (originalOwnerId === null || originalOwnerId === currentUser.id) {
-            setIsProcessingClick(false);
-        }
+    }
+    else if (originalOwnerId !== currentUser.id) {
+        setInvasionTarget({ x, y, originalOwnerId: originalOwnerId! });
+        setCurrentProblem(generateMathProblem());
+        setIsModalOpen(true);
+    } else {
+        setIsProcessingClick(false);
     }
   };
   
-  const handleRestart = async () => {
+  const handleRestart = () => {
     if (!currentUser || !firestore) return;
   
     const batch = writeBatch(firestore);
@@ -342,12 +363,17 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
       batch.update(tileRef, { ownerId: null });
     });
   
-    await batch.commit();
-  
-    toast({
-      title: "새로운 시작!",
-      description: "정복이 다시 시작됩니다.",
-    });
+    batch.commit()
+      .then(() => {
+        toast({
+          title: "새로운 시작!",
+          description: "정복이 다시 시작됩니다.",
+        });
+      })
+      .catch(error => {
+        console.error("재시작 실패:", error);
+        errorEmitter.emit('permission-error', new FirestorePermissionError({ path: userRef.path, operation: 'update' }));
+      });
   };
 
   const handleZoomIn = () => setZoomLevel(prev => Math.min(prev + 0.2, 10));
@@ -375,14 +401,17 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
     setIsModalOpen(open);
   }
 
-  const handleWrongAnswer = async (problem: MathProblem) => {
+  const handleWrongAnswer = (problem: MathProblem) => {
     if (!authUser || !firestore) return;
     
     if (invasionTarget) {
       const userRef = doc(firestore, "users", authUser.uid);
-      await updateDoc(userRef, { tokens: increment(-1) });
+      updateDoc(userRef, { tokens: increment(-1) }).catch(error => {
+        console.error("토큰 감소 실패:", error);
+        errorEmitter.emit('permission-error', new FirestorePermissionError({ path: userRef.path, operation: 'update' }));
+      });
     } else {
-      await addWrongAnswer(firestore, authUser.uid, problem);
+      addWrongAnswer(firestore, authUser.uid, problem);
     }
   };
 
@@ -430,3 +459,5 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
     </div>
   );
 }
+
+    
