@@ -7,7 +7,7 @@ import type {
   StorableProblem,
 } from './types';
 import { isLand } from './world-map-shape';
-import React, { ReactNode, useMemo } from 'react';
+import React, { ReactNode } from 'react';
 import { cn } from './utils';
 
 // --- Utility Functions ---
@@ -114,8 +114,8 @@ const generateDirectCalculationProblem = (): MathProblem => {
       // 3 1/8 - 6/8
       const den = randomInt(7, 13);
       const int1 = randomInt(1, 5);
-      let num1 = randomInt(1, den - 1);
-      let num2 = randomInt(num1 + 1, den * 2); // num2 can be larger than den
+      const num1 = randomInt(1, den - 1);
+      const num2 = randomInt(num1 + 1, den * 2); // num2 can be larger than den
       
       const totalNum1 = int1 * den + num1;
       const resultNum = totalNum1 - num2;
