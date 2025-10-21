@@ -1,58 +1,113 @@
-
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper functions
-    function isUpdating(field) {
-      return request.resource.data.keys().hasOnly([field]);
-    }
-
-    function isUpdatingMultiple(fields) {
-      return request.resource.data.keys().hasAll(fields) && request.resource.data.keys().size() == fields.size();
-    }
-
+    /**
+     * @description Allows users to read their own profile data and create new profiles upon signup. Users can also update their profiles.
+     * @path /users/{userId}
+     * @allow (get, list) if isSignedIn()
+     * @allow (create, update) if request.auth.uid == userId
+     * @deny delete if true
+     * @principle Enforces document ownership for profile modifications; anyone can read user info, but only owner can update.
+     */
     match /users/{userId} {
-      // Allow authenticated users to read any user profile for game state (e.g., leaderboard)
-      allow get, list: if request.auth != null;
-      
-      // Allow users to update their own document,
-      // OR allow any authenticated user to update ONLY the 'tokens' or 'conqueredCountries' fields of another user.
-      // This is necessary for territory cut compensation and conquest tracking.
-      allow update: if (request.auth.uid == userId && !isUpdating('tokens') && !isUpdating('conqueredCountries') && !isUpdatingMultiple(['tokens', 'conqueredCountries'])) || 
-                    (request.auth != null && (isUpdating('tokens') || isUpdating('conqueredCountries') || isUpdatingMultiple(['tokens', 'conqueredCountries'])));
-      
-      // Users can only create their own profile
-      allow create: if request.auth.uid == userId;
-
-      match /wrong_answers/{wrongAnswerId} {
-        // Only the user can manage their own wrong answers
-        allow list, get, create, update, delete: if request.auth != null && request.auth.uid == userId;
+      function isOwner(userId) {
+        return request.auth.uid == userId;
       }
+
+      function isSignedIn() {
+        return request.auth != null;
+      }
+
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId);
+      allow delete: if false;
     }
 
+    /**
+     * @description Allows a user to create, read, update, and delete their own wrong answer records.
+     * @path /users/{userId}/wrong_answers/{wrongAnswerId}
+     * @allow (get, list, create, update, delete) if request.auth.uid == userId
+     * @deny none
+     * @principle Enforces that only the owning user can manage their incorrect answer data.
+     */
+    match /users/{userId}/wrong_answers/{wrongAnswerId} {
+      function isOwner(userId) {
+        return request.auth.uid == userId;
+      }
+      function isSignedIn() {
+        return request.auth != null;
+      }
+
+      allow get: if isOwner(userId);
+      allow list: if isOwner(userId);
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId);
+      allow delete: if isOwner(userId);
+    }
+
+    /**
+     * @description Allows any authenticated user to read existing countries and create new ones. Updates and deletes are disallowed.
+     * @path /countries/{countryId}
+     * @allow (get, list) if true
+     * @allow create if isSignedIn()
+     * @deny update, delete if true
+     * @principle Allows public read access to country data; restricts modifications.
+     */
     match /countries/{countryId} {
-      // Allow ANY user (authenticated or not) to read country data.
-      // This is required for the sign-up page where users select a country before they are fully logged in and have a profile.
-      allow get, list: if true;
+      function isSignedIn() {
+        return request.auth != null;
+      }
 
-      // Allow authenticated users to create a new country
-      allow create: if request.auth != null;
-
-      // Allow any authenticated user to update a country, but ONLY to set 'demised' to true.
-      // This prevents other malicious updates.
-      allow update: if request.auth != null && request.resource.data.demised == true && isUpdating('demised');
+      allow get: if true;
+      allow list: if true;
+      allow create: if isSignedIn();
+      allow update: if false;
+      allow delete: if false;
     }
 
+    /**
+     * @description Allows any authenticated user to read existing land tiles and create new ones.  Updates are allowed. Deletes are disallowed.
+     * @path /land_tiles/{landTileId}
+     * @allow (get, list) if true
+     * @allow create, update if isSignedIn()
+     * @deny delete if true
+     * @principle Allows public read access to land tile data; restricts deletes.
+     */
     match /land_tiles/{landTileId} {
-      // Allow any authenticated user to read, create, and update land tiles for gameplay
-      allow list, get, create, update: if request.auth != null;
+      function isSignedIn() {
+        return request.auth != null;
+      }
+
+      allow get: if true;
+      allow list: if true;
+      allow create: if isSignedIn();
+      allow update: if isSignedIn();
+      allow delete: if false;
     }
 
-    match /problem_attempts/{userId}/{doc=**} {
-        // Users can only create and read their own problem attempts
-        allow list, get, create: if request.auth != null && request.auth.uid == userId;
+    /**
+     * @description Allows a user to create and read their own problem attempts.
+     * @path /problem_attempts/{userId}/attempts/{attemptId}
+     * @allow (get, list, create) if request.auth.uid == userId
+     * @deny update, delete if true
+     * @principle Enforces that only the owning user can manage their problem attempt data.
+     */
+    match /problem_attempts/{userId}/{attemptId} {
+      function isOwner(userId) {
+        return request.auth.uid == userId;
+      }
+      function isSignedIn() {
+        return request.auth != null;
+      }
+
+      allow get: if isOwner(userId);
+      allow list: if isOwner(userId);
+      allow create: if isOwner(userId);
+      allow update: if false;
+      allow delete: if false;
     }
   }
 }
