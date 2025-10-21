@@ -76,7 +76,8 @@ export const AnswerInput = ({ index }: { index: number }) => (
 const generateDirectCalculationProblem = (): MathProblem => {
   const isFraction = Math.random() > 0.5;
   if (isFraction) {
-    if (Math.random() > 0.5) {
+    const type = randomInt(1, 3);
+    if (type === 1) {
       // 5 - 2 1/7
       const int1 = randomInt(3, 8);
       const int2 = randomInt(1, int1 - 1);
@@ -91,8 +92,8 @@ const generateDirectCalculationProblem = (): MathProblem => {
       return {
         problem: (
           <span>
-            {int1} - <MixedFraction integer={int2} numerator={num2} denominator={den} />{' '}
-            ={' '}
+            {int1} - <MixedFraction integer={int2} numerator={num2} denominator={den} />
+            {' = '}
             <MixedFraction 
               integer={<AnswerInput index={0} />} 
               numerator={<AnswerInput index={1} />} 
@@ -110,7 +111,7 @@ const generateDirectCalculationProblem = (): MathProblem => {
           operator: 'subtract',
         },
       };
-    } else {
+    } else if (type === 2) {
       // 3 1/8 - 6/8
       const den = randomInt(7, 13);
       const int1 = randomInt(1, 5);
@@ -123,14 +124,19 @@ const generateDirectCalculationProblem = (): MathProblem => {
       const resultInt = Math.floor(resultNum / den);
       const resultRem = resultNum % den;
       
-      const commonDivisor = gcd(resultRem, den);
+      const commonDivisor = resultRem > 0 ? gcd(resultRem, den) : 1;
       
       const num2Int = Math.floor(num2/den);
       const num2Rem = num2 % den;
 
-      const problemRhs = num2Rem === 0 
-        ? <span>{num2Int}</span> 
-        : <Fraction numerator={num2} denominator={den} />;
+      let problemRhs;
+      if (num2Rem === 0) {
+        problemRhs = <span>{num2Int}</span>;
+      } else if (num2Int > 0) {
+        problemRhs = <MixedFraction integer={num2Int} numerator={num2Rem} denominator={den} />;
+      } else {
+        problemRhs = <Fraction numerator={num2} denominator={den} />;
+      }
       
       if (resultRem === 0) {
          return {
@@ -174,6 +180,51 @@ const generateDirectCalculationProblem = (): MathProblem => {
           operator: 'subtract',
         },
       };
+    } else {
+        // 3 1/8 - 1/8
+        const den = randomInt(5, 12);
+        const int1 = randomInt(1, 5);
+        const num1 = randomInt(1, den - 1);
+        const num2 = randomInt(1, num1);
+        const resultNum = num1 - num2;
+        const commonDivisor = gcd(resultNum, den);
+
+        if (resultNum === 0) {
+             return {
+                problem: (
+                    <span>
+                    <MixedFraction integer={int1} numerator={num1} denominator={den} /> - <Fraction numerator={num2} denominator={den} /> = <AnswerInput index={0} />
+                    </span>
+                ),
+                answer: [String(int1)],
+                type: 'fraction',
+                subType: 'fraction-subtract-same-den',
+                storable: {
+                    type: 'fraction',
+                    subType: 'fraction-subtract-same-den',
+                    operands: [int1, num1, num2, den],
+                    operator: 'subtract',
+                },
+            };
+        }
+
+        return {
+            problem: (
+                <span>
+                <MixedFraction integer={int1} numerator={num1} denominator={den} /> - <Fraction numerator={num2} denominator={den} /> = <MixedFraction integer={<AnswerInput index={0}/>} numerator={<AnswerInput index={1}/>} denominator={<AnswerInput index={2}/>} />
+                </span>
+            ),
+            answer: [String(int1), String(resultNum / commonDivisor), String(den/commonDivisor)],
+            type: 'fraction',
+            subType: 'fraction-subtract-same-den',
+            storable: {
+                type: 'fraction',
+                subType: 'fraction-subtract-same-den',
+                operands: [int1, num1, num2, den],
+                operator: 'subtract',
+            },
+        };
+
     }
   } else {
     // 2.3 - 0.8
@@ -202,7 +253,7 @@ const generateDirectCalculationProblem = (): MathProblem => {
 const generateProcessDecompositionProblem = (): MathProblem => {
   const type = randomInt(1, 3);
   if (type === 1) {
-    // 예시 (받아내림): 5 - 2 4/5 = 4 [ ? ]/5 - 2 4/5 = [ ? ] [ ? ]/5
+    // 예시: 5 - 2 4/5 = 4 [ ? ]/5 - 2 4/5 = [ ? ] [ ? ]/5
     const den = randomInt(5, 9);
     const int1 = randomInt(3, 5);
     const int2 = randomInt(1, int1 - 1);
@@ -404,7 +455,7 @@ const generateComparisonProblem = (): MathProblem => {
     // 3.45 O 3.5
     const num1 = round(randomInt(10, 500) / 100, 2);
     const num2 = round(randomInt(10, 500) / 100, 2);
-    const correctSign = num1 > num2 ? '>' : num1 < num2 ? '<' : '=';
+    const correctSign = num1 > num2 ? '>' : num1 < val2 ? '<' : '=';
     return {
       problem: (
         <span>
