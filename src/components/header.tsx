@@ -68,7 +68,7 @@ export default function Header({ currentUser, onSolveProblemClick, countries, pr
           {continents.map((name, index) => {
             const isActive = index === 0;
             return (
-              <TooltipProvider key={name}>
+              <TooltipProvider key={name} delayDuration={100}>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
@@ -86,7 +86,7 @@ export default function Header({ currentUser, onSolveProblemClick, countries, pr
                   </TooltipTrigger>
                   {!isActive && (
                     <TooltipContent>
-                      <p>추후 오픈 예정</p>
+                      <p>추후 오픈 예정입니다.</p>
                     </TooltipContent>
                   )}
                 </Tooltip>
