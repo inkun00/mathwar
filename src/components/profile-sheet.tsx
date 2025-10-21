@@ -5,12 +5,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { LogOut, BookOpen, Trash2 } from "lucide-react";
+import { LogOut, BookOpen, ChevronsUpDown, Check } from "lucide-react";
 import { useAuth, useFirestore } from "@/firebase";
 import { signOut } from "firebase/auth";
 import ProblemModal from "./problem-modal";
 import { deleteWrongAnswer } from "@/firebase/firestore/data";
 import { doc, updateDoc, increment } from "firebase/firestore";
+import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "./ui/command";
+import { cn } from "@/lib/utils";
 
 interface ProfileSheetProps {
   currentUser: User;
@@ -39,6 +42,8 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
 
   const [isReviewModalOpen, setReviewModalOpen] = useState(false);
   const [selectedReviewProblem, setSelectedReviewProblem] = useState<WrongAnswer | null>(null);
+  const [isComboboxOpen, setComboboxOpen] = useState(false);
+
   
   const handleLogout = () => {
     signOut(auth);
@@ -47,6 +52,7 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
   const handleReviewProblemClick = (problem: WrongAnswer) => {
     setSelectedReviewProblem(problem);
     setReviewModalOpen(true);
+    setComboboxOpen(false); // Close combobox when a problem is selected
   };
 
   const handleCorrectReview = async () => {
@@ -194,26 +200,43 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
              </Card>
           </div>
 
-          <div className="space-y-4">
+           <div className="space-y-4">
             <h3 className="text-lg font-semibold tracking-tight">오답노트</h3>
             <Card>
               <CardContent className="pt-4">
                 {wrongAnswers.length > 0 ? (
-                  <ul className="space-y-2">
-                    {wrongAnswers.map((wa) => (
-                      <li key={wa.id} className="flex items-center justify-between rounded-md bg-muted p-2">
-                        <span className="font-code text-sm">{wa.problemString}</span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleReviewProblemClick(wa)}
-                        >
-                          <BookOpen className="mr-2 h-4 w-4" />
-                          다시 풀기
-                        </Button>
-                      </li>
-                    ))}
-                  </ul>
+                  <Popover open={isComboboxOpen} onOpenChange={setComboboxOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={isComboboxOpen}
+                        className="w-full justify-between"
+                      >
+                        다시 풀 문제 선택하기...
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                      <Command>
+                        <CommandInput placeholder="문제 유형 검색..." />
+                        <CommandEmpty>틀린 문제가 없습니다.</CommandEmpty>
+                        <CommandGroup>
+                          <CommandList>
+                            {wrongAnswers.map((wa) => (
+                              <CommandItem
+                                key={wa.id}
+                                value={`${areaLabels[wa.problemData.subType] || '알 수 없는 유형'} - ${wa.id}`}
+                                onSelect={() => handleReviewProblemClick(wa)}
+                              >
+                                {areaLabels[wa.problemData.subType] || '알 수 없는 유형'}
+                              </CommandItem>
+                            ))}
+                          </CommandList>
+                        </CommandGroup>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                 ) : (
                   <p className="text-center text-muted-foreground">틀린 문제가 없습니다!</p>
                 )}
