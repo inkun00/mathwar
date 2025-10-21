@@ -121,11 +121,17 @@ export default function ProblemModal({
     const correctAnswers = problem.answer;
 
     const isCorrect = userAnswers.every((userAns, i) => {
-        const correctAns = correctAnswers[i];
-        if (!isNaN(Number(userAns)) && !isNaN(Number(correctAns))) {
-            return Number(userAns) === Number(correctAns);
-        }
-        return userAns.toLowerCase() === correctAns.toLowerCase();
+      const correctAns = correctAnswers[i];
+      // When comparing numbers, treat an empty user answer as 0.
+      const userIsNumberLike = userAns === '' || !isNaN(Number(userAns));
+      const correctIsNumberLike = !isNaN(Number(correctAns));
+
+      if (userIsNumberLike && correctIsNumberLike) {
+        // Treat empty string as 0 for numeric comparison
+        return Number(userAns || '0') === Number(correctAns);
+      }
+      // For non-numeric answers (like '>', '<'), do a case-insensitive string comparison.
+      return userAns.toLowerCase() === correctAns.toLowerCase();
     });
 
     if (isCorrect) {
