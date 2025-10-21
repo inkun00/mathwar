@@ -18,6 +18,7 @@ import { CheckCircle, XCircle, Swords } from 'lucide-react';
 import { useFirestore } from '@/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { generateProblemFromData, problemNodeToString } from '@/lib/game-logic';
+import { cn } from '@/lib/utils';
 
 
 interface ProblemModalProps {
@@ -36,6 +37,17 @@ interface ProblemModalProps {
 const parseDecimalAnswer = (input: string): number | null => {
   input = input.trim();
   if (!input) return null;
+  // Allow fractions like '3/4' to be parsed
+  if (input.includes('/')) {
+    const parts = input.split('/');
+    if (parts.length === 2) {
+      const num = parseFloat(parts[0]);
+      const den = parseFloat(parts[1]);
+      if (!isNaN(num) && !isNaN(den) && den !== 0) {
+        return num / den;
+      }
+    }
+  }
   const num = parseFloat(input);
   return isNaN(num) ? null : num;
 };
@@ -69,7 +81,7 @@ export default function ProblemModal({
       setNumeratorPart('');
       setDenominatorPart('');
     }
-  }, [isOpen]);
+  }, [isOpen, problem]); // Reset when problem changes as well
 
   const recordAttempt = async (isCorrect: boolean) => {
     if (!userId || !firestore || !problem) return;
@@ -96,24 +108,9 @@ export default function ProblemModal({
     let userAnswer: number | null = null;
     let isCorrect = false;
 
-    if (problem.type === 'fraction' || (problem.type === 'conversion' && problem.subType === 'decimal-to-fraction')) {
-        const integer = parseInt(integerPart || '0', 10);
-        const numerator = parseInt(numeratorPart || '0', 10);
-        const denominator = parseInt(denominatorPart || '1', 10);
-
-        if (isNaN(integer) || isNaN(numerator) || isNaN(denominator) || denominator === 0) {
-             toast({
-                variant: 'destructive',
-                title: "입력 오류",
-                description: `유효한 숫자를 입력해주세요. 분모는 0이 될 수 없습니다.`,
-            });
-            return;
-        }
-        userAnswer = integer + (numerator / denominator);
-
-    } else { // decimal or fraction-to-decimal
-        userAnswer = parseDecimalAnswer(answer);
-    }
+    // A single input field is now used for all problem types for simplicity.
+    // The user can enter decimals (3.5) or fractions (7/2).
+    userAnswer = parseDecimalAnswer(answer);
     
     // Check if userAnswer is close enough to the correct answer to handle floating point issues
     if (userAnswer !== null && Math.abs(userAnswer - problem.answer) < 0.001) {
@@ -147,11 +144,9 @@ export default function ProblemModal({
     ? '문제를 맞춰 적의 영토를 획득하세요!'
     : (isReview ? '틀렸던 문제입니다. 다시 풀어보세요!' : '정답을 입력하여 확장 토큰을 획득하세요.');
 
-  const isFractionInput = problem?.type === 'fraction' || problem?.subType === 'decimal-to-fraction';
-
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-md">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -163,60 +158,20 @@ export default function ProblemModal({
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
-            <div className="text-center text-xl font-bold font-code tracking-wider bg-muted p-4 rounded-md h-24 flex items-center justify-center">
+            <div className="text-center text-lg font-semibold font-code tracking-wider bg-muted p-4 rounded-md min-h-[100px] flex items-center justify-center">
               {problem?.problem}
             </div>
 
-            {isFractionInput ? (
-                <div className="flex items-center justify-center gap-2">
-                    <div className="flex-shrink-0">
-                        <Label htmlFor="integerPart" className="sr-only">자연수</Label>
-                        <Input
-                        id="integerPart"
-                        type="number"
-                        value={integerPart}
-                        onChange={(e) => setIntegerPart(e.target.value)}
-                        placeholder="자연수"
-                        className="w-20 text-center text-lg"
-                        aria-label="자연수 부분"
-                        />
-                    </div>
-                    <div className="flex flex-col items-center">
-                        <Label htmlFor="numeratorPart" className="sr-only">분자</Label>
-                        <Input
-                        id="numeratorPart"
-                        type="number"
-                        value={numeratorPart}
-                        onChange={(e) => setNumeratorPart(e.target.value)}
-                        placeholder="분자"
-                        className="w-20 text-center text-lg"
-                        aria-label="분자 부분"
-                        />
-                        <div className="w-full h-px bg-current my-1"></div>
-                        <Label htmlFor="denominatorPart" className="sr-only">분모</Label>
-                        <Input
-                        id="denominatorPart"
-                        type="number"
-                        value={denominatorPart}
-                        onChange={(e) => setDenominatorPart(e.target.value)}
-                        placeholder="분모"
-                        className="w-20 text-center text-lg"
-                        aria-label="분모 부분"
-                        />
-                    </div>
-                </div>
-            ) : (
-                <Input
-                id="answer"
-                type="text"
-                value={answer}
-                onChange={(e) => setAnswer(e.target.value)}
-                placeholder="정답을 입력하세요 (예: 3.5)"
-                required
-                className="text-center text-lg"
-                aria-label="수학 문제 정답"
-                />
-            )}
+            <Input
+              id="answer"
+              type="text"
+              value={answer}
+              onChange={(e) => setAnswer(e.target.value)}
+              placeholder="정답을 입력하세요 (예: 3.5 또는 7/2)"
+              required
+              className="text-center text-lg"
+              aria-label="수학 문제 정답"
+            />
           </div>
           <DialogFooter>
             <Button type="submit">정답 제출</Button>
@@ -226,5 +181,3 @@ export default function ProblemModal({
     </Dialog>
   );
 }
-
-    

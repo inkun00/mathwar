@@ -7,7 +7,7 @@ export interface User {
   nickname: string;
   email: string;
   countryId: string;
-  color: string;
+  // color: string; // This is now derived from the country
   tokens: number;
   isAI?: boolean;
   conqueredCountries?: string[]; // Array of conquered country IDs
@@ -32,6 +32,17 @@ export type MapData = Tile[][];
 
 export type ProblemType = 'decimal' | 'fraction' | 'conversion';
 export type ProblemSubType = 
+  | 'direct-calculation'
+  | 'fill-in-the-blanks-process'
+  | 'fill-in-the-blanks-concept'
+  | 'comparison'
+  | 'word-problem'
+  | 'error-analysis'
+  | 'conditional'
+  | 'list-navigation'
+  | 'multiple-choice'
+  | 'diagram'
+  // Legacy types
   | 'decimal-add' 
   | 'decimal-subtract'
   | 'fraction-add-same-den'
@@ -56,7 +67,7 @@ export interface StorableProblem {
   type: ProblemType;
   subType: ProblemSubType;
   operands: (number | string)[];
-  operator: 'add' | 'subtract' | 'compare' | 'convert';
+  operator: 'add' | 'subtract' | 'compare' | 'convert' | 'calculate';
 }
 
 
