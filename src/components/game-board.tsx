@@ -346,6 +346,19 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
             });
     }
     else if (originalOwnerId !== currentUser.id) {
+        // Find if the owner is from the same country
+        const owner = allUsers.find(u => u.id === originalOwnerId);
+        if (owner && owner.countryId === currentUser.countryId) {
+            // Cannot attack a player from the same country
+             toast({
+                variant: "default",
+                title: "공격 불가",
+                description: "같은 국가 소속의 플레이어는 공격할 수 없습니다.",
+            });
+            setIsProcessingClick(false);
+            return;
+        }
+
         setInvasionTarget({ x, y, originalOwnerId: originalOwnerId! });
         setCurrentProblem(generateMathProblem());
         setIsModalOpen(true);
@@ -384,7 +397,7 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
     // 타일 소유자가 같은 국가 소속인지 확인
     const owner = tile.ownerId ? allUsers.find(u => u.id === tile.ownerId) : null;
     if (owner && owner.countryId === currentUser.countryId) {
-      return false;
+      return false; // Cannot conquer a tile owned by a countryman
     }
     
     if (userCountryTiles.length === 0) {
@@ -408,7 +421,8 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
       
       return true; // Far enough from all other players.
     }
-
+    
+    // Check for adjacency with any tile from the same country
     return isAdjacent(tile.x, tile.y, userCountryTiles);
   };
   
