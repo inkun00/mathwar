@@ -76,7 +76,7 @@ export const AnswerInput = ({ index }: { index: number }) => (
 const generateDirectCalculationProblem = (): MathProblem => {
   const isFraction = Math.random() > 0.5;
   if (isFraction) {
-    // 예시: 3 1/8 - 1/8 또는 5 - 2 1/7
+    // 예시: 3 1/8 - 6/8 또는 5 - 2 1/7
     if (Math.random() > 0.5) {
       // 5 - 2 1/7
       const int1 = randomInt(3, 8);
@@ -112,24 +112,60 @@ const generateDirectCalculationProblem = (): MathProblem => {
         },
       };
     } else {
-      // 3 1/8 - 1/8
+      // 3 1/8 - 6/8
       const den = randomInt(7, 13);
       const int1 = randomInt(1, 5);
       let num1 = randomInt(1, den - 1);
-      let num2 = randomInt(1, den - 1);
-      if (int1 * den + num1 < num2) {
-        [num1, num2] = [num2, num1]; // ensure positive result
+      let num2 = randomInt(num1 + 1, den * 2); // num2 can be larger than den
+      
+      const totalNum1 = int1 * den + num1;
+      const resultNum = totalNum1 - num2;
+
+      const resultInt = Math.floor(resultNum / den);
+      const resultRem = resultNum % den;
+      
+      const commonDivisor = gcd(resultRem, den);
+      
+      const num2Int = Math.floor(num2/den);
+      const num2Rem = num2 % den;
+
+      const problemRhs = num2Rem === 0 
+        ? <span>{num2Int}</span> 
+        : <Fraction numerator={num2} denominator={den} />;
+      
+      if (resultRem === 0) {
+         return {
+          problem: (
+            <span>
+              <MixedFraction integer={int1} numerator={num1} denominator={den} /> -{' '}
+              {problemRhs} = <AnswerInput index={0} />
+            </span>
+          ),
+          answer: [String(resultInt)],
+          type: 'fraction',
+          subType: 'fraction-subtract-mixed',
+          storable: {
+            type: 'fraction',
+            subType: 'fraction-subtract-mixed',
+            operands: [int1, num1, den, num2],
+            operator: 'subtract',
+          },
+        };
       }
-      const result = int1 + num1 / den - num2 / den;
 
       return {
         problem: (
           <span>
             <MixedFraction integer={int1} numerator={num1} denominator={den} /> -{' '}
-            <Fraction numerator={num2} denominator={den} /> = <AnswerInput index={0} />
+            {problemRhs} ={' '}
+            <MixedFraction 
+              integer={<AnswerInput index={0} />} 
+              numerator={<AnswerInput index={1} />} 
+              denominator={<AnswerInput index={2} />} 
+            />
           </span>
         ),
-        answer: [String(round(result, 4))],
+        answer: [String(resultInt), String(resultRem / commonDivisor), String(den / commonDivisor)],
         type: 'fraction',
         subType: 'fraction-subtract-mixed',
         storable: {
