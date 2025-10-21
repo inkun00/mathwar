@@ -7,7 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { ZoomIn, ZoomOut } from "lucide-react";
 import { useFirestore, useUser } from "@/firebase";
-import { doc, setDoc, updateDoc, writeBatch, increment, collection, getDocs } from "firebase/firestore";
+import { doc, setDoc, updateDoc, writeBatch, increment, collection, getDocs, arrayUnion } from "firebase/firestore";
 import { addWrongAnswer } from "@/firebase/firestore/data";
 
 import Header from "./header";
@@ -88,7 +88,6 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
   const isDemise = useMemo(() => {
       if (!currentUser) return false;
       const hasLand = landTiles.some(tile => tile.ownerId === currentUser.id);
-      // Demise if user has no land and no tokens to expand
       return !hasLand && currentUser.tokens === 0;
   }, [landTiles, currentUser]);
 
@@ -111,6 +110,7 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
           try {
              // 70% chance to succeed without a problem
             const successfulInvasion = move.ownerId === null || Math.random() < 0.7;
+            const originalOwnerId = move.ownerId;
 
             const tileRef = doc(firestore, 'land_tiles', move.id || `${move.x}-${move.y}`);
             const aiUserRef = doc(firestore, 'users', ai.id);
@@ -128,8 +128,8 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
             
             await batch.commit();
 
-            if (successfulInvasion && move.ownerId && move.ownerId !== ai.id) {
-               await handleTerritoryCut(move.ownerId);
+            if (successfulInvasion && originalOwnerId && originalOwnerId !== ai.id) {
+               await handleTerritoryCut(originalOwnerId, ai.id);
             }
 
           } catch (error) {
@@ -156,7 +156,7 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
     });
   };
 
-  const handleTerritoryCut = async (originalOwnerId: string) => {
+  const handleTerritoryCut = async (originalOwnerId: string, conquerorId: string | null) => {
     if (!firestore) return;
 
     const tilesCollectionRef = collection(firestore, "land_tiles");
@@ -164,7 +164,24 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
     const currentLandTiles = landTilesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Tile));
 
     const ownedTiles = currentLandTiles.filter(t => t.ownerId === originalOwnerId);
-    if (ownedTiles.length === 0) return;
+    if (ownedTiles.length === 0) {
+      // This means the player has no tiles left, they are demised.
+      if (conquerorId) {
+        const originalOwner = allUsers.find(u => u.id === originalOwnerId);
+        const conquerorRef = doc(firestore, "users", conquerorId);
+        if (originalOwner) {
+          // Add conquered country to conqueror's profile
+          await updateDoc(conquerorRef, {
+            conqueredCountries: arrayUnion(originalOwner.countryId)
+          });
+
+          // Mark country as demised
+          const demisedCountryRef = doc(firestore, "countries", originalOwner.countryId);
+          await updateDoc(demisedCountryRef, { demised: true });
+        }
+      }
+      return;
+    }
 
     const visited = new Set<string>();
     const territories: Tile[][] = [];
@@ -246,6 +263,7 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
 
     try {
         const batch = writeBatch(firestore);
+        const originalOwnerId = invasionTarget.originalOwnerId;
 
         const tileId = `${invasionTarget.x}-${invasionTarget.y}`;
         const tileRef = doc(firestore, "land_tiles", tileId);
@@ -256,8 +274,8 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
 
         await batch.commit();
         
-        if (invasionTarget.originalOwnerId) {
-            await handleTerritoryCut(invasionTarget.originalOwnerId);
+        if (originalOwnerId) {
+            await handleTerritoryCut(originalOwnerId, currentUser.id);
         }
     } catch (error) {
         console.error("침략 실패:", error);

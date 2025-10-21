@@ -99,7 +99,8 @@ export default function SignUpDetails() {
         const countryRef = await addDoc(collection(firestore, 'countries'), {
           name: newCountryName,
           createdBy: auth.currentUser.uid,
-          color: `hsl(${Math.random() * 360}, 60%, 70%)` // Assign a random color to new country
+          color: `hsl(${Math.random() * 360}, 60%, 70%)`, // Assign a random color to new country
+          demised: false,
         });
         countryId = countryRef.id;
       } else {
@@ -117,7 +118,8 @@ export default function SignUpDetails() {
         email: auth.currentUser.email,
         countryId,
         tokens: 1, // Start with 1 token
-        color: `hsl(${Math.random() * 360}, 60%, 70%)` // This color is for the user avatar/icon, not the map
+        color: `hsl(${Math.random() * 360}, 60%, 70%)`, // This color is for the user avatar/icon, not the map
+        conqueredCountries: [],
       });
 
       toast({ title: '프로필 생성 완료!', description: '이제 게임을 시작할 수 있습니다.' });
@@ -129,6 +131,8 @@ export default function SignUpDetails() {
       setIsLoading(false);
     }
   };
+  
+  const availableCountries = countries?.filter(c => !c.demised);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
@@ -172,7 +176,7 @@ export default function SignUpDetails() {
                         disabled={countriesLoading}
                         >
                         {selectedCountryId
-                            ? countries?.find((country) => country.id === selectedCountryId)?.name
+                            ? availableCountries?.find((country) => country.id === selectedCountryId)?.name
                             : "국가를 선택해주세요..."}
                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                         </Button>
@@ -183,7 +187,7 @@ export default function SignUpDetails() {
                             <CommandEmpty>생성된 국가가 없습니다.</CommandEmpty>
                             <CommandGroup>
                                 <CommandList>
-                                    {countries?.map((country) => (
+                                    {availableCountries?.map((country) => (
                                         <CommandItem
                                         key={country.id}
                                         value={country.name}
@@ -229,5 +233,3 @@ export default function SignUpDetails() {
     </div>
   );
 }
-
-    

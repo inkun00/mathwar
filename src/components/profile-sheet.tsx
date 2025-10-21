@@ -5,12 +5,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { LogOut, BookOpen, ChevronsUpDown, Check } from "lucide-react";
-import { useAuth, useFirestore } from "@/firebase";
+import { LogOut, BookOpen, ChevronsUpDown, Check, Crown } from "lucide-react";
+import { useAuth, useFirestore, useCollection, useMemoFirebase } from "@/firebase";
 import { signOut } from "firebase/auth";
 import ProblemModal from "./problem-modal";
 import { deleteWrongAnswer } from "@/firebase/firestore/data";
-import { doc, updateDoc, increment } from "firebase/firestore";
+import { doc, updateDoc, increment, collection } from "firebase/firestore";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "./ui/command";
 import { cn } from "@/lib/utils";
@@ -43,6 +43,9 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
   const [isReviewModalOpen, setReviewModalOpen] = useState(false);
   const [selectedReviewProblem, setSelectedReviewProblem] = useState<WrongAnswer | null>(null);
   const [isComboboxOpen, setComboboxOpen] = useState(false);
+
+  const countriesQuery = useMemoFirebase(() => collection(firestore, 'countries'), [firestore]);
+  const { data: countries } = useCollection<Country>(countriesQuery);
 
   
   const handleLogout = () => {
@@ -138,6 +141,14 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
 
     return { unitStats, areaStats };
   }, [problemAttempts]);
+  
+  const conqueredCountryNames = useMemo(() => {
+    if (!currentUser.conqueredCountries || !countries) return [];
+    return currentUser.conqueredCountries.map(id => {
+      const country = countries.find(c => c.id === id);
+      return country ? country.name : null;
+    }).filter(name => name !== null);
+  }, [currentUser.conqueredCountries, countries]);
 
   return (
     <>
@@ -164,6 +175,24 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
               </CardContent>
             </Card>
           </div>
+          
+           {conqueredCountryNames.length > 0 && (
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold tracking-tight">정복 기록</h3>
+              <Card>
+                <CardContent className="pt-4">
+                  <div className="flex flex-wrap gap-2">
+                    {conqueredCountryNames.map(name => (
+                      <Badge key={name} variant="destructive">
+                        <Crown className="mr-1 h-3 w-3" />
+                        {name}
+                      </Badge>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
 
           <div className="space-y-4">
              <h3 className="text-lg font-semibold tracking-tight">정답률 현황</h3>

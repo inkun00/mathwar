@@ -10,6 +10,7 @@ export interface User {
   color: string;
   tokens: number;
   isAI?: boolean;
+  conqueredCountries?: string[]; // Array of conquered country IDs
 }
 
 export interface Country {
@@ -17,6 +18,7 @@ export interface Country {
   name: string;
   createdBy: string;
   color: string;
+  demised?: boolean; // True if the country has fallen
 }
 
 export interface Tile {
