@@ -2,135 +2,115 @@
  * @fileoverview Firestore Security Rules for Decimal Conquest.
  *
  * Core Philosophy:
- * This ruleset enforces a user-centric security model with role-based access control
- * where appropriate, ensuring users can only access and modify their own data,
- * while allowing controlled public access to shared game elements.  Data validation
- * is relaxed to allow for rapid prototyping, focusing on authorization.
+ * This ruleset enforces a user-ownership model where users primarily have access to their own data.
+ * Additionally, there are public read collections for game-related data.
  *
  * Data Structure:
- * - /users/{userId}: Stores user profiles, accessible only to the owning user.
- * - /users/{userId}/wrong_answers/{wrongAnswerId}: Stores incorrect problem attempts for a user, accessible only to the owning user.
- * - /countries/{countryId}: Stores countries, publicly readable, but creation is open to any authenticated user.
- * - /land_tiles/{landTileId}: Stores land tiles, publicly readable, but creation and updates are open to any authenticated user.
- * - /problem_attempts/{userId}/attempts/{attemptId}: Stores problem attempts, accessible only to the owning user.
+ * - /users/{userId}: Stores user profiles, accessible to the owner for updates and readable by all authenticated users.
+ * - /users/{userId}/wrong_answers/{wrongAnswerId}: Stores incorrect problem attempts, only accessible by the owning user.
+ * - /countries/{countryId}: Stores country data, publicly readable, but restricted to authenticated users for creation.
+ * - /land_tiles/{landTileId}: Stores land tile data, publicly readable, and restricted to authenticated users for create and update.
+ * - /problem_attempts/{userId}/attempts/{attemptId}: Stores problem attempts for a user. Only the user can create and list their own attempts.
  *
  * Key Security Decisions:
- * - User listing is not allowed to protect user privacy.
- * - Flexible data shapes are allowed to speed up prototyping.
+ * - Users can only modify their own profiles.
+ * - Data validation is relaxed in this prototyping phase, focusing on ownership and relational integrity.
+ * - List operations on user-specific data are restricted to the owning user.
  *
  * Denormalization for Authorization:
- *  - The `ownerId` field on `LandTile` documents is critical for write authorization (checking ownership during updates/deletes).
- *  - The `userId` field on `ProblemAttempt` and `WrongAnswer` documents is critical for read and write authorization (owner-only access).
- *  - The `createdBy` field on `Country` documents is critical for write authorization (checking ownership during updates/deletes).
+ *  - User ownership is enforced via the `userId` parameter in the path for user-specific data, avoiding the need for `get()` calls.
  */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * @description Secures user profiles.
+     * @description Manages user profile data.
      * @path /users/{userId}
-     * @allow (get) User with UID 'sgGcpndfemPpTIjYjFauIZ2qtDD3' can read their profile.
-     * @allow (update) User with UID 'sgGcpndfemPpTIjYjFauIZ2qtDD3' can update their profile.
-     * @deny (get) User with UID 'otherUserId' cannot read the profile of user 'sgGcpndfemPpTIjYjFauIZ2qtDD3'.
-     * @deny (update) User with UID 'otherUserId' cannot update the profile of user 'sgGcpndfemPpTIjYjFauIZ2qtDD3'.
-     * @principle Enforces document ownership for writes.
+     * @allow (get, list) if isSignedIn()
+     * @allow (update) if isSignedIn() && isOwner(userId)
+     * @deny (create) if true
+     * @deny (delete) if true
+     * @principle Enforces user-ownership and authenticated access for profile management.
      */
     match /users/{userId} {
-      allow get: if isSignedIn() && isOwner(userId);
-      allow list: if false;
-      allow create: if isSignedIn() && isOwner(userId) && request.resource.data.id == userId;
-      allow update: if isSignedIn() && isOwner(userId) && resource.data.id == request.resource.data.id;
+      // Anyone who is signed in can read user profiles
+      allow get, list: if isSignedIn();
+      allow create: if false;
+      allow update: if isSignedIn() && isOwner(userId);
       allow delete: if false;
     }
 
     /**
-     * @description Secures wrong answer entries for a specific user.
+     * @description Manages wrong answer records for a specific user.
      * @path /users/{userId}/wrong_answers/{wrongAnswerId}
-     * @allow (list) User with UID 'sgGcpndfemPpTIjYjFauIZ2qtDD3' can list their wrong answers.
-     * @allow (get) User with UID 'sgGcpndfemPpTIjYjFauIZ2qtDD3' can get a specific wrong answer.
-     * @allow (create) User with UID 'sgGcpndfemPpTIjYjFauIZ2qtDD3' can create a wrong answer.
-     * @allow (update) User with UID 'sgGcpndfemPpTIjYjFauIZ2qtDD3' can update a specific wrong answer.
-     * @allow (delete) User with UID 'sgGcpndfemPpTIjYjFauIZ2qtDD3' can delete a specific wrong answer.
-     * @deny (list) User with UID 'otherUserId' cannot list wrong answers for user 'sgGcpndfemPpTIjYjFauIZ2qtDD3'.
-     * @deny (get) User with UID 'otherUserId' cannot get a wrong answer for user 'sgGcpndfemPpTIjYjFauIZ2qtDD3'.
-     * @deny (create) User with UID 'otherUserId' cannot create a wrong answer for user 'sgGcpndfemPpTIjYjFauIZ2qtDD3'.
-     * @deny (update) User with UID 'otherUserId' cannot update a wrong answer for user 'sgGcpndfemPpTIjYjFauIZ2qtDD3'.
-     * @deny (delete) User with UID 'otherUserId' cannot delete a wrong answer for user 'sgGcpndfemPpTIjYjFauIZ2qtDD3'.
-     * @principle Restricts access to a user's own data tree.
+     * @allow (list, get, create, update, delete) if isSignedIn() && isOwner(userId)
+     * @deny (operations) if !isSignedIn() || !isOwner(userId)
+     * @principle Restricts access to a user's own wrong answer records.
      */
     match /users/{userId}/wrong_answers/{wrongAnswerId} {
-      allow list: if isSignedIn() && isOwner(userId);
-      allow get: if isSignedIn() && isOwner(userId);
-      allow create: if isSignedIn() && isOwner(userId) && request.resource.data.userId == userId;
-      allow update: if isSignedIn() && isOwner(userId) && isExistingOwner(userId) && resource.data.userId == request.resource.data.userId;
-      allow delete: if isSignedIn() && isOwner(userId) && isExistingOwner(userId);
+      allow list, get, create, update, delete: if isSignedIn() && isOwner(userId);
     }
 
     /**
-     * @description Secures countries. Publicly readable, but creation is open to any authenticated user.
+     * @description Manages country data, allowing public read access and authenticated create access.
      * @path /countries/{countryId}
-     * @allow (list) Any authenticated user can list countries.
-     * @allow (get) Any authenticated user can get a specific country.
-     * @allow (create) Any authenticated user can create a country.
-     * @deny (update) No one can update a country.
-     * @deny (delete) No one can delete a country.
+     * @allow (get, list) if true
+     * @allow (create) if isSignedIn()
+     * @deny (update, delete) if true
+     * @principle Provides public read access while restricting modifications.
      */
     match /countries/{countryId} {
-      allow list: if isSignedIn();
-      allow get: if isSignedIn();
+      allow get, list: if true;
       allow create: if isSignedIn();
       allow update: if false;
       allow delete: if false;
     }
 
     /**
-     * @description Secures land tiles. Publicly readable, but creation and updates are open to any authenticated user.
+     * @description Manages land tile data, allowing public read access and authenticated create/update access.
      * @path /land_tiles/{landTileId}
-     * @allow (list) Any authenticated user can list land tiles.
-     * @allow (get) Any authenticated user can get a specific land tile.
-     * @allow (create) Any authenticated user can create a land tile.
-     * @allow (update) Any authenticated user can update a land tile.
-     * @deny (delete) No one can delete a land tile.
+     * @allow (get, list) if true
+     * @allow (create, update) if isSignedIn()
+     * @deny (delete) if true
+     * @principle Provides public read access while restricting modifications.
      */
     match /land_tiles/{landTileId} {
-      allow list: if isSignedIn();
-      allow get: if isSignedIn();
-      allow create: if isSignedIn();
-      allow update: if isSignedIn();
+      allow get, list: if true;
+      allow create, update: if isSignedIn();
       allow delete: if false;
     }
 
     /**
-     * @description Secures problem attempts for a specific user.
+     * @description Manages user problem attempts for analytics.
      * @path /problem_attempts/{userId}/attempts/{attemptId}
-     * @allow (list) User with UID 'sgGcpndfemPpTIjYjFauIZ2qtDD3' can list their problem attempts.
-     * @allow (get) User with UID 'sgGcpndfemPpTIjYjFauIZ2qtDD3' can get a specific problem attempt.
-     * @allow (create) User with UID 'sgGcpndfemPpTIjYjFauIZ2qtDD3' can create a problem attempt.
-     * @deny (list) User with UID 'otherUserId' cannot list problem attempts for user 'sgGcpndfemPpTIjYjFauIZ2qtDD3'.
-     * @deny (get) User with UID 'otherUserId' cannot get a problem attempt for user 'sgGcpndfemPpTIjYjFauIZ2qtDD3'.
-     * @deny (update) No one can update a problem attempt.
-     * @deny (delete) No one can delete a problem attempt.
-     * @principle Restricts access to a user's own data.
+     * @allow (list, get, create) if isSignedIn() && isOwner(userId)
+     * @deny (update, delete) if true
+     * @principle Restricts access to a user's own problem attempts.
      */
     match /problem_attempts/{userId}/attempts/{attemptId} {
-      allow list: if isSignedIn() && isOwner(userId);
-      allow get: if isSignedIn() && isOwner(userId);
-      allow create: if isSignedIn() && isOwner(userId) && request.resource.data.userId == userId;
+      allow list, get, create: if isSignedIn() && isOwner(userId);
       allow update: if false;
       allow delete: if false;
     }
 
+    // ---- Helper functions ----
+
+    /**
+     * @description Checks if the user is signed in.
+     * @return {boolean} True if the user is authenticated.
+     */
     function isSignedIn() {
       return request.auth != null;
     }
 
+    /**
+     * @description Checks if the request is made by the owner of the resource.
+     * @param {string} userId - The user ID to check against the request's auth UID.
+     * @return {boolean} True if the request is made by the owner.
+     */
     function isOwner(userId) {
       return request.auth.uid == userId;
-    }
-
-    function isExistingOwner(userId) {
-        return isSignedIn() && isOwner(userId) && resource != null;
     }
   }
 }
