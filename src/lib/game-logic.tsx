@@ -7,7 +7,7 @@ import type {
   StorableProblem,
 } from './types';
 import { isLand } from './world-map-shape';
-import React, { ReactNode } from 'react';
+import React, { ReactNode, useMemo } from 'react';
 import { cn } from './utils';
 
 // --- Utility Functions ---
@@ -208,20 +208,26 @@ const generateProcessDecompositionProblem = (): MathProblem => {
     const int1 = randomInt(3, 5);
     const int2 = randomInt(1, int1 - 1);
     const num2 = randomInt(1, den - 1);
+    const resultInt = int1 - 1 - int2;
+    const resultNum = den - num2;
+    const commonDivisor = gcd(resultNum, den);
+
     return {
       problem: (
-        <span>
-          {int1} - <MixedFraction integer={int2} numerator={num2} denominator={den} />{' '}
-          = <MixedFraction integer={int1 - 1} numerator={<AnswerInput index={0} />} denominator={den} />{' '}
-          - <MixedFraction integer={int2} numerator={num2} denominator={den} /> ={' '}
+        <span className="flex flex-wrap items-center justify-center gap-x-2">
+          {int1} - <MixedFraction integer={int2} numerator={num2} denominator={den} />
+          =
+          <MixedFraction integer={int1 - 1} numerator={<AnswerInput index={0} />} denominator={den} />
+          -
+          <MixedFraction integer={int2} numerator={num2} denominator={den} /> =
           <MixedFraction
             integer={<AnswerInput index={1} />}
             numerator={<AnswerInput index={2} />}
-            denominator={den}
+            denominator={den / commonDivisor}
           />
         </span>
       ),
-      answer: [String(den), String(int1 - 1 - int2), String(den - num2)],
+      answer: [String(den), String(resultInt), String(resultNum / commonDivisor)],
       type: 'fraction',
       subType: 'fraction-subtract-from-int',
       storable: {
