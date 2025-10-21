@@ -5,6 +5,7 @@ import { isLand } from "@/lib/world-map-shape";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import React from "react";
 import { useMemo } from 'react';
+import { Button } from "./ui/button";
 
 interface WorldMapProps {
   mapData: MapData;
@@ -96,9 +97,42 @@ export default function WorldMap({ mapData, users, countries, onTileClick, canCo
     const countryName = countryNameMap.get(countryId);
     return `${countryName || '소속 없음'} (${owner.nickname})`;
   }
+  
+  const continents = ["대륙 1", "대륙 2", "대륙 3", "대륙 4", "대륙 5"];
 
   return (
-    <div className="h-full w-full max-w-7xl overflow-auto rounded-lg border bg-card/80 p-2 shadow-inner backdrop-blur-sm md:p-4">
+    <div className="relative h-full w-full max-w-7xl overflow-auto rounded-lg border bg-card/80 p-2 shadow-inner backdrop-blur-sm md:p-4">
+      <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 flex gap-2 rounded-lg bg-background/50 p-1 backdrop-blur-sm">
+        {continents.map((name, index) => {
+          const isActive = index === 0;
+          return (
+            <TooltipProvider key={name}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={isActive ? "secondary" : "ghost"}
+                    size="sm"
+                    className={cn(
+                      "disabled:opacity-50",
+                      isActive && "shadow-sm"
+                    )}
+                    disabled={!isActive}
+                    aria-label={name}
+                  >
+                    {name}
+                  </Button>
+                </TooltipTrigger>
+                {!isActive && (
+                  <TooltipContent>
+                    <p>추후 오픈 예정</p>
+                  </TooltipContent>
+                )}
+              </Tooltip>
+            </TooltipProvider>
+          );
+        })}
+      </div>
+
       <div 
         className="grid touch-none select-none gap-0 transition-transform duration-300 ease-in-out"
         style={{
