@@ -30,9 +30,17 @@ export interface Tile {
 
 export type MapData = Tile[][];
 
-export type ProblemType = 'decimal' | 'fraction' | 'conversion';
+export type ProblemType = 'decimal' | 'fraction' | 'conversion' | 'mixed';
 export type ProblemSubType = 
   | 'direct-calculation'
+  | 'process-decomposition'
+  | 'vertical-calculation'
+  | 'error-correction'
+  | 'multi-step-word-problem'
+  | 'unit-conversion-concept'
+  | 'conditional-operation'
+  | 'find-and-operate'
+  // Legacy types
   | 'fill-in-the-blanks-process'
   | 'fill-in-the-blanks-concept'
   | 'comparison'
@@ -42,7 +50,6 @@ export type ProblemSubType =
   | 'list-navigation'
   | 'multiple-choice'
   | 'diagram'
-  // Legacy types
   | 'decimal-add' 
   | 'decimal-subtract'
   | 'fraction-add-same-den'
@@ -57,7 +64,7 @@ export type ProblemSubType =
 
 export interface MathProblem {
   problem: ReactNode;
-  answer: number; // All answers are handled as numbers, fractions will be converted.
+  answer: string[]; // All answers are handled as arrays of strings.
   type: ProblemType;
   subType: ProblemSubType;
   storable: StorableProblem;
@@ -67,7 +74,7 @@ export interface StorableProblem {
   type: ProblemType;
   subType: ProblemSubType;
   operands: (number | string)[];
-  operator: 'add' | 'subtract' | 'compare' | 'convert' | 'calculate';
+  operator: 'add' | 'subtract' | 'compare' | 'convert' | 'calculate' | 'multi-step';
 }
 
 

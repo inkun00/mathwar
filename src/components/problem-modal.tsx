@@ -10,16 +10,13 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import type { MathProblem, StorableProblem } from '@/lib/types';
-import { useState, type FormEvent, useEffect } from 'react';
+import { useState, type FormEvent, useEffect, useMemo, Children, cloneElement, isValidElement } from 'react';
 import { CheckCircle, XCircle, Swords } from 'lucide-react';
 import { useFirestore } from '@/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { generateProblemFromData, problemNodeToString } from '@/lib/game-logic';
-import { cn } from '@/lib/utils';
-
 
 interface ProblemModalProps {
   isOpen: boolean;
@@ -33,25 +30,9 @@ interface ProblemModalProps {
   reviewProblem?: StorableProblem | null;
 }
 
-// Function to parse a simple decimal/integer string
-const parseDecimalAnswer = (input: string): number | null => {
-  input = input.trim();
-  if (!input) return null;
-  // Allow fractions like '3/4' to be parsed
-  if (input.includes('/')) {
-    const parts = input.split('/');
-    if (parts.length === 2) {
-      const num = parseFloat(parts[0]);
-      const den = parseFloat(parts[1]);
-      if (!isNaN(num) && !isNaN(den) && den !== 0) {
-        return num / den;
-      }
-    }
-  }
-  const num = parseFloat(input);
-  return isNaN(num) ? null : num;
+const parseAnswer = (input: string): string => {
+  return input.trim();
 };
-
 
 export default function ProblemModal({
   isOpen,
@@ -64,29 +45,28 @@ export default function ProblemModal({
   isReview = false,
   reviewProblem = null,
 }: ProblemModalProps) {
-  const [answer, setAnswer] = useState('');
-  const [integerPart, setIntegerPart] = useState('');
-  const [numeratorPart, setNumeratorPart] = useState('');
-  const [denominatorPart, setDenominatorPart] = useState('');
+  const [answers, setAnswers] = useState<string[]>([]);
   const { toast } = useToast();
   const firestore = useFirestore();
 
-  // The actual problem being solved, either newly generated or from a review.
   const problem = reviewProblem ? generateProblemFromData(reviewProblem) : initialProblem;
+  const numInputs = useMemo(() => problem?.answer.length ?? 0, [problem]);
 
   useEffect(() => {
     if (isOpen) {
-      setAnswer('');
-      setIntegerPart('');
-      setNumeratorPart('');
-      setDenominatorPart('');
+      setAnswers(Array(numInputs).fill(''));
     }
-  }, [isOpen, problem]); // Reset when problem changes as well
+  }, [isOpen, numInputs]);
+
+  const handleAnswerChange = (index: number, value: string) => {
+    const newAnswers = [...answers];
+    newAnswers[index] = value;
+    setAnswers(newAnswers);
+  };
 
   const recordAttempt = async (isCorrect: boolean) => {
     if (!userId || !firestore || !problem) return;
     try {
-      // Path updated to reflect new top-level collection structure: problem_attempts/{userId}/attempts/{attemptId}
       await addDoc(collection(firestore, 'problem_attempts', userId, 'attempts'), {
         userId: userId,
         unit: problem.type,
@@ -94,41 +74,75 @@ export default function ProblemModal({
         correct: isCorrect,
         timestamp: serverTimestamp(),
         isReview: isReview,
-        problem: problemNodeToString(problem.problem)
+        problem: problemNodeToString(problem.problem),
       });
     } catch (error) {
       console.error("문제 풀이 기록 오류:", error);
     }
+  };
+  
+  // Custom renderer to replace placeholders with actual input fields
+  const renderProblemWithInputs = (node: React.ReactNode): React.ReactNode => {
+    return Children.map(node, child => {
+      if (!isValidElement(child)) {
+        return child;
+      }
+      
+      if (child.props['data-answer-input'] !== undefined) {
+        const index = child.props['data-answer-input'];
+        return (
+          <Input
+            type="text"
+            value={answers[index] || ''}
+            onChange={(e) => handleAnswerChange(index, e.target.value)}
+            className="inline-block w-20 h-8 text-center mx-1"
+            aria-label={`정답 입력 ${index + 1}`}
+            required
+          />
+        );
+      }
+      
+      if (child.props.children) {
+        return cloneElement(child, {
+          ...child.props,
+          children: renderProblemWithInputs(child.props.children),
+        });
+      }
+      
+      return child;
+    });
   };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!problem) return;
 
-    let userAnswer: number | null = null;
-    let isCorrect = false;
+    const userAnswers = answers.map(parseAnswer);
+    const correctAnswers = problem.answer;
 
-    // A single input field is now used for all problem types for simplicity.
-    // The user can enter decimals (3.5) or fractions (7/2).
-    userAnswer = parseDecimalAnswer(answer);
-    
-    // Check if userAnswer is close enough to the correct answer to handle floating point issues
-    if (userAnswer !== null && Math.abs(userAnswer - problem.answer) < 0.001) {
-      isCorrect = true;
+    // Use a loose comparison for numeric values (e.g., '1.5' == '1.50')
+    const isCorrect = userAnswers.every((userAns, i) => {
+        const correctAns = correctAnswers[i];
+        if (!isNaN(Number(userAns)) && !isNaN(Number(correctAns))) {
+            return Number(userAns) === Number(correctAns);
+        }
+        return userAns === correctAns;
+    });
+
+    if (isCorrect) {
       toast({
         title: isInvasion ? "침략 성공!" : "정답입니다!",
         description: isInvasion ? "적의 영토를 획득했습니다." : "확장 토큰을 획득했습니다.",
         className: 'border-green-500 bg-green-50 text-green-700 dark:bg-green-900/50 dark:text-green-300 dark:border-green-700',
-        action: <CheckCircle className="text-green-500" />
+        action: <CheckCircle className="text-green-500" />,
       });
       await onCorrectAnswer(problem);
     } else {
-      isCorrect = false;
       toast({
         variant: 'destructive',
         title: isInvasion ? "침략 실패" : "오답입니다",
-        description: isInvasion ? "토큰을 잃고 영토 획득에 실패했습니다." : (isReview ? "오답노트에서 문제가 삭제됩니다." : `정답은 ${problem.answer} 입니다. 오답노트에 추가되었습니다.`),
-        action: <XCircle className="text-white" />
+        description: isInvasion ? "토큰을 잃고 영토 획득에 실패했습니다." : `정답: ${correctAnswers.join(', ')}. 오답노트에 추가되었습니다.`,
+        action: <XCircle className="text-white" />,
       });
       if (onWrongAnswer) {
         await onWrongAnswer(problem);
@@ -146,7 +160,7 @@ export default function ProblemModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-xl">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -157,21 +171,8 @@ export default function ProblemModal({
               {description}
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="text-center text-lg font-semibold font-code tracking-wider bg-muted p-4 rounded-md min-h-[100px] flex items-center justify-center">
-              {problem?.problem}
-            </div>
-
-            <Input
-              id="answer"
-              type="text"
-              value={answer}
-              onChange={(e) => setAnswer(e.target.value)}
-              placeholder="정답을 입력하세요 (예: 3.5 또는 7/2)"
-              required
-              className="text-center text-lg"
-              aria-label="수학 문제 정답"
-            />
+          <div className="my-4 text-center text-lg font-semibold font-code tracking-wider bg-muted p-4 rounded-md min-h-[120px] flex items-center justify-center leading-relaxed">
+            {problem ? renderProblemWithInputs(problem.problem) : "문제를 불러오는 중..."}
           </div>
           <DialogFooter>
             <Button type="submit">정답 제출</Button>
