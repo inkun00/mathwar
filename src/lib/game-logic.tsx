@@ -630,9 +630,11 @@ const generateListNavigationProblem = (): MathProblem => {
 
   if (isFraction) {
     const den = randomInt(15, 30);
-    const nums = shuffle(
-      Array.from({ length: 4 }, (_, i) => randomInt(1, den - 1))
-    ).slice(0, 4);
+    const numSet = new Set<number>();
+    while (numSet.size < 4) {
+      numSet.add(randomInt(1, den - 1));
+    }
+    const nums = Array.from(numSet);
     const sorted = [...nums].sort((a, b) => a - b);
     const smallest = sorted[0];
     const largest = sorted[sorted.length - 1];
@@ -644,8 +646,8 @@ const generateListNavigationProblem = (): MathProblem => {
           <div className="text-center">
             <p>다음 카드 중 가장 큰 수와 가장 작은 수의 {op_text}을 구하세요.</p>
             <div className="flex justify-center gap-2 my-2">
-              {nums.map(n => (
-                <div key={n} className="p-2 border rounded bg-gray-100">
+              {nums.map((n, index) => (
+                <div key={`${n}-${index}`} className="p-2 border rounded bg-gray-100">
                   <Fraction numerator={n} denominator={den} />
                 </div>
               ))}
@@ -673,8 +675,8 @@ const generateListNavigationProblem = (): MathProblem => {
           <div className="text-center">
             <p>다음 카드 중 가장 큰 수와 가장 작은 수의 {op_text}을 구하세요.</p>
             <div className="flex justify-center gap-2 my-2">
-              {nums.map(n => (
-                <div key={n} className="p-2 border rounded bg-gray-100">
+              {nums.map((n, index) => (
+                <div key={`${n}-${index}`} className="p-2 border rounded bg-gray-100">
                   <Fraction numerator={n} denominator={den} />
                 </div>
               ))}
@@ -696,8 +698,8 @@ const generateListNavigationProblem = (): MathProblem => {
         <div className="text-center">
           <p>다음 카드 중 가장 큰 수와 가장 작은 수의 {op_text}을 구하세요.</p>
           <div className="flex justify-center gap-2 my-2">
-            {nums.map(n => (
-              <div key={n} className="p-2 border rounded bg-gray-100">
+            {nums.map((n, index) => (
+              <div key={`${n}-${index}`} className="p-2 border rounded bg-gray-100">
                   <Fraction numerator={n} denominator={den} />
               </div>
             ))}
@@ -715,9 +717,11 @@ const generateListNavigationProblem = (): MathProblem => {
       storable: { type: 'fraction', subType: 'list-navigation', operands: [...nums, den, isSum ? 1 : 0], operator: 'calculate' },
     };
   } else {
-    const nums = Array.from({ length: 4 }, () =>
-      round(randomInt(100, 999) / 100, 2)
-    );
+    const numSet = new Set<number>();
+    while (numSet.size < 4) {
+      numSet.add(round(randomInt(100, 999) / 100, 2));
+    }
+    const nums = Array.from(numSet);
     const sorted = [...nums].sort((a, b) => a - b);
     const smallest = sorted[0];
     const largest = sorted[sorted.length - 1];
@@ -729,8 +733,8 @@ const generateListNavigationProblem = (): MathProblem => {
         <div className="text-center">
           <p>다음 카드 중 가장 큰 수와 가장 작은 수의 {op_text}을 구하세요.</p>
           <div className="flex justify-center gap-2 my-2">
-            {nums.map(n => (
-              <div key={n} className="p-3 border rounded bg-gray-100 font-mono">
+            {nums.map((n, index) => (
+              <div key={`${n}-${index}`} className="p-3 border rounded bg-gray-100 font-mono">
                 {n}
               </div>
             ))}
