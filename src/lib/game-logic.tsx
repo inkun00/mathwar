@@ -15,17 +15,18 @@ const randomInt = (min: number, max: number) =>
   Math.floor(Math.random() * (max - min + 1)) + min;
 const round = (num: number, places: number) => parseFloat(num.toFixed(places));
 const shuffle = <T>(array: T[]): T[] => {
-  let currentIndex = array.length,
+  const uniqueItems = Array.from(new Set(array));
+  let currentIndex = uniqueItems.length,
     randomIndex;
   while (currentIndex !== 0) {
     randomIndex = Math.floor(Math.random() * currentIndex);
     currentIndex--;
-    [array[currentIndex], array[randomIndex]] = [
-      array[randomIndex],
-      array[currentIndex],
+    [uniqueItems[currentIndex], uniqueItems[randomIndex]] = [
+      uniqueItems[randomIndex],
+      uniqueItems[currentIndex],
     ];
   }
-  return array;
+  return uniqueItems;
 };
 // Greatest Common Divisor
 const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
@@ -66,25 +67,8 @@ const MixedFraction = ({
   </span>
 );
 
-/**
- * [수정됨]
- * AnswerInput 컴포넌트를 <span>에서 실제 <input> 태그로 변경합니다.
- *
- * 기존: <span className="inline-block ..."></span>
- *
- * 변경: <input className="inline-block ... " />
- * - w-10 (width: 2.5rem)으로 너비 고정
- * - text-center로 숫자 중앙 정렬
- * - type="text"로 숫자 및 기호(>, <) 입력 허용
- */
 export const AnswerInput = ({ index }: { index: number }) => (
-  <input 
-    className="inline-block w-10 border border-gray-400 rounded bg-white align-middle text-center" 
-    data-answer-input={index}
-    type="text" // 숫자, <, > 기호 모두를 위해 text 타입을 사용합니다.
-    maxLength={5}
-    autoComplete="off"
-  />
+  <span className="inline-block w-20 border border-gray-400 rounded bg-white align-middle text-center" data-answer-input={index} />
 );
 
 
@@ -105,6 +89,8 @@ const generateDirectCalculationProblem = (): MathProblem => {
       const result = int1 - (int2 + num2 / den);
       const resultInt = Math.floor(result);
       const resultNumRaw = Math.round((result - resultInt) * den);
+      
+      const storable = { type: 'fraction', subType: 'fraction-subtract-from-int', operands: [int1, int2, num2, den], operator: 'subtract' } as StorableProblem;
 
       if (resultNumRaw === 0) {
         return {
@@ -118,7 +104,7 @@ const generateDirectCalculationProblem = (): MathProblem => {
           answer: [String(resultInt)],
           type: 'fraction',
           subType: 'fraction-subtract-from-int',
-          storable: { type: 'fraction', subType: 'fraction-subtract-from-int', operands: [int1, int2, num2, den], operator: 'subtract' },
+          storable,
         };
       }
 
@@ -141,7 +127,7 @@ const generateDirectCalculationProblem = (): MathProblem => {
         answer: [String(resultInt), String(resultNum), String(resultDen)],
         type: 'fraction',
         subType: 'fraction-subtract-from-int',
-        storable: { type: 'fraction', subType: 'fraction-subtract-from-int', operands: [int1, int2, num2, den], operator: 'subtract' },
+        storable,
       };
     } else if (type === 2) {
       // 3 1/8 - 1 6/8
@@ -150,6 +136,7 @@ const generateDirectCalculationProblem = (): MathProblem => {
       const num1 = randomInt(1, den - 1);
       const int2 = randomInt(1, int1 - 1);
       const num2 = randomInt(num1 + 1, den - 1); // num2 > num1 to force borrowing
+      const storable = { type: 'fraction', subType: 'fraction-subtract-mixed', operands: [int1, num1, int2, num2, den], operator: 'subtract'} as StorableProblem;
       
       const totalNum1 = int1 * den + num1;
       const totalNum2 = int2 * den + num2;
@@ -169,7 +156,7 @@ const generateDirectCalculationProblem = (): MathProblem => {
           answer: [String(resultInt)],
           type: 'fraction',
           subType: 'fraction-subtract-mixed',
-          storable: { type: 'fraction', subType: 'fraction-subtract-mixed', operands: [int1, num1, int2, num2, den], operator: 'subtract'},
+          storable,
         };
       }
       
@@ -177,49 +164,31 @@ const generateDirectCalculationProblem = (): MathProblem => {
       const resultNum = resultRem / commonDivisor;
       const resultDen = den / commonDivisor;
 
-      if (resultInt > 0) {
-        return {
-          problem: (
-            <span>
-              <MixedFraction integer={int1} numerator={num1} denominator={den} /> -{' '}
-              <MixedFraction integer={int2} numerator={num2} denominator={den} /> ={' '}
-              <MixedFraction 
-                integer={<AnswerInput index={0} />} 
-                numerator={<AnswerInput index={1} />} 
-                denominator={<AnswerInput index={2} />} 
-              />
-            </span>
-          ),
-          answer: [String(resultInt), String(resultNum), String(resultDen)],
-          type: 'fraction',
-          subType: 'fraction-subtract-mixed',
-          storable: { type: 'fraction', subType: 'fraction-subtract-mixed', operands: [int1, num1, int2, num2, den], operator: 'subtract'},
-        };
-      } else {
-          return {
-          problem: (
-            <span>
-              <MixedFraction integer={int1} numerator={num1} denominator={den} /> -{' '}
-              <MixedFraction integer={int2} numerator={num2} denominator={den} /> ={' '}
-              <MixedFraction 
-                integer={<AnswerInput index={0} />} 
-                numerator={<AnswerInput index={1} />} 
-                denominator={<AnswerInput index={2} />} 
-              />
-            </span>
-          ),
-          answer: ["0", String(resultNum), String(resultDen)],
-          type: 'fraction',
-          subType: 'fraction-subtract-mixed',
-          storable: { type: 'fraction', subType: 'fraction-subtract-mixed', operands: [int1, num1, int2, num2, den], operator: 'subtract'},
-        };
-      }
+      return {
+        problem: (
+          <span>
+            <MixedFraction integer={int1} numerator={num1} denominator={den} /> -{' '}
+            <MixedFraction integer={int2} numerator={num2} denominator={den} /> ={' '}
+            <MixedFraction 
+              integer={<AnswerInput index={0} />} 
+              numerator={<AnswerInput index={1} />} 
+              denominator={<AnswerInput index={2} />} 
+            />
+          </span>
+        ),
+        answer: [String(resultInt), String(resultNum), String(resultDen)],
+        type: 'fraction',
+        subType: 'fraction-subtract-mixed',
+        storable,
+      };
+
     } else if (type === 3) {
         // 3 5/8 - 1/8
         const den = randomInt(5, 12);
         const int1 = randomInt(1, 5);
         const num1 = randomInt(2, den - 1);
         const num2 = randomInt(1, num1-1);
+        const storable = { type: 'fraction', subType: 'fraction-subtract-same-den', operands: [int1, num1, num2, den], operator: 'subtract' } as StorableProblem;
         const resultNum = num1 - num2;
 
         if (resultNum === 0) {
@@ -232,7 +201,7 @@ const generateDirectCalculationProblem = (): MathProblem => {
               answer: [String(int1)],
               type: 'fraction',
               subType: 'fraction-subtract-same-den',
-              storable: { type: 'fraction', subType: 'fraction-subtract-same-den', operands: [int1, num1, num2, den], operator: 'subtract' },
+              storable,
             };
         }
         
@@ -249,7 +218,7 @@ const generateDirectCalculationProblem = (): MathProblem => {
             answer: [String(int1), String(finalNum), String(finalDen)],
             type: 'fraction',
             subType: 'fraction-subtract-same-den',
-            storable: { type: 'fraction', subType: 'fraction-subtract-same-den', operands: [int1, num1, num2, den], operator: 'subtract' },
+            storable,
         };
     } else {
         // 1 7/12 - 1 4/12
@@ -258,6 +227,7 @@ const generateDirectCalculationProblem = (): MathProblem => {
         const num1 = randomInt(2, den -1);
         const int2 = int1; // same integer part
         const num2 = randomInt(1, num1-1);
+        const storable = { type: 'fraction', subType: 'fraction-subtract-mixed', operands: [int1, num1, int2, num2, den], operator: 'subtract' } as StorableProblem;
 
         const resultNumRaw = num1 - num2;
         
@@ -271,7 +241,7 @@ const generateDirectCalculationProblem = (): MathProblem => {
               answer: ["0"],
               type: 'fraction',
               subType: 'fraction-subtract-mixed',
-              storable: { type: 'fraction', subType: 'fraction-subtract-mixed', operands: [int1, num1, int2, num2, den], operator: 'subtract' },
+              storable,
             };
         }
 
@@ -283,17 +253,16 @@ const generateDirectCalculationProblem = (): MathProblem => {
             problem: (
               <span>
                 <MixedFraction integer={int1} numerator={num1} denominator={den} /> - <MixedFraction integer={int2} numerator={num2} denominator={den} /> = 
-                <MixedFraction 
-                  integer={<AnswerInput index={0} />} 
-                  numerator={<AnswerInput index={1} />} 
-                  denominator={<AnswerInput index={2} />}
+                <Fraction 
+                  numerator={<AnswerInput index={0} />} 
+                  denominator={<AnswerInput index={1} />}
                 />
               </span>
             ),
-            answer: ["0", String(resultNum), String(resultDen)],
+            answer: [String(resultNum), String(resultDen)],
             type: 'fraction',
             subType: 'fraction-subtract-mixed',
-            storable: { type: 'fraction', subType: 'fraction-subtract-mixed', operands: [int1, num1, int2, num2, den], operator: 'subtract' },
+            storable,
         };
     }
   } else {
@@ -359,7 +328,7 @@ const generateProcessDecompositionProblem = (): MathProblem => {
     const result_num = gavunsu_num1 - num2;
     return {
       problem: (
-        <span>
+        <span className="flex flex-wrap items-center justify-center gap-x-2">
           <MixedFraction integer={int1} numerator={num1} denominator={den} /> -{' '}
           <Fraction numerator={num2} denominator={den} /> ={' '}
           <Fraction numerator={<AnswerInput index={0} />} denominator={den} /> -{' '}
@@ -533,13 +502,13 @@ const generateWordProblem = (): MathProblem => {
     // "지효는 마트에서 돼지고기 4/6kg, 소고기 5/6kg을 샀습니다. 고기는 모두 몇 kg인지 구하세요."
     const den = randomInt(5, 12);
     const num1 = randomInt(1, den - 1);
-    const num2 = randomInt(1, den - 1); // 1을 넘을 수 있도록 수정
+    const num2 = randomInt(1, den - 1);
+    const storable = { type: 'fraction', subType: 'fraction-word-problem', operands: [num1, num2, den], operator: 'add' } as StorableProblem;
     const totalNumRaw = num1 + num2;
 
     const resultInt = Math.floor(totalNumRaw / den);
     const resultNumRem = totalNumRaw % den;
 
-    // [수정됨] 답이 1, 2처럼 정수인 경우
     if (resultNumRem === 0) {
       return {
         problem: (
@@ -553,11 +522,10 @@ const generateWordProblem = (): MathProblem => {
         answer: [String(resultInt)],
         type: 'fraction',
         subType: 'fraction-word-problem',
-        storable: { type: 'fraction', subType: 'fraction-word-problem', operands: [num1, num2, den], operator: 'add' },
+        storable,
       };
     }
 
-    // [수정됨] 답이 대분수 또는 진분수인 경우
     const commonDivisor = gcd(resultNumRem, den);
     const resultNum = resultNumRem / commonDivisor;
     const resultDen = den / commonDivisor;
@@ -568,17 +536,17 @@ const generateWordProblem = (): MathProblem => {
           지효는 마트에서 돼지고기 <Fraction numerator={num1} denominator={den}/>kg, 소고기 <Fraction numerator={num2} denominator={den}/>kg을
           샀습니다. <br />
           고기는 모두 몇 kg인가요?{' '}
-          <MixedFraction // Fraction -> MixedFraction
+          <MixedFraction 
             integer={<AnswerInput index={0} />} 
             numerator={<AnswerInput index={1} />} 
             denominator={<AnswerInput index={2} />} 
           /> kg
         </p>
       ),
-      answer: [String(resultInt), String(resultNum), String(resultDen)], // 3-part answer
+      answer: [String(resultInt), String(resultNum), String(resultDen)],
       type: 'fraction',
       subType: 'fraction-word-problem',
-      storable: { type: 'fraction', subType: 'fraction-word-problem', operands: [num1, num2, den], operator: 'add' },
+      storable,
     };
   }
 };
@@ -596,10 +564,9 @@ const generateConditionalProblem = (): MathProblem => {
     let num2 = randomInt(1, den - 1);
 
     if (!isBigger && num1 < num2) {
-      // ensure positive result for 'smaller'
       [num1, num2] = [num2, num1];
     }
-
+    const storable = { type: 'fraction', subType: 'conditional', operands: [num1, num2, den, isBigger ? 1 : 0], operator: 'calculate' } as StorableProblem;
     const answerFraction = isBigger ? num1 + num2 : num1 - num2;
     
     if (answerFraction === 0) {
@@ -614,17 +581,16 @@ const generateConditionalProblem = (): MathProblem => {
         answer: ["0"],
         type: 'fraction',
         subType: 'conditional',
-        storable: { type: 'fraction', subType: 'conditional', operands: [num1, num2, den, isBigger ? 1 : 0], operator: 'calculate' },
+        storable,
       }
     }
 
-    // [수정됨] 정수 답변 체크
-    const commonDivisorInt = gcd(answerFraction, den);
-    const simplifiedNumInt = answerFraction / commonDivisorInt;
-    const simplifiedDenInt = den / commonDivisorInt;
+    const commonDivisor = gcd(answerFraction, den);
+    const simplifiedNum = answerFraction / commonDivisor;
+    const simplifiedDen = den / commonDivisor;
 
 
-    if (simplifiedDenInt === 1) {
+    if (simplifiedDen === 1) {
         return {
         problem: (
           <span>
@@ -633,19 +599,18 @@ const generateConditionalProblem = (): MathProblem => {
             만큼 {op_text} 수는? <AnswerInput index={0} />
           </span>
         ),
-        answer: [String(simplifiedNumInt)],
+        answer: [String(simplifiedNum)],
         type: 'fraction',
         subType: 'conditional',
-        storable: { type: 'fraction', subType: 'conditional', operands: [num1, num2, den, isBigger ? 1 : 0], operator: 'calculate' },
+        storable,
       };
     }
 
-    // [수정됨] 대분수 또는 진분수 처리
     const resultInt = Math.floor(answerFraction / den);
     const resultNumRem = answerFraction % den;
-    const commonDivisorFrac = gcd(resultNumRem, den);
-    const resultNum = resultNumRem / commonDivisorFrac;
-    const resultDen = den / commonDivisorFrac;
+    const finalCommonDivisor = gcd(resultNumRem, den);
+    const resultNum = resultNumRem / finalCommonDivisor;
+    const resultDen = den / finalCommonDivisor;
 
     return {
       problem: (
@@ -653,17 +618,17 @@ const generateConditionalProblem = (): MathProblem => {
           <Fraction numerator={num1} denominator={den} />
           보다 <Fraction numerator={num2} denominator={den} />
           만큼 {op_text} 수는?{' '}
-          <MixedFraction // Fraction -> MixedFraction
+          <MixedFraction
             integer={<AnswerInput index={0} />}
             numerator={<AnswerInput index={1} />} 
             denominator={<AnswerInput index={2} />}
           />
         </span>
       ),
-      answer: [String(resultInt), String(resultNum), String(resultDen)], // 3-part answer
+      answer: [String(resultInt), String(resultNum), String(resultDen)],
       type: 'fraction',
       subType: 'conditional',
-      storable: { type: 'fraction', subType: 'conditional', operands: [num1, num2, den, isBigger ? 1 : 0], operator: 'calculate' },
+      storable,
     };
   } else {
     let num1 = round(randomInt(100, 800) / 100, 2);
@@ -696,11 +661,12 @@ const generateListNavigationProblem = (): MathProblem => {
     const den = randomInt(15, 30);
     const nums = shuffle(
       Array.from({ length: 4 }, (_, i) => randomInt(1, den - 1))
-    ).slice(0, 4);
+    );
+    const storable = { type: 'fraction', subType: 'list-navigation', operands: [...nums, den, isSum ? 1 : 0], operator: 'calculate' } as StorableProblem;
     const sorted = [...nums].sort((a, b) => a - b);
     const smallest = sorted[0];
     const largest = sorted[sorted.length - 1];
-    const resultNumRaw = isSum ? smallest + largest : largest - smallest; // 이름 변경
+    const resultNumRaw = isSum ? smallest + largest : largest - smallest;
 
     if (resultNumRaw === 0) {
       return {
@@ -708,8 +674,8 @@ const generateListNavigationProblem = (): MathProblem => {
           <div className="text-center">
             <p>다음 카드 중 가장 큰 수와 가장 작은 수의 {op_text}을 구하세요.</p>
             <div className="flex justify-center gap-2 my-2">
-              {nums.map(n => (
-                <div key={n} className="p-2 border rounded bg-gray-100">
+              {nums.map((n, i) => (
+                <div key={`${n}-${i}`} className="p-2 border rounded bg-gray-100">
                   <Fraction numerator={n} denominator={den} />
                 </div>
               ))}
@@ -722,23 +688,22 @@ const generateListNavigationProblem = (): MathProblem => {
         answer: ["0"],
         type: 'fraction',
         subType: 'list-navigation',
-        storable: { type: 'fraction', subType: 'list-navigation', operands: [...nums, den, isSum ? 1 : 0], operator: 'calculate' },
+        storable,
       }
     }
 
-    // [수정됨] 정수 답변 체크
-    const commonDivisorInt = gcd(resultNumRaw, den);
-    const simplifiedNumInt = resultNumRaw / commonDivisorInt;
-    const simplifiedDenInt = den / commonDivisorInt;
+    const commonDivisor = gcd(resultNumRaw, den);
+    const simplifiedNum = resultNumRaw / commonDivisor;
+    const simplifiedDen = den / commonDivisor;
     
-    if (simplifiedDenInt === 1) {
+    if (simplifiedDen === 1) {
         return {
         problem: (
           <div className="text-center">
             <p>다음 카드 중 가장 큰 수와 가장 작은 수의 {op_text}을 구하세요.</p>
             <div className="flex justify-center gap-2 my-2">
-              {nums.map(n => (
-                <div key={n} className="p-2 border rounded bg-gray-100">
+              {nums.map((n, i) => (
+                <div key={`${n}-${i}`} className="p-2 border rounded bg-gray-100">
                   <Fraction numerator={n} denominator={den} />
                 </div>
               ))}
@@ -748,33 +713,32 @@ const generateListNavigationProblem = (): MathProblem => {
             </p>
           </div>
         ),
-        answer: [String(simplifiedNumInt)],
+        answer: [String(simplifiedNum)],
         type: 'fraction',
         subType: 'list-navigation',
-        storable: { type: 'fraction', subType: 'list-navigation', operands: [...nums, den, isSum ? 1 : 0], operator: 'calculate' },
+        storable,
       };
     }
 
-    // [수정됨] 대분수 또는 진분수 처리
     const resultInt = Math.floor(resultNumRaw / den);
     const resultNumRem = resultNumRaw % den;
-    const commonDivisorFrac = gcd(resultNumRem, den);
-    const resultNum = resultNumRem / commonDivisorFrac;
-    const resultDen = den / commonDivisorFrac;
+    const finalCommonDivisor = gcd(resultNumRem, den);
+    const resultNum = resultNumRem / finalCommonDivisor;
+    const resultDen = den / finalCommonDivisor;
 
     return {
       problem: (
         <div className="text-center">
           <p>다음 카드 중 가장 큰 수와 가장 작은 수의 {op_text}을 구하세요.</p>
           <div className="flex justify-center gap-2 my-2">
-            {nums.map(n => (
-              <div key={n} className="p-2 border rounded bg-gray-100">
+            {nums.map((n, i) => (
+              <div key={`${n}-${i}`} className="p-2 border rounded bg-gray-100">
                   <Fraction numerator={n} denominator={den} />
               </div>
             ))}
           </div>
           <p>
-            답: <MixedFraction // Fraction -> MixedFraction
+            답: <MixedFraction
                   integer={<AnswerInput index={0} />}
                   numerator={<AnswerInput index={1} />} 
                   denominator={<AnswerInput index={2} />}
@@ -783,16 +747,16 @@ const generateListNavigationProblem = (): MathProblem => {
         </div>
       ),
       answer: [
-        String(resultInt), String(resultNum), String(resultDen) // 3-part answer
+        String(resultInt), String(resultNum), String(resultDen)
       ],
       type: 'fraction',
       subType: 'list-navigation',
-      storable: { type: 'fraction', subType: 'list-navigation', operands: [...nums, den, isSum ? 1 : 0], operator: 'calculate' },
+      storable,
     };
   } else {
-    const nums = Array.from({ length: 4 }, () =>
+    const nums = shuffle(Array.from({ length: 4 }, () =>
       round(randomInt(100, 999) / 100, 2)
-    );
+    ));
     const sorted = [...nums].sort((a, b) => a - b);
     const smallest = sorted[0];
     const largest = sorted[sorted.length - 1];
@@ -804,8 +768,8 @@ const generateListNavigationProblem = (): MathProblem => {
         <div className="text-center">
           <p>다음 카드 중 가장 큰 수와 가장 작은 수의 {op_text}을 구하세요.</p>
           <div className="flex justify-center gap-2 my-2">
-            {nums.map(n => (
-              <div key={n} className="p-3 border rounded bg-gray-100 font-mono">
+            {nums.map((n, i) => (
+              <div key={`${n}-${i}`} className="p-3 border rounded bg-gray-100 font-mono">
                 {n}
               </div>
             ))}
@@ -824,10 +788,69 @@ const generateListNavigationProblem = (): MathProblem => {
 };
 
 
-export const generateProblemFromData = (data: StorableProblem): MathProblem => {
-  // This function would ideally reconstruct the problem from stored data.
-  // For now, it regenerates a similar problem type as a placeholder for review.
-  const problemMap: Record<ProblemSubType, () => MathProblem> = {
+export const generateProblemFromData = (data: StorableProblem): MathProblem | null => {
+  const { type, subType, operands, operator } = data;
+  
+  if (subType === 'fraction-subtract-from-int' && operator === 'subtract' && operands.length === 4) {
+    const [int1, int2, num2, den] = operands as [number, number, number, number];
+    const result = int1 - (int2 + num2 / den);
+    const resultInt = Math.floor(result);
+    const resultNumRaw = Math.round((result - resultInt) * den);
+
+    if (resultNumRaw === 0) {
+      return {
+        problem: <span>{int1} - <MixedFraction integer={int2} numerator={num2} denominator={den} /> = <AnswerInput index={0} /></span>,
+        answer: [String(resultInt)], type: 'fraction', subType, storable: data,
+      };
+    }
+    const commonDivisor = gcd(resultNumRaw, den);
+    const resultNum = resultNumRaw / commonDivisor;
+    const resultDen = den / commonDivisor;
+    return {
+      problem: <span>{int1} - <MixedFraction integer={int2} numerator={num2} denominator={den} /> = <MixedFraction integer={<AnswerInput index={0} />} numerator={<AnswerInput index={1} />} denominator={<AnswerInput index={2} />} /></span>,
+      answer: [String(resultInt), String(resultNum), String(resultDen)], type: 'fraction', subType, storable: data,
+    };
+  }
+  
+   if (subType === 'conditional' && type === 'fraction' && operator === 'calculate' && operands.length === 4) {
+    const [num1, num2, den, isBiggerNum] = operands as [number, number, number, number];
+    const isBigger = isBiggerNum === 1;
+    const op_text = isBigger ? '더 큰' : '더 작은';
+    const answerFraction = isBigger ? num1 + num2 : num1 - num2;
+
+    if (answerFraction === 0) {
+        return {
+            problem: <span><Fraction numerator={num1} denominator={den} /> 보다 <Fraction numerator={num2} denominator={den} /> 만큼 {op_text} 수는? <AnswerInput index={0} /></span>,
+            answer: ["0"], type, subType, storable: data,
+        };
+    }
+
+    const commonDivisor = gcd(answerFraction, den);
+    const simplifiedNum = answerFraction / commonDivisor;
+    const simplifiedDen = den / commonDivisor;
+
+    if (simplifiedDen === 1) {
+        return {
+            problem: <span><Fraction numerator={num1} denominator={den} /> 보다 <Fraction numerator={num2} denominator={den} /> 만큼 {op_text} 수는? <AnswerInput index={0} /></span>,
+            answer: [String(simplifiedNum)], type, subType, storable: data,
+        };
+    }
+
+    const resultInt = Math.floor(answerFraction / den);
+    const resultNumRem = answerFraction % den;
+    const finalCommonDivisor = gcd(resultNumRem, den);
+    const resultNum = resultNumRem / finalCommonDivisor;
+    const resultDen = den / finalCommonDivisor;
+    
+    return {
+      problem: <span><Fraction numerator={num1} denominator={den} /> 보다 <Fraction numerator={num2} denominator={den} /> 만큼 {op_text} 수는? <MixedFraction integer={<AnswerInput index={0} />} numerator={<AnswerInput index={1} />} denominator={<AnswerInput index={2} />} /></span>,
+      answer: [String(resultInt), String(resultNum), String(resultDen)], type, subType, storable: data
+    };
+  }
+
+  // Fallback for other or unknown types - generate a new problem of the same subtype.
+  // This part is less ideal but prevents crashes.
+  const problemMap: Record<string, () => MathProblem> = {
     'decimal-add': generateDirectCalculationProblem,
     'decimal-subtract': generateDirectCalculationProblem,
     'fraction-add-same-den': generateDirectCalculationProblem,
@@ -843,18 +866,9 @@ export const generateProblemFromData = (data: StorableProblem): MathProblem => {
     'list-navigation': generateListNavigationProblem,
     'word-problem': generateWordProblem,
     'comparison': generateComparisonProblem,
-    // Add other mappings if necessary, falling back to a default.
     'direct-calculation': generateDirectCalculationProblem,
     'process-decomposition': generateProcessDecompositionProblem,
     'unit-conversion-concept': generateUnitConversionConceptProblem,
-    'vertical-calculation': generateDirectCalculationProblem, 
-    'error-correction': generateDirectCalculationProblem, 
-    'multi-step-word-problem': generateWordProblem, 
-    'find-and-operate': generateListNavigationProblem, 
-    'error-analysis': generateComparisonProblem, 
-    'multiple-choice': generateComparisonProblem,
-    'diagram': generateDirectCalculationProblem, 
-    'conditional-operation': generateConditionalProblem,
   };
 
   const generator = problemMap[data.subType] || generateDirectCalculationProblem;

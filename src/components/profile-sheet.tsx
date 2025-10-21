@@ -285,7 +285,7 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
       <ProblemModal
         isOpen={isReviewModalOpen}
         onOpenChange={setReviewModalOpen}
-        problem={null} // We pass reviewProblemData instead
+        problem={null}
         reviewProblem={selectedReviewProblem?.problemData}
         isReview={true}
         onCorrectAnswer={handleCorrectReview}

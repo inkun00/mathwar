@@ -49,7 +49,13 @@ export default function ProblemModal({
   const { toast } = useToast();
   const firestore = useFirestore();
 
-  const problem = reviewProblem ? generateProblemFromData(reviewProblem) : initialProblem;
+  const problem = useMemo(() => {
+    if (reviewProblem) {
+      return generateProblemFromData(reviewProblem);
+    }
+    return initialProblem;
+  }, [reviewProblem, initialProblem]);
+
   const numInputs = useMemo(() => problem?.answer.length ?? 0, [problem]);
 
   useEffect(() => {
@@ -122,15 +128,12 @@ export default function ProblemModal({
 
     const isCorrect = userAnswers.every((userAns, i) => {
       const correctAns = correctAnswers[i];
-      // When comparing numbers, treat an empty user answer as 0.
       const userIsNumberLike = userAns === '' || !isNaN(Number(userAns));
       const correctIsNumberLike = !isNaN(Number(correctAns));
 
       if (userIsNumberLike && correctIsNumberLike) {
-        // Treat empty string as 0 for numeric comparison
         return Number(userAns || '0') === Number(correctAns);
       }
-      // For non-numeric answers (like '>', '<'), do a case-insensitive string comparison.
       return userAns.toLowerCase() === correctAns.toLowerCase();
     });
 
