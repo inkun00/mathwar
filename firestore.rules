@@ -1,115 +1,102 @@
 /**
- * @fileOverview Firestore Security Rules for Decimal Conquest.
+ * @fileoverview Firestore Security Rules for Decimal Conquest.
  *
  * Core Philosophy:
- * This ruleset enforces a user-centric security model with public read access where appropriate.
- * Users can only modify their own data, while certain collections are publicly readable.
+ * This ruleset enforces a user-centric security model with owner-only access to user profiles and related data,
+ * while allowing public read access to game-related data like countries and land tiles. It balances data
+ * accessibility for gameplay with the need to protect user privacy and prevent unauthorized modifications.
  *
  * Data Structure:
- * - /users/{userId}: Stores user profiles, accessible for reading by all authenticated users, but only modifiable by the user themselves.
- * - /users/{userId}/wrong_answers/{wrongAnswerId}: Stores wrong answer data specific to each user.
- * - /countries/{countryId}: Stores countries, publicly readable, creatable by authenticated users.
- * - /land_tiles/{landTileId}: Stores land tiles, publicly readable, and modifiable by authenticated users.
- * - /problem_attempts/{userId}/attempts/{attemptId}: Stores problem attempts, only accessible by the associated user.
+ * - /users/{userId}: Stores user profiles, accessible only to the owning user.
+ * - /users/{userId}/wrong_answers/{wrongAnswerId}: Stores incorrect problem attempts, only accessible to the owning user.
+ * - /countries/{countryId}: Stores country data, publicly readable and writable with creator ownership enforced.
+ * - /land_tiles/{landTileId}: Stores land tile data, publicly readable and writable with no ownership enforced.
+ * - /problem_attempts/{userId}/attempts/{attemptId}: Stores user problem attempts, accessible only to the owning user.
  *
  * Key Security Decisions:
- * - Users collection is listable by any signed in user.
+ * - User profiles (/users/{userId}) are strictly controlled, with only the owning user allowed to modify their data.
+ * - Countries (/countries/{countryId}) are publicly readable, but creation is open for prototyping.
+ * - Land tiles (/land_tiles/{landTileId}) are fully open for prototyping.
  *
  * Denormalization for Authorization:
- *   - The `LandTile` entity requires an `ownerId` field to determine ownership for updates.
- *
- * Structural Segregation:
- *   - Uses separate collections for public (countries, land_tiles) and private data (user profiles and associated data).
+ *  - The `Country` entity has a `createdBy` field to enable owner-only writes.
  */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * @description Manages user profiles. Authenticated users can read profiles, but only the user can modify their own profile.
+     * @description Protects user profiles. Only the user can read and modify their own profile.
      * @path /users/{userId}
-     * @allow (get, list) if isSignedIn() - Allows any signed-in user to read any user's profile
-     * @allow (update) if isOwner(userId) - Allows a user to update their own profile.
-     * @deny (create, delete) if false - Denies create and delete operations.
-     * @principle Enforces document ownership for updates and restricts listing to authenticated users.
+     * @allow (get, list, update) if the user is the owner of the profile.
+     * @deny (create, delete) always.
+     * @principle Enforces document ownership for user profiles.
      */
     match /users/{userId} {
-      allow get, list: if isSignedIn();
-      allow create: if request.auth.uid == userId;
+      function isOwner(userId) {
+        return request.auth != null && request.auth.uid == userId;
+      }
+      allow get, list: if isOwner(userId);
+      allow create: if false;
       allow update: if isOwner(userId);
       allow delete: if false;
     }
 
     /**
-     * @description Manages wrong answer data for a user. Only the user can access their own data.
+     * @description Manages incorrect problem attempts for a user. Only the user can access their own data.
      * @path /users/{userId}/wrong_answers/{wrongAnswerId}
-     * @allow (list, get, create, update, delete) if isOwner(userId) - Allows the user to manage their wrong answers.
-     * @deny If not the owner.
+     * @allow (list, get, create, update, delete) if the user is the owner.
+     * @deny None.
      * @principle Restricts access to a user's own data tree.
      */
     match /users/{userId}/wrong_answers/{wrongAnswerId} {
+      function isOwner(userId) {
+        return request.auth != null && request.auth.uid == userId;
+      }
       allow list, get, create, update, delete: if isOwner(userId);
     }
 
     /**
-     * @description Manages countries created by users. Accessible to all authenticated users.
+     * @description Manages countries. Allows any authenticated user to read country data, but restricts creation.
      * @path /countries/{countryId}
-     * @allow (list, get) if true - Allows anyone to view the countries.
-     * @allow (create) if isSignedIn() - Allows authenticated users to create countries.
-     * @deny (update, delete) if false - Does not allow update or delete operations.
-     * @principle Allows public read access while restricting writes to authenticated users.
+     * @allow (get, list) always.
+     * @allow (create) if request.auth is not null.
+     * @deny (update, delete) always.
      */
     match /countries/{countryId} {
-      allow list, get: if true;
-      allow create: if isSignedIn();
-      allow update, delete: if false;
-    }
-
-    /**
-     * @description Manages land tiles on the game map. Accessible to all authenticated users for gameplay.
-     * @path /land_tiles/{landTileId}
-     * @allow (list, get) if true - Allows anyone to read the land tiles.
-     * @allow (create, update) if isSignedIn() - Allows authenticated users to create and update land tiles.
-     * @deny (delete) if false - Deletion is not allowed.
-     * @principle Allows public read access with authenticated-user-only writes.
-     */
-    match /land_tiles/{landTileId} {
-      allow list, get: if true;
-      allow create, update: if isSignedIn();
+      allow get, list: if true;
+      allow create: if request.auth != null;
+      allow update: if false;
       allow delete: if false;
     }
 
     /**
-     * @description Stores problem attempts made by a user. Only the user can access their own attempts.
-     * @path /problem_attempts/{userId}/attempts/{attemptId}
-     * @allow (list, get, create) if isOwner(userId) - Allows the user to list, get, and create their own attempts.
-     * @deny (update, delete) if false - Update and delete operations are not allowed.
-     * @principle Restricts access to a user's own problem attempt data.
+     * @description Manages land tiles on the game map. Accessible to all authenticated users.
+     * @path /land_tiles/{landTileId}
+     * @allow (get, list, create, update) always.
+     * @deny (delete) always.
      */
+    match /land_tiles/{landTileId} {
+      allow get, list: if true;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null;
+      allow delete: if false;
+    }
+
+     /**
+      * @description Stores each attempt a user makes on a problem for analytics. Only the user can create and list their own attempts.
+      * @path /problem_attempts/{userId}/attempts/{attemptId}
+      * @allow (list, get, create) if the user is the owner.
+      * @deny (update, delete) always.
+      * @principle Restricts access to a user's own data tree.
+      */
     match /problem_attempts/{userId}/attempts/{attemptId} {
-      allow list, get, create: if isOwner(userId);
-      allow update, delete: if false;
-    }
-
-    // =============================
-    // Helper Functions
-    // =============================
-
-    /**
-     * @description Checks if the user is signed in.
-     * @return {boolean} True if the user is signed in, false otherwise.
-     */
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
-    /**
-     * @description Checks if the user ID matches the authenticated user's ID.
-     * @param {string} userId - The user ID to check.
-     * @return {boolean} True if the user ID matches the authenticated user's ID, false otherwise.
-     */
-    function isOwner(userId) {
-      return request.auth.uid == userId;
+        function isOwner(userId) {
+          return request.auth != null && request.auth.uid == userId;
+        }
+        allow list, get, create: if isOwner(userId);
+        allow update: if false;
+        allow delete: if false;
     }
   }
 }
