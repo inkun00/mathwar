@@ -19,14 +19,14 @@ export default function Home() {
   }, [firestore, authUser]);
   
   const countriesQuery = useMemoFirebase(() => {
-    if (!firestore) return null;
+    if (!firestore || !authUser) return null;
     return collection(firestore, 'countries');
-  }, [firestore]);
+  }, [firestore, authUser]);
 
   const landTilesQuery = useMemoFirebase(() => {
-    if (!firestore) return null;
+    if (!firestore || !authUser) return null;
     return collection(firestore, 'land_tiles');
-  }, [firestore]);
+  }, [firestore, authUser]);
   
   const usersQuery = useMemoFirebase(() => {
     if (!firestore || !authUser) return null;
