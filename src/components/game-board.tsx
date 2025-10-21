@@ -7,7 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { ZoomIn, ZoomOut } from "lucide-react";
 import { useFirestore, useUser } from "@/firebase";
-import { doc, setDoc, updateDoc, writeBatch, increment, collection } from "firebase/firestore";
+import { doc, setDoc, updateDoc, writeBatch, increment, collection, getDocs } from "firebase/firestore";
 import { addWrongAnswer } from "@/firebase/firestore/data";
 
 import Header from "./header";
@@ -55,8 +55,8 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
   const allCountries = useMemo(() => {
     const aiApiCountries = aiUsers.map(ai => ({...ai.country, id: ai.countryId, createdBy: 'ai', color: ai.country.color}));
     const humanCountries = countries.map(c => {
-      const countryUser = users.find(u => u.countryId === c.id);
-      return {...c, color: countryUser?.color || "hsl(0, 0%, 50%)"}
+        const userWithCountry = users.find(u => u.countryId === c.id);
+        return {...c, color: userWithCountry?.color || "hsl(0, 0%, 50%)"};
     })
     return [...humanCountries, ...aiApiCountries];
   }, [countries, users]);
@@ -88,6 +88,7 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
   const isDemise = useMemo(() => {
       if (!currentUser) return false;
       const hasLand = landTiles.some(tile => tile.ownerId === currentUser.id);
+      // Demise if user has no land and no tokens to expand
       return !hasLand && currentUser.tokens === 0;
   }, [landTiles, currentUser]);
 
@@ -158,9 +159,8 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
   const handleTerritoryCut = async (originalOwnerId: string) => {
     if (!firestore) return;
 
-    // Get a fresh snapshot of land tiles
     const tilesCollectionRef = collection(firestore, "land_tiles");
-    const landTilesSnapshot = await require('firebase/firestore').getDocs(tilesCollectionRef);
+    const landTilesSnapshot = await getDocs(tilesCollectionRef);
     const currentLandTiles = landTilesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Tile));
 
     const ownedTiles = currentLandTiles.filter(t => t.ownerId === originalOwnerId);
@@ -169,7 +169,6 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
     const visited = new Set<string>();
     const territories: Tile[][] = [];
 
-    // Find all contiguous territories
     for (const tile of ownedTiles) {
         const tileId = `${tile.x},${tile.y}`;
         if (!visited.has(tileId)) {
@@ -213,7 +212,6 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
                 batch.update(tileRef, { ownerId: null });
             });
 
-            // Add token compensation
             const tokensToCompensate = Math.round(tilesToNeutralize.length / 2);
             if (tokensToCompensate > 0) {
               const originalOwnerRef = doc(firestore, "users", originalOwnerId);
@@ -227,10 +225,10 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
             let toastDescription = `상대방의 영토가 분단되어 일부가 미개척지가 되었습니다.`;
             if(ownerIsCurrentUser) {
               toastDescription = `영토가 분단되어 타일 ${tilesToNeutralize.length}개를 잃고 토큰 ${tokensToCompensate}개를 얻었습니다.`
-            } else if (tokensToCompensate > 0) {
+            } else {
               const originalOwner = allUsers.find(u => u.id === originalOwnerId);
               const ownerName = originalOwner?.nickname || '상대방';
-              toastDescription = `${ownerName}에게 ${tokensToCompensate}개의 보상 토큰이 지급되었습니다.`
+              toastDescription = `${ownerName}의 영토가 분단되었습니다. ${tokensToCompensate > 0 ? `보상으로 토큰 ${tokensToCompensate}개가 지급되었습니다.` : ''}`
             }
 
             toast({
@@ -249,18 +247,15 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
     try {
         const batch = writeBatch(firestore);
 
-        // Conquer the tile
         const tileId = `${invasionTarget.x}-${invasionTarget.y}`;
         const tileRef = doc(firestore, "land_tiles", tileId);
         batch.set(tileRef, { x: invasionTarget.x, y: invasionTarget.y, ownerId: currentUser.id }, { merge: true });
 
-        // Decrement token
         const userRef = doc(firestore, "users", currentUser.id);
         batch.update(userRef, { tokens: increment(-1) });
 
         await batch.commit();
         
-        // After commit, check for territory cuts
         if (invasionTarget.originalOwnerId) {
             await handleTerritoryCut(invasionTarget.originalOwnerId);
         }
@@ -289,7 +284,6 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
     const originalOwnerId = clickedTile.ownerId;
 
     try {
-        // Case 1: Conquering unowned land
         if (originalOwnerId === null) {
             const tileId = `${x}-${y}`;
             const tileRef = doc(firestore, "land_tiles", tileId);
@@ -301,7 +295,6 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
             });
             toast({ title: "영토 확장!", description: "새로운 땅을 정복했습니다." });
         }
-        // Case 2: Attacking an enemy tile
         else if (originalOwnerId !== currentUser.id) {
             setInvasionTarget({ x, y, originalOwnerId: originalOwnerId! });
             setCurrentProblem(generateMathProblem());
@@ -311,8 +304,6 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
         console.error("타일 클릭 작업 실패:", error);
         toast({ variant: "destructive", title: "오류", description: "작업 처리 중 오류가 발생했습니다." });
     } finally {
-        // For non-invasion clicks, stop processing here.
-        // For invasions, the modal's onOpenChange will handle it.
         if (originalOwnerId === null || originalOwnerId === currentUser.id) {
             setIsProcessingClick(false);
         }
@@ -324,11 +315,9 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
   
     const batch = writeBatch(firestore);
   
-    // Reset user's tokens
     const userRef = doc(firestore, "users", currentUser.id);
     batch.update(userRef, { tokens: 1 });
   
-    // Find and reset user's tiles
     const tilesToClear = landTiles.filter(tile => tile.ownerId === currentUser.id);
     tilesToClear.forEach(tile => {
       const tileRef = doc(firestore, "land_tiles", tile.id);
@@ -353,7 +342,6 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
 
     if (tile.ownerId === currentUser.id) return false;
 
-    // If user has no tiles, they can only take unowned land
     if (userTiles.length === 0) {
       return tile.ownerId === null && isLand(tile.x, tile.y);
     }
@@ -363,10 +351,8 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
   
   const handleProblemModalClose = (open: boolean) => {
     if (!open) {
-      // This is called when the modal is closed, either by solving, failing, or clicking away.
-      // This is the right place to unlock clicking.
       setIsProcessingClick(false);
-      setInvasionTarget(null); // Always reset invasion target on close
+      setInvasionTarget(null);
     }
     setIsModalOpen(open);
   }
@@ -375,14 +361,11 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
     if (!authUser || !firestore) return;
     
     if (invasionTarget) {
-      // Decrement token on wrong answer during an invasion
       const userRef = doc(firestore, "users", authUser.uid);
       await updateDoc(userRef, { tokens: increment(-1) });
     } else {
-      // Not an invasion, so add to wrong answer notes
       await addWrongAnswer(firestore, authUser.uid, problem);
     }
-    // No need to reset invasion target here, onOpenChange handles it.
   };
 
   if (!currentUser) {
@@ -429,5 +412,3 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
     </div>
   );
 }
-
-    
