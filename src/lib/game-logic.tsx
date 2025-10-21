@@ -86,8 +86,11 @@ const generateDirectCalculationProblem = (): MathProblem => {
 
       const result = int1 - (int2 + num2 / den);
       const resultInt = Math.floor(result);
-      const resultNum = Math.round((result - resultInt) * den);
-      const commonDivisor = gcd(resultNum, den);
+      const resultNumRaw = Math.round((result - resultInt) * den);
+      
+      const commonDivisor = gcd(resultNumRaw, den);
+      const resultNum = resultNumRaw / commonDivisor;
+      const resultDen = den / commonDivisor;
 
       return {
         problem: (
@@ -101,7 +104,7 @@ const generateDirectCalculationProblem = (): MathProblem => {
             />
           </span>
         ),
-        answer: [String(resultInt), String(resultNum / commonDivisor), String(den / commonDivisor)],
+        answer: [String(resultInt), String(resultNum), String(resultDen)],
         type: 'fraction',
         subType: 'fraction-subtract-from-int',
         storable: {
@@ -119,12 +122,10 @@ const generateDirectCalculationProblem = (): MathProblem => {
       const num2 = randomInt(num1 + 1, den * 2); // num2 can be larger than den
       
       const totalNum1 = int1 * den + num1;
-      const resultNum = totalNum1 - num2;
+      const resultNumRaw = totalNum1 - num2;
 
-      const resultInt = Math.floor(resultNum / den);
-      const resultRem = resultNum % den;
-      
-      const commonDivisor = resultRem > 0 ? gcd(resultRem, den) : 1;
+      const resultInt = Math.floor(resultNumRaw / den);
+      const resultRem = resultNumRaw % den;
       
       const num2Int = Math.floor(num2/den);
       const num2Rem = num2 % den;
@@ -157,6 +158,8 @@ const generateDirectCalculationProblem = (): MathProblem => {
           },
         };
       }
+      
+      const commonDivisor = gcd(resultRem, den);
 
       return {
         problem: (
@@ -187,8 +190,7 @@ const generateDirectCalculationProblem = (): MathProblem => {
         const num1 = randomInt(1, den - 1);
         const num2 = randomInt(1, num1);
         const resultNum = num1 - num2;
-        const commonDivisor = gcd(resultNum, den);
-
+        
         if (resultNum === 0) {
              return {
                 problem: (
@@ -207,6 +209,8 @@ const generateDirectCalculationProblem = (): MathProblem => {
                 },
             };
         }
+        
+        const commonDivisor = gcd(resultNum, den);
 
         return {
             problem: (
@@ -259,8 +263,10 @@ const generateProcessDecompositionProblem = (): MathProblem => {
     const int2 = randomInt(1, int1 - 1);
     const num2 = randomInt(1, den - 1);
     const resultInt = int1 - 1 - int2;
-    const resultNum = den - num2;
-    const commonDivisor = gcd(resultNum, den);
+    const resultNumRaw = den - num2;
+    const commonDivisor = gcd(resultNumRaw, den);
+    const resultNum = resultNumRaw / commonDivisor;
+    const resultDen = den / commonDivisor;
 
     return {
       problem: (
@@ -273,11 +279,11 @@ const generateProcessDecompositionProblem = (): MathProblem => {
           <MixedFraction
             integer={<AnswerInput index={1} />}
             numerator={<AnswerInput index={2} />}
-            denominator={den / commonDivisor}
+            denominator={<AnswerInput index={3} />}
           />
         </span>
       ),
-      answer: [String(den), String(resultInt), String(resultNum / commonDivisor)],
+      answer: [String(den), String(resultInt), String(resultNum), String(resultDen)],
       type: 'fraction',
       subType: 'fraction-subtract-from-int',
       storable: {
@@ -347,7 +353,7 @@ const generateProcessDecompositionProblem = (): MathProblem => {
           <MixedFraction
             integer={<AnswerInput index={4} />}
             numerator={<AnswerInput index={5} />}
-            denominator={simplifiedDen}
+            denominator={<AnswerInput index={6} />}
           />
         </span>
       ),
@@ -358,6 +364,7 @@ const generateProcessDecompositionProblem = (): MathProblem => {
         String(num1 + num2),
         String(int1 + int2),
         String(simplifiedNum),
+        String(simplifiedDen),
       ],
       type: 'fraction',
       subType: 'fraction-add-mixed',
@@ -549,6 +556,28 @@ const generateConditionalProblem = (): MathProblem => {
     }
 
     const answerFraction = isBigger ? num1 + num2 : num1 - num2;
+    
+    if (answerFraction === 0) {
+      return {
+         problem: (
+          <span>
+            <Fraction numerator={num1} denominator={den} />
+            보다 <Fraction numerator={num2} denominator={den} />
+            만큼 {op_text} 수는? <AnswerInput index={0} />
+          </span>
+        ),
+        answer: ["0"],
+        type: 'fraction',
+        subType: 'conditional',
+        storable: {
+          type: 'fraction',
+          subType: 'conditional',
+          operands: [num1, num2, den, isBigger ? 1 : 0],
+          operator: 'calculate',
+        },
+      }
+    }
+
     const commonDivisor = gcd(answerFraction, den);
     const simplifiedNum = answerFraction / commonDivisor;
     const simplifiedDen = den / commonDivisor;
@@ -635,6 +664,37 @@ const generateListNavigationProblem = (): MathProblem => {
     const smallest = sorted[0];
     const largest = sorted[sorted.length - 1];
     const resultNum = isSum ? smallest + largest : largest - smallest;
+
+    if (resultNum === 0) {
+      return {
+        problem: (
+          <div className="text-center">
+            <p>다음 카드 중 가장 큰 수와 가장 작은 수의 {op_text}을 구하세요.</p>
+            <div className="flex justify-center gap-2 my-2">
+              {nums.map(n => (
+                <div key={n} className="p-2 border rounded bg-gray-100">
+                  <Fraction numerator={n} denominator={den} />
+                </div>
+              ))}
+            </div>
+            <p>
+              답: <AnswerInput index={0} />
+            </p>
+          </div>
+        ),
+        answer: ["0"],
+        type: 'fraction',
+        subType: 'list-navigation',
+        storable: {
+          type: 'fraction',
+          subType: 'list-navigation',
+          operands: [...nums, den, isSum ? 1 : 0],
+          operator: 'calculate',
+        },
+      }
+    }
+
+
     const commonDivisor = gcd(resultNum, den);
     const simplifiedNum = resultNum / commonDivisor;
     const simplifiedDen = den / commonDivisor;
