@@ -67,22 +67,26 @@ export default function Header({ currentUser, onSolveProblemClick, countries, pr
         <div className="hidden md:flex gap-2 rounded-lg bg-background/50 p-1 backdrop-blur-sm">
           {continents.map((name, index) => {
             const isActive = index === 0;
+            const button = (
+              <Button
+                variant={isActive ? "secondary" : "ghost"}
+                size="sm"
+                className={cn(
+                  "disabled:opacity-50",
+                  isActive && "shadow-sm"
+                )}
+                disabled={!isActive}
+                aria-label={name}
+              >
+                {name}
+              </Button>
+            );
+
             return (
               <TooltipProvider key={name} delayDuration={100}>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Button
-                      variant={isActive ? "secondary" : "ghost"}
-                      size="sm"
-                      className={cn(
-                        "disabled:opacity-50",
-                        isActive && "shadow-sm"
-                      )}
-                      disabled={!isActive}
-                      aria-label={name}
-                    >
-                      {name}
-                    </Button>
+                    {isActive ? button : <span tabIndex={0}>{button}</span>}
                   </TooltipTrigger>
                   {!isActive && (
                     <TooltipContent>
