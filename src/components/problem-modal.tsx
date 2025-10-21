@@ -122,21 +122,27 @@ export default function ProblemModal({
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!problem) return;
-
+  
     const userAnswers = answers.map(parseAnswer);
     const correctAnswers = problem.answer;
-
+  
     const isCorrect = userAnswers.every((userAns, i) => {
       const correctAns = correctAnswers[i];
-      const userIsNumberLike = userAns === '' || !isNaN(Number(userAns));
-      const correctIsNumberLike = !isNaN(Number(correctAns));
-
-      if (userIsNumberLike && correctIsNumberLike) {
-        return Number(userAns || '0') === Number(correctAns);
+  
+      // Treat empty string as 0 for numeric comparisons
+      const userNum = userAns === '' ? 0 : parseFloat(userAns);
+      const correctNum = parseFloat(correctAns);
+  
+      // If both can be treated as numbers, compare them numerically
+      if (!isNaN(userNum) && !isNaN(correctNum)) {
+        // Use a small epsilon for float comparison to avoid precision issues
+        return Math.abs(userNum - correctNum) < 0.001;
       }
+  
+      // Otherwise, fall back to case-insensitive string comparison (for '<', '>', '=')
       return userAns.toLowerCase() === correctAns.toLowerCase();
     });
-
+  
     if (isCorrect) {
       toast({
         title: isInvasion ? "침략 성공!" : "정답입니다!",
@@ -149,7 +155,7 @@ export default function ProblemModal({
       toast({
         variant: 'destructive',
         title: isInvasion ? "침략 실패" : "오답입니다",
-        description: isInvasion ? "토큰을 잃고 영토 획득에 실패했습니다." : `정답: ${correctAnswers.join(', ')}. 오답노트에 추가되었습니다.`,
+        description: isInvasion ? "토큰을 잃고 영토 획득에 실패했습니다." : `정답: ${correctAnswers.join(', ')}`,
         action: <XCircle className="text-white" />,
       });
       if (onWrongAnswer) {

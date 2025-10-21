@@ -34,6 +34,23 @@ const areaLabels: Record<ProblemSubType, string> = {
   'fraction-comparison': '분수 크기 비교',
   'fraction-to-decimal': '분수->소수 변환',
   'decimal-to-fraction': '소수->분수 변환',
+  'direct-calculation': '직접 계산',
+  'process-decomposition': '과정 분해',
+  'vertical-calculation': '세로셈',
+  'error-correction': '오류 수정',
+  'multi-step-word-problem': '복합 문장제',
+  'unit-conversion-concept': '단위 변환',
+  'conditional-operation': '조건부 연산',
+  'find-and-operate': '찾아서 연산',
+  'fill-in-the-blanks-process': '과정 빈칸 채우기',
+  'fill-in-the-blanks-concept': '개념 빈칸 채우기',
+  'comparison': '크기 비교',
+  'word-problem': '문장제',
+  'error-analysis': '오류 분석',
+  'conditional': '조건부 문제',
+  'list-navigation': '목록 탐색',
+  'multiple-choice': '객관식',
+  'diagram': '도형 문제',
 };
 
 export default function ProfileSheet({ currentUser, userCountry, problemAttempts, wrongAnswers }: ProfileSheetProps) {
