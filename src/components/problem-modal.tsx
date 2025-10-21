@@ -88,35 +88,41 @@ export default function ProblemModal({
   };
   
   const renderProblemWithInputs = (node: React.ReactNode): React.ReactNode => {
-    return Children.map(node, child => {
-      if (!isValidElement(child)) {
+    let inputCounter = 0;
+    
+    const mapChildren = (children: React.ReactNode): React.ReactNode => {
+      return Children.map(children, child => {
+        if (!isValidElement(child)) {
+          return child;
+        }
+        
+        if (child.type === AnswerInput) {
+          const index = inputCounter++;
+          return (
+            <Input
+              type="text"
+              value={answers[index] || ''}
+              onChange={(e) => handleAnswerChange(index, e.target.value)}
+              className="inline-block w-20 h-8 text-center mx-1"
+              aria-label={`정답 입력 ${index + 1}`}
+              required
+              autoFocus={index === 0}
+            />
+          );
+        }
+        
+        if (child.props.children) {
+          return cloneElement(child, {
+            ...child.props,
+            children: mapChildren(child.props.children),
+          });
+        }
+        
         return child;
-      }
-      
-      if (child.type === AnswerInput) {
-        const index = child.props.index;
-        return (
-          <Input
-            type="text"
-            value={answers[index] || ''}
-            onChange={(e) => handleAnswerChange(index, e.target.value)}
-            className="inline-block w-20 h-8 text-center mx-1"
-            aria-label={`정답 입력 ${index + 1}`}
-            required
-            autoFocus={index === 0}
-          />
-        );
-      }
-      
-      if (child.props.children) {
-        return cloneElement(child, {
-          ...child.props,
-          children: renderProblemWithInputs(child.props.children),
-        });
-      }
-      
-      return child;
-    });
+      });
+    };
+    
+    return mapChildren(node);
   };
 
   const handleSubmit = async (e: FormEvent) => {
@@ -128,19 +134,18 @@ export default function ProblemModal({
   
     const isCorrect = userAnswers.every((userAns, i) => {
       const correctAns = correctAnswers[i];
+      const isNumericAnswer = !isNaN(parseFloat(correctAns));
   
-      // Treat empty string as 0 for numeric comparisons
-      const userNum = userAns === '' ? 0 : parseFloat(userAns);
-      const correctNum = parseFloat(correctAns);
-  
-      // If both can be treated as numbers, compare them numerically
-      if (!isNaN(userNum) && !isNaN(correctNum)) {
-        // Use a small epsilon for float comparison to avoid precision issues
+      if (isNumericAnswer) {
+        // For numeric answers, treat blank as 0.
+        const userNum = userAns === '' ? 0 : parseFloat(userAns);
+        const correctNum = parseFloat(correctAns);
+        // Use a small epsilon for float comparison to avoid precision issues.
         return Math.abs(userNum - correctNum) < 0.001;
+      } else {
+        // For non-numeric answers (e.g., '<', '>', '='), do a case-insensitive string comparison.
+        return userAns.toLowerCase() === correctAns.toLowerCase();
       }
-  
-      // Otherwise, fall back to case-insensitive string comparison (for '<', '>', '=')
-      return userAns.toLowerCase() === correctAns.toLowerCase();
     });
   
     if (isCorrect) {
