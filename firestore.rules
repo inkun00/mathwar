@@ -1,55 +1,58 @@
+
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Users can read all user/country/land data for game state.
-    // Writes are more restrictive.
-    
-    // /users/{userId}
-    // - Anyone can read user profiles for leaderboards, map display, etc.
-    // - A user can ONLY update their own profile.
-    // - HOWEVER, any authenticated user can update another user's 'tokens' and 'conqueredCountries' fields for game logic.
+    // Helper functions
+    function isUpdating(field) {
+      return request.resource.data.keys().hasOnly([field]);
+    }
+
+    function isUpdatingMultiple(fields) {
+      return request.resource.data.keys().hasAll(fields) && request.resource.data.keys().size() == fields.size();
+    }
+
     match /users/{userId} {
+      // Allow authenticated users to read any user profile for game state (e.g., leaderboard)
       allow get, list: if request.auth != null;
       
-      // Allow a user to update their own document for standard changes.
-      allow update: if request.auth.uid == userId;
+      // Allow users to update their own document,
+      // OR allow any authenticated user to update ONLY the 'tokens' or 'conqueredCountries' fields of another user.
+      // This is necessary for territory cut compensation and conquest tracking.
+      allow update: if (request.auth.uid == userId && !isUpdating('tokens') && !isUpdating('conqueredCountries') && !isUpdatingMultiple(['tokens', 'conqueredCountries'])) || 
+                    (request.auth != null && (isUpdating('tokens') || isUpdating('conqueredCountries') || isUpdatingMultiple(['tokens', 'conqueredCountries'])));
       
-      // Also allow updates ONLY to 'tokens' or 'conqueredCountries' fields by any authenticated user for game logic
-      // e.g., an attacker updating their conquered list, or the system compensating a player for lost territory.
-      allow update: if request.auth != null && 
-                      (request.resource.data.keys().hasOnly(['tokens']) || 
-                       request.resource.data.keys().hasOnly(['conqueredCountries']));
+      // Users can only create their own profile
+      allow create: if request.auth.uid == userId;
+
+      match /wrong_answers/{wrongAnswerId} {
+        // Only the user can manage their own wrong answers
+        allow list, get, create, update, delete: if request.auth != null && request.auth.uid == userId;
+      }
     }
-    
-    // /countries/{countryId}
-    // - Anyone can read country data.
-    // - A user can create a new country.
-    // - Any authenticated user can update a country's 'demised' status.
+
     match /countries/{countryId} {
-      allow get, list, create: if request.auth != null;
-      allow update: if request.auth != null && request.resource.data.keys().hasOnly(['demised']);
+      // Allow ANY user (authenticated or not) to read country data.
+      // This is required for the sign-up page where users select a country before they are fully logged in and have a profile.
+      allow get, list: if true;
+
+      // Allow authenticated users to create a new country
+      allow create: if request.auth != null;
+
+      // Allow any authenticated user to update a country, but ONLY to set 'demised' to true.
+      // This prevents other malicious updates.
+      allow update: if request.auth != null && request.resource.data.demised == true && isUpdating('demised');
     }
 
-    // /land_tiles/{landTileId}
-    // - Anyone can read tile data.
-    // - Anyone can create new tiles (claim neutral territory).
-    // - Anyone can update tiles (conquering).
     match /land_tiles/{landTileId} {
-      allow get, list, create, update: if request.auth != null;
+      // Allow any authenticated user to read, create, and update land tiles for gameplay
+      allow list, get, create, update: if request.auth != null;
     }
 
-    // /problem_attempts/{userId}/attempts/{attemptId}
-    // - A user can only create and read their own problem attempts.
-    match /problem_attempts/{userId}/attempts/{attemptId} {
-      allow get, list, create: if request.auth.uid == userId;
-    }
-
-    // /users/{userId}/wrong_answers/{wrongAnswerId}
-    // - A user can fully manage their own wrong answers list.
-    match /users/{userId}/wrong_answers/{wrongAnswerId} {
-        allow read, write, delete: if request.auth.uid == userId;
+    match /problem_attempts/{userId}/{doc=**} {
+        // Users can only create and read their own problem attempts
+        allow list, get, create: if request.auth != null && request.auth.uid == userId;
     }
   }
 }
