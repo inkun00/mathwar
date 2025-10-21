@@ -482,7 +482,7 @@ const generateWordProblem = (): MathProblem => {
 
 // 7. 조건 제시형
 const generateConditionalProblem = (): MathProblem => {
-  // "9/13보다 8/13만큼 더 큰 수 구하기"
+  // "9/13보다 8/13만큼 더 큰/작은 수 구하기"
   const isFraction = Math.random() > 0.5;
   const isBigger = Math.random() > 0.5;
   const op_text = isBigger ? '더 큰' : '더 작은';
@@ -570,7 +570,7 @@ const generateConditionalProblem = (): MathProblem => {
 
 // 8. 목록 탐색형
 const generateListNavigationProblem = (): MathProblem => {
-  // "[3/12, 6/12, 8/12, 11/12] 중에서 가장 큰 수와 가장 작은 수의 합 구하기"
+  // "[3/12, 6/12, 8/12, 11/12] 중에서 가장 큰 수와 가장 작은 수의 합/차 구하기"
   const isFraction = Math.random() > 0.5;
   const isSum = Math.random() > 0.5;
   const op_text = isSum ? '합' : '차';
