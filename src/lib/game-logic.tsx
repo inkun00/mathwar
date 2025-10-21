@@ -455,7 +455,7 @@ const generateComparisonProblem = (): MathProblem => {
     // 3.45 O 3.5
     const num1 = round(randomInt(10, 500) / 100, 2);
     const num2 = round(randomInt(10, 500) / 100, 2);
-    const correctSign = num1 > num2 ? '>' : num1 < val2 ? '<' : '=';
+    const correctSign = num1 > num2 ? '>' : num1 < num2 ? '<' : '=';
     return {
       problem: (
         <span>
