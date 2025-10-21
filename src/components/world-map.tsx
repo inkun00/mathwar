@@ -82,7 +82,7 @@ export default function WorldMap({ mapData, users, countries, onTileClick, canCo
       return countryColorMap.get(countryId) || null;
     }
     return null;
-  }
+  };
 
   const getTooltipContent = (tile: Tile): React.ReactNode => {
     if (!tile.ownerId) return '미개척지';
@@ -91,7 +91,7 @@ export default function WorldMap({ mapData, users, countries, onTileClick, canCo
     const countryId = owner.countryId;
     const countryName = countryNameMap.get(countryId);
     return `${countryName || '소속 없음'} (${owner.nickname})`;
-  }
+  };
   
   return (
     <div className="relative h-full w-full max-w-7xl overflow-auto rounded-lg border bg-card/80 p-2 shadow-inner backdrop-blur-sm md:p-4">

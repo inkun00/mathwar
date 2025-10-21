@@ -7,7 +7,6 @@ import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { RadioGroup, RadioGroupItem } from './ui/radio-group';
 import type { Country } from '@/lib/types';
@@ -113,12 +112,12 @@ export default function SignUpDetails() {
 
       // Create user profile
       await setDoc(doc(firestore, 'users', auth.currentUser.uid), {
+        id: auth.currentUser.uid,
         uid: auth.currentUser.uid,
         nickname,
         email: auth.currentUser.email,
         countryId,
         tokens: 1, // Start with 1 token
-        color: `hsl(${Math.random() * 360}, 60%, 70%)`, // This color is for the user avatar/icon, not the map
         conqueredCountries: [],
       });
 
@@ -126,7 +125,7 @@ export default function SignUpDetails() {
       // The page should auto-refresh via the listener in page.tsx
     } catch (error: any) {
       console.error('프로필 생성 오류:', error);
-      toast({ variant: 'destructive', title: '프로필 생성 오류', description: '프로필을 만드는 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.' });
+      toast({ variant: 'destructive', title: '프로필 생성 오류', description: error.message || '프로필을 만드는 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.' });
     } finally {
       setIsLoading(false);
     }

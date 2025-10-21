@@ -55,12 +55,9 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
   
   const allCountries = useMemo(() => {
     const aiApiCountries = aiUsers.map(ai => ({...ai.country, id: ai.countryId, createdBy: 'ai', color: ai.country.color}));
-    const humanCountries = countries.map(c => {
-        const userWithCountry = users.find(u => u.countryId === c.id);
-        return {...c, color: userWithCountry?.color || "hsl(0, 0%, 50%)"};
-    })
+    const humanCountries = countries.map(c => ({...c}));
     return [...humanCountries, ...aiApiCountries];
-  }, [countries, users]);
+  }, [countries]);
 
   const mapData = useMemo(() => {
     const map: Tile[][] = Array.from({ length: MAP_HEIGHT }, (_, y) =>
@@ -81,10 +78,12 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
     return map;
   }, [landTiles]);
   
-  const userTiles = useMemo(() => 
-    landTiles.filter(tile => tile.ownerId === currentUser?.id),
-    [landTiles, currentUser?.id]
-  );
+  const userCountryTiles = useMemo(() => {
+    if (!currentUser) return [];
+    const countryMembers = allUsers.filter(u => u.countryId === currentUser.countryId);
+    const memberIds = new Set(countryMembers.map(u => u.id));
+    return landTiles.filter(tile => tile.ownerId && memberIds.has(tile.ownerId));
+  }, [landTiles, allUsers, currentUser]);
   
   const isDemise = useMemo(() => {
       if (!currentUser) return false;
@@ -381,10 +380,14 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
     if (!currentUser || (currentUser.tokens ?? 0) <= 0 || isProcessingClick) {
       return false;
     }
-
-    if (tile.ownerId === currentUser.id) return false;
-
-    if (userTiles.length === 0) {
+    
+    // 타일 소유자가 같은 국가 소속인지 확인
+    const owner = tile.ownerId ? allUsers.find(u => u.id === tile.ownerId) : null;
+    if (owner && owner.countryId === currentUser.countryId) {
+      return false;
+    }
+    
+    if (userCountryTiles.length === 0) {
       // Rule for the very first tile placement.
       if (tile.ownerId !== null || !isLand(tile.x, tile.y)) {
         return false;
@@ -406,7 +409,7 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
       return true; // Far enough from all other players.
     }
 
-    return isAdjacent(tile.x, tile.y, userTiles);
+    return isAdjacent(tile.x, tile.y, userCountryTiles);
   };
   
   const handleProblemModalClose = (open: boolean) => {
