@@ -73,19 +73,15 @@ TileComponent.displayName = "TileComponent";
 export default function WorldMap({ mapData, users, countries, onTileClick, canConquer, zoomLevel }: WorldMapProps) {
   const countryColorMap = useMemo(() => new Map(countries.map(c => [c.id, c.color])), [countries]);
   const userCountryMap = useMemo(() => new Map(users.map(u => [u.id, u.countryId])), [users]);
-  const userColorMap = useMemo(() => new Map(users.map(u => [u.id, u.color])), [users]);
   const countryNameMap = useMemo(() => new Map(countries.map(c => [c.id, c.name])), [countries]);
 
   const getTileOwnerColor = (ownerId: string | null): string | null => {
     if (!ownerId) return null;
     const countryId = userCountryMap.get(ownerId);
     if (countryId) {
-      // Prefer country color if it exists
-      const countryColor = countryColorMap.get(countryId);
-      if (countryColor) return countryColor;
+      return countryColorMap.get(countryId) || null;
     }
-    // Fallback to the user's individual color if country color is missing
-    return userColorMap.get(ownerId) || null;
+    return null;
   }
 
   const getTooltipContent = (tile: Tile): React.ReactNode => {
