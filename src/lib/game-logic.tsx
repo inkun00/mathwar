@@ -76,7 +76,6 @@ export const AnswerInput = ({ index }: { index: number }) => (
 const generateDirectCalculationProblem = (): MathProblem => {
   const isFraction = Math.random() > 0.5;
   if (isFraction) {
-    // 예시: 3 1/8 - 6/8 또는 5 - 2 1/7
     if (Math.random() > 0.5) {
       // 5 - 2 1/7
       const int1 = randomInt(3, 8);
@@ -284,8 +283,8 @@ const generateProcessDecompositionProblem = (): MathProblem => {
           <span>=</span>
           <span>
             ({int1} + <AnswerInput index={0} />) + (
-            <Fraction numerator={num1} denominator={den} /> +{' '}
-            <Fraction numerator={<AnswerInput index={1} />} denominator={den} />
+            <Fraction numerator={<AnswerInput index={1} />} denominator={den} /> +{' '}
+            <Fraction numerator={num2} denominator={den} />
             )
           </span>
           <span>=</span>
@@ -303,7 +302,7 @@ const generateProcessDecompositionProblem = (): MathProblem => {
       ),
       answer: [
         String(int2),
-        String(num2),
+        String(num1),
         String(int1 + int2),
         String(num1 + num2),
         String(int1 + int2),
@@ -602,7 +601,7 @@ const generateListNavigationProblem = (): MathProblem => {
               ))}
             </div>
             <p>
-              <AnswerInput index={0} />
+              답: <AnswerInput index={0} />
             </p>
           </div>
         ),
@@ -630,7 +629,7 @@ const generateListNavigationProblem = (): MathProblem => {
             ))}
           </div>
           <p>
-            <Fraction numerator={<AnswerInput index={0} />} denominator={<AnswerInput index={1} />} />
+            답: <Fraction numerator={<AnswerInput index={0} />} denominator={<AnswerInput index={1} />} />
           </p>
         </div>
       ),
@@ -668,7 +667,7 @@ const generateListNavigationProblem = (): MathProblem => {
             ))}
           </div>
           <p>
-            <AnswerInput index={0} />
+            답: <AnswerInput index={0} />
           </p>
         </div>
       ),
@@ -687,8 +686,6 @@ const generateListNavigationProblem = (): MathProblem => {
 
 
 export const generateProblemFromData = (data: StorableProblem): MathProblem => {
-  // This is a placeholder for re-generating problems from stored data.
-  // For now, it's safer to generate a new problem of a similar type.
   const problemMap: Record<ProblemSubType, () => MathProblem> = {
     'direct-calculation': generateDirectCalculationProblem,
     'process-decomposition': generateProcessDecompositionProblem,
@@ -697,14 +694,13 @@ export const generateProblemFromData = (data: StorableProblem): MathProblem => {
     'word-problem': generateWordProblem,
     conditional: generateConditionalProblem,
     'list-navigation': generateListNavigationProblem,
-    // Add other types here as they are implemented
-    'vertical-calculation': generateDirectCalculationProblem, // Fallback
-    'error-correction': generateDirectCalculationProblem, // Fallback
-    'multi-step-word-problem': generateWordProblem, // Fallback
-    'find-and-operate': generateListNavigationProblem, // Fallback
-    'error-analysis': generateComparisonProblem, // Fallback
-    'multiple-choice': generateComparisonProblem, // Fallback
-    diagram: generateDirectCalculationProblem, // Fallback
+    'vertical-calculation': generateDirectCalculationProblem, 
+    'error-correction': generateDirectCalculationProblem, 
+    'multi-step-word-problem': generateWordProblem, 
+    'find-and-operate': generateListNavigationProblem, 
+    'error-analysis': generateComparisonProblem, 
+    'multiple-choice': generateComparisonProblem,
+    diagram: generateDirectCalculationProblem, 
     'decimal-add': generateDirectCalculationProblem,
     'decimal-subtract': generateDirectCalculationProblem,
     'fraction-add-same-den': generateDirectCalculationProblem,
