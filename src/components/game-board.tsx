@@ -202,10 +202,8 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
     }
 
     if (territories.length > 1) {
-        // Sort by size, descending
         territories.sort((a, b) => b.length - a.length);
 
-        // Keep the largest, neutralize the rest
         const tilesToNeutralize = territories.slice(1).flat();
         
         if (tilesToNeutralize.length > 0) {
@@ -214,12 +212,31 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
                 const tileRef = doc(firestore, "land_tiles", tile.id);
                 batch.update(tileRef, { ownerId: null });
             });
+
+            // Add token compensation
+            const tokensToCompensate = Math.round(tilesToNeutralize.length / 2);
+            if (tokensToCompensate > 0) {
+              const originalOwnerRef = doc(firestore, "users", originalOwnerId);
+              batch.update(originalOwnerRef, { tokens: increment(tokensToCompensate) });
+            }
+
             await batch.commit();
 
+            const ownerIsCurrentUser = originalOwnerId === currentUser?.id;
+            const toastTitle = ownerIsCurrentUser ? "영토 분단!" : "공격 성공!";
+            let toastDescription = `상대방의 영토가 분단되어 일부가 미개척지가 되었습니다.`;
+            if(ownerIsCurrentUser) {
+              toastDescription = `영토가 분단되어 타일 ${tilesToNeutralize.length}개를 잃고 토큰 ${tokensToCompensate}개를 얻었습니다.`
+            } else if (tokensToCompensate > 0) {
+              const originalOwner = allUsers.find(u => u.id === originalOwnerId);
+              const ownerName = originalOwner?.nickname || '상대방';
+              toastDescription = `${ownerName}에게 ${tokensToCompensate}개의 보상 토큰이 지급되었습니다.`
+            }
+
             toast({
-                variant: "destructive",
-                title: "영토 분단!",
-                description: `상대방의 영토가 분단되어 일부가 미개척지가 되었습니다.`,
+                variant: ownerIsCurrentUser ? "destructive" : "default",
+                title: toastTitle,
+                description: toastDescription,
             });
         }
     }
