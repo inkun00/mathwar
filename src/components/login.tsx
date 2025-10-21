@@ -94,7 +94,7 @@ export default function Login() {
           </div>
           <CardTitle className="text-3xl font-bold">수학 전쟁</CardTitle>
           <CardDescription className="text-lg">
-            {isSignUp ? '새로운 계정을 만들어 영토를 정복하세요.' : '소수점 계산으로 영토를 확장하는 전략 게임'}
+            {isSignUp ? '새로운 계정을 만들어 영토를 정복하세요.' : '수학 문제를 풀고 영토를 확장하자'}
           </CardDescription>
         </CardHeader>
         <CardContent>
