@@ -624,7 +624,7 @@ const generateListNavigationProblem = (): MathProblem => {
           <div className="flex justify-center gap-2 my-2">
             {nums.map(n => (
               <div key={n} className="p-2 border rounded bg-gray-100">
-                <Fraction numerator={n} denominator={den} />
+                  <Fraction numerator={n} denominator={den} />
               </div>
             ))}
           </div>
