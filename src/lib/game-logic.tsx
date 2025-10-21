@@ -266,18 +266,32 @@ const generateProcessDecompositionProblem = (): MathProblem => {
     const num1 = randomInt(1, Math.floor(den / 2) - 1);
     const int2 = randomInt(1, 5);
     const num2 = randomInt(1, Math.floor(den / 2) - 1);
+    const simplifiedNum = (num1 + num2) / gcd(num1 + num2, den);
+    const simplifiedDen = den / gcd(num1 + num2, den);
+
     return {
       problem: (
-        <span>
-          <MixedFraction integer={int1} numerator={num1} denominator={den} /> +{' '}
-          <MixedFraction integer={int2} numerator={num2} denominator={den} /> = (
-          {int1} + <AnswerInput index={0} />) + (<Fraction numerator={num1} denominator={den} /> +{' '}
-          <Fraction numerator={<AnswerInput index={1} />} denominator={den} />) = <AnswerInput index={2} /> +{' '}
-          <Fraction numerator={<AnswerInput index={3} />} denominator={den} /> ={' '} 
-          <MixedFraction 
-            integer={<AnswerInput index={4} />} 
-            numerator={<AnswerInput index={5} />} 
-            denominator={den} 
+        <span className="flex flex-wrap items-center justify-center gap-x-2">
+          <MixedFraction integer={int1} numerator={num1} denominator={den} />
+          <span>+</span>
+          <MixedFraction integer={int2} numerator={num2} denominator={den} />
+          <span>=</span>
+          <span>
+            ({int1} + <AnswerInput index={0} />) + (
+            <Fraction numerator={num1} denominator={den} /> +{' '}
+            <Fraction numerator={<AnswerInput index={1} />} denominator={den} />
+            )
+          </span>
+          <span>=</span>
+          <span>
+            <AnswerInput index={2} /> +{' '}
+            <Fraction numerator={<AnswerInput index={3} />} denominator={den} />
+          </span>
+          <span>=</span>
+          <MixedFraction
+            integer={<AnswerInput index={4} />}
+            numerator={<AnswerInput index={5} />}
+            denominator={simplifiedDen}
           />
         </span>
       ),
@@ -287,7 +301,7 @@ const generateProcessDecompositionProblem = (): MathProblem => {
         String(int1 + int2),
         String(num1 + num2),
         String(int1 + int2),
-        String(num1 + num2),
+        String(simplifiedNum),
       ],
       type: 'fraction',
       subType: 'fraction-add-mixed',
