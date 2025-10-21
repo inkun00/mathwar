@@ -16,7 +16,7 @@ import { useState, type FormEvent, useEffect, useMemo, Children, cloneElement, i
 import { CheckCircle, XCircle, Swords } from 'lucide-react';
 import { useFirestore } from '@/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { generateProblemFromData, problemNodeToString } from '@/lib/game-logic';
+import { generateProblemFromData, problemNodeToString, AnswerInput } from '@/lib/game-logic';
 
 interface ProblemModalProps {
   isOpen: boolean;
@@ -81,15 +81,14 @@ export default function ProblemModal({
     }
   };
   
-  // Custom renderer to replace placeholders with actual input fields
   const renderProblemWithInputs = (node: React.ReactNode): React.ReactNode => {
     return Children.map(node, child => {
       if (!isValidElement(child)) {
         return child;
       }
       
-      if (child.props['data-answer-input'] !== undefined) {
-        const index = child.props['data-answer-input'];
+      if (child.type === AnswerInput) {
+        const index = child.props.index;
         return (
           <Input
             type="text"
@@ -98,6 +97,7 @@ export default function ProblemModal({
             className="inline-block w-20 h-8 text-center mx-1"
             aria-label={`정답 입력 ${index + 1}`}
             required
+            autoFocus={index === 0}
           />
         );
       }
@@ -120,13 +120,12 @@ export default function ProblemModal({
     const userAnswers = answers.map(parseAnswer);
     const correctAnswers = problem.answer;
 
-    // Use a loose comparison for numeric values (e.g., '1.5' == '1.50')
     const isCorrect = userAnswers.every((userAns, i) => {
         const correctAns = correctAnswers[i];
         if (!isNaN(Number(userAns)) && !isNaN(Number(correctAns))) {
             return Number(userAns) === Number(correctAns);
         }
-        return userAns === correctAns;
+        return userAns.toLowerCase() === correctAns.toLowerCase();
     });
 
     if (isCorrect) {
