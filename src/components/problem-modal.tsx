@@ -134,11 +134,10 @@ export default function ProblemModal({
   
     const isCorrect = userAnswers.length === correctAnswers.length && userAnswers.every((userAns, i) => {
       const correctAns = correctAnswers[i];
-  
-      // Treat user's empty input as '0' only if the correct answer is '0' or numeric.
-      // Otherwise, an empty string is just an empty string.
-      const processedUserAns = (userAns === '' && (correctAns === '0' || !isNaN(parseFloat(correctAns)))) ? '0' : userAns;
-  
+      
+      // Treat user's empty input as '0' only if the correct answer is '0'.
+      const processedUserAns = (userAns === '' && correctAns === '0') ? '0' : userAns;
+
       // Compare them as strings. This is the simplest and most robust way.
       // e.g., '17' vs '17', '17.0' vs '17.0', '>' vs '>', '0' vs '0'
       return String(processedUserAns).trim() === String(correctAns).trim();
