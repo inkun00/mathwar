@@ -13,11 +13,15 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import type { MathProblem, StorableProblem } from '@/lib/types';
-import { useState, type FormEvent, useEffect, useMemo, useRef } from 'react';
+import { useState, type FormEvent, useEffect, useMemo } from 'react';
 import { CheckCircle, XCircle, Swords } from 'lucide-react';
 import { useFirestore } from '@/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { generateProblemFromData, problemNodeToString, AnswerInput } from '@/lib/game-logic';
+import {
+  generateProblemFromData,
+  problemNodeToString,
+  AnswerInput,
+} from '@/lib/game-logic';
 
 interface ProblemModalProps {
   isOpen: boolean;
@@ -45,7 +49,7 @@ export default function ProblemModal({
   const [answers, setAnswers] = useState<string[]>([]);
   const { toast } = useToast();
   const firestore = useFirestore();
-  
+
   const problem = useMemo(() => {
     if (reviewProblem && reviewProblem.operands) {
       return generateProblemFromData(reviewProblem);
@@ -70,7 +74,7 @@ export default function ProblemModal({
     newAnswers[index] = value;
     setAnswers(newAnswers);
   };
-
+  
   const renderProblemWithInputs = (node: React.ReactNode): React.ReactNode => {
     let inputIndex = 0;
 
@@ -80,14 +84,14 @@ export default function ProblemModal({
           return child;
         }
 
-        // Check if the child is the component we want to replace
+        // If the child is the component we want to replace
         if (child.type === AnswerInput) {
           const currentIndex = inputIndex++;
           return (
             <Input
               type="text"
               value={answers[currentIndex] || ''}
-              onChange={(e) => handleAnswerChange(currentIndex, e.target.value)}
+              onChange={e => handleAnswerChange(currentIndex, e.target.value)}
               className="inline-block w-20 h-8 text-center mx-1"
               aria-label={`정답 입력 ${currentIndex + 1}`}
               required
@@ -100,10 +104,10 @@ export default function ProblemModal({
         if (child.props.children) {
           return React.cloneElement(child, {
             ...child.props,
-            children: processChildren(child.props.children)
+            children: processChildren(child.props.children),
           });
         }
-        
+
         return child;
       });
     };
@@ -111,50 +115,63 @@ export default function ProblemModal({
     return processChildren(node);
   };
 
-
   const recordAttempt = async (isCorrect: boolean) => {
     if (!userId || !firestore || !problem) return;
     try {
-      await addDoc(collection(firestore, 'problem_attempts', userId, 'attempts'), {
-        userId: userId,
-        unit: problem.type,
-        area: problem.subType,
-        correct: isCorrect,
-        timestamp: serverTimestamp(),
-        isReview: isReview,
-        problem: problemNodeToString(problem.problem),
-      });
+      await addDoc(
+        collection(firestore, 'problem_attempts', userId, 'attempts'),
+        {
+          userId: userId,
+          unit: problem.type,
+          area: problem.subType,
+          correct: isCorrect,
+          timestamp: serverTimestamp(),
+          isReview: isReview,
+          problem: problemNodeToString(problem.problem),
+        }
+      );
     } catch (error) {
-      console.error("문제 풀이 기록 오류:", error);
+      console.error('문제 풀이 기록 오류:', error);
     }
   };
-  
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!problem) return;
-  
+
     const { answer: correctAnswers } = problem;
-  
-    const isCorrect = correctAnswers.length === answers.length &&
+
+    const isCorrect =
+      correctAnswers.length === answers.length &&
       answers.every((userAns, i) => {
         const correctAns = correctAnswers[i];
-        // Handle cases where empty input should be treated as 0 for numeric answers
-        const processedUserAns = (userAns.trim() === '' && !isNaN(Number(correctAns))) ? '0' : userAns.trim();
-        return processedUserAns === correctAns.trim();
+        // Special case for empty input which should match '0' for numeric-like answers
+        const processedUserAns = userAns.trim() === '' ? '0' : userAns.trim();
+        const processedCorrectAns = correctAns.trim() === '' ? '0' : correctAns.trim();
+        
+        // If the expected answer is '0', an empty input is correct.
+        if (processedCorrectAns === '0' && userAns.trim() === '') {
+            return true;
+        }
+
+        return processedUserAns === processedCorrectAns;
       });
-  
+
     if (isCorrect) {
       toast({
-        title: isInvasion ? "침략 성공!" : "정답입니다!",
-        description: isInvasion ? "적의 영토를 획득했습니다." : "확장 토큰을 획득했습니다.",
-        className: 'border-green-500 bg-green-50 text-green-700 dark:bg-green-900/50 dark:text-green-300 dark:border-green-700',
+        title: isInvasion ? '침략 성공!' : '정답입니다!',
+        description: isInvasion
+          ? '적의 영토를 획득했습니다.'
+          : '확장 토큰을 획득했습니다.',
+        className:
+          'border-green-500 bg-green-50 text-green-700 dark:bg-green-900/50 dark:text-green-300 dark:border-green-700',
         action: <CheckCircle className="text-green-500" />,
       });
       await onCorrectAnswer(problem);
     } else {
-       toast({
+      toast({
         variant: 'destructive',
-        title: "오답입니다",
+        title: '오답입니다',
         description: (
           <div>
             <p>입력: [{answers.join(', ')}]</p>
@@ -167,15 +184,21 @@ export default function ProblemModal({
         await onWrongAnswer(problem);
       }
     }
-    
+
     await recordAttempt(isCorrect);
     onOpenChange(false);
   };
 
-  const title = isInvasion ? '침략 문제' : (isReview ? '오답노트 문제' : '문제 풀기');
+  const title = isInvasion
+    ? '침략 문제'
+    : isReview
+    ? '오답노트 문제'
+    : '문제 풀기';
   const description = isInvasion
     ? '문제를 맞춰 적의 영토를 획득하세요!'
-    : (isReview ? '틀렸던 문제입니다. 다시 풀어보세요!' : '정답을 입력하여 확장 토큰을 획득하세요.');
+    : isReview
+    ? '틀렸던 문제입니다. 다시 풀어보세요!'
+    : '정답을 입력하여 확장 토큰을 획득하세요.';
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -183,15 +206,15 @@ export default function ProblemModal({
         <form onSubmit={handleSubmit}>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-                {isInvasion && <Swords className="text-destructive" />}
-                {title}
+              {isInvasion && <Swords className="text-destructive" />}
+              {title}
             </DialogTitle>
-            <DialogDescription>
-              {description}
-            </DialogDescription>
+            <DialogDescription>{description}</DialogDescription>
           </DialogHeader>
           <div className="my-4 text-center text-lg font-semibold font-code tracking-wider bg-muted p-4 rounded-md min-h-[120px] flex items-center justify-center leading-relaxed">
-            {problem ? renderProblemWithInputs(problem.problem) : "문제를 불러오는 중..."}
+            {problem
+              ? renderProblemWithInputs(problem.problem)
+              : '문제를 불러오는 중...'}
           </div>
           <DialogFooter>
             <Button type="submit">정답 제출</Button>
