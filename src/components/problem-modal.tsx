@@ -50,7 +50,7 @@ export default function ProblemModal({
   const firestore = useFirestore();
 
   const problem = useMemo(() => {
-    if (reviewProblem) {
+    if (reviewProblem && reviewProblem.operands) {
       return generateProblemFromData(reviewProblem);
     }
     return initialProblem;
@@ -128,26 +128,36 @@ export default function ProblemModal({
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!problem) return;
-  
+
     const userAnswers = answers.map(parseAnswer);
     const correctAnswers = problem.answer;
-  
-    const isCorrect = userAnswers.every((userAns, i) => {
-      const correctAns = correctAnswers[i];
-      const isNumericAnswer = !isNaN(parseFloat(correctAns));
-  
-      if (isNumericAnswer) {
+    
+    const isCorrect = userAnswers.length === correctAnswers.length && userAnswers.every((userAns, i) => {
+        const correctAns = correctAnswers[i];
+        
+        // Check if the answer is a non-numeric symbol like '<', '>', or '='
+        if (isNaN(parseFloat(correctAns)) && isNaN(parseFloat(userAns))) {
+            return userAns.toLowerCase() === correctAns.toLowerCase();
+        }
+        
         // For numeric answers, treat blank as 0.
         const userNum = userAns === '' ? 0 : parseFloat(userAns);
         const correctNum = parseFloat(correctAns);
-        // Use a small epsilon for float comparison to avoid precision issues.
+
+        // Check for NaN after parsing
+        if (isNaN(userNum) || isNaN(correctNum)) {
+            return false;
+        }
+
+        // If it's an integer, compare directly.
+        if (!correctAns.includes('.') && userAns.indexOf('.') === -1) {
+             return parseInt(userAns, 10) === parseInt(correctAns, 10);
+        }
+        
+        // For floating point numbers, use an epsilon comparison.
         return Math.abs(userNum - correctNum) < 0.001;
-      } else {
-        // For non-numeric answers (e.g., '<', '>', '='), do a case-insensitive string comparison.
-        return userAns.toLowerCase() === correctAns.toLowerCase();
-      }
     });
-  
+
     if (isCorrect) {
       toast({
         title: isInvasion ? "침략 성공!" : "정답입니다!",
