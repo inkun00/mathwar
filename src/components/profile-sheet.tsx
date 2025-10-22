@@ -307,13 +307,18 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
                 <div className="flex justify-between items-center">
                   <span className="font-medium text-muted-foreground">국가</span>
                   <div className="flex items-center gap-2">
-                    <button 
-                        onClick={() => currentUser.isCountryOwner && setFlagEditorOpen(true)} 
-                        disabled={!currentUser.isCountryOwner}
-                        className={cn(currentUser.isCountryOwner && "cursor-pointer hover:opacity-80 transition-opacity")}
-                    >
-                        {userCountry && <FlagDisplay flagData={userCountry.flag} width={32} />}
-                    </button>
+                    {currentUser.isCountryOwner ? (
+                       <button 
+                            onClick={() => setFlagEditorOpen(true)}
+                            className="cursor-pointer hover:opacity-80 transition-opacity"
+                        >
+                            {userCountry && <FlagDisplay flagData={userCountry.flag} width={40} />}
+                       </button>
+                    ) : (
+                        <div>
+                             {userCountry && <FlagDisplay flagData={userCountry.flag} width={40} />}
+                        </div>
+                    )}
                     <Badge variant="secondary" style={{ backgroundColor: userCountry?.color }}>{userCountry?.name || '미지정'}</Badge>
                   </div>
                 </div>

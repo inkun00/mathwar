@@ -16,7 +16,7 @@ interface FlagEditorProps {
   onOpenChange: (open: boolean) => void;
 }
 
-const FLAG_GRID_WIDTH = 40;
+const FLAG_GRID_WIDTH = 32;
 const FLAG_GRID_HEIGHT = 20;
 const defaultColor = "#ffffff";
 const colors = [
@@ -71,12 +71,12 @@ export default function FlagEditor({ country, isOpen, onOpenChange }: FlagEditor
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl">
         <DialogHeader>
-          <DialogTitle>국기 디자인 (40x20)</DialogTitle>
+          <DialogTitle>국기 디자인 (32x20)</DialogTitle>
         </DialogHeader>
         <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-6 items-start">
           {/* Flag Grid */}
           <div
-            className="grid touch-none cursor-pointer border aspect-[2/1]"
+            className="grid touch-none cursor-pointer border aspect-[1.6/1]"
             style={{ gridTemplateColumns: `repeat(${FLAG_GRID_WIDTH}, 1fr)` }}
             onMouseDown={(e) => e.preventDefault()} // Prevent text selection
           >
