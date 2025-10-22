@@ -307,7 +307,13 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
                 <div className="flex justify-between items-center">
                   <span className="font-medium text-muted-foreground">국가</span>
                   <div className="flex items-center gap-2">
-                    {userCountry && <FlagDisplay flagData={userCountry.flag} size={20} />}
+                    <button 
+                        onClick={() => currentUser.isCountryOwner && setFlagEditorOpen(true)} 
+                        disabled={!currentUser.isCountryOwner}
+                        className={cn(currentUser.isCountryOwner && "cursor-pointer hover:opacity-80 transition-opacity")}
+                    >
+                        {userCountry && <FlagDisplay flagData={userCountry.flag} width={32} />}
+                    </button>
                     <Badge variant="secondary" style={{ backgroundColor: userCountry?.color }}>{userCountry?.name || '미지정'}</Badge>
                   </div>
                 </div>
@@ -323,11 +329,6 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
                   <span className="font-medium text-muted-foreground">게임 포인트</span>
                   <span className="font-semibold">{currentUser.gamePoints ?? 0} 포인트</span>
                 </div>
-                {currentUser.isCountryOwner && userCountry && (
-                    <Button variant="outline" className="w-full" onClick={() => setFlagEditorOpen(true)}>
-                        <Pencil className="mr-2 h-4 w-4" /> 국기 수정
-                    </Button>
-                )}
               </CardContent>
             </Card>
           </div>

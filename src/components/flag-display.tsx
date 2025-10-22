@@ -7,8 +7,8 @@ interface FlagDisplayProps {
   className?: string;
 }
 
-const FLAG_GRID_WIDTH = 20;
-const FLAG_GRID_HEIGHT = 10;
+const FLAG_GRID_WIDTH = 40;
+const FLAG_GRID_HEIGHT = 20;
 const ASPECT_RATIO = FLAG_GRID_WIDTH / FLAG_GRID_HEIGHT;
 
 export default function FlagDisplay({ flagData, width = 48, className }: FlagDisplayProps) {

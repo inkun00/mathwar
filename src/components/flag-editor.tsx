@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState } from "react";
@@ -17,8 +16,8 @@ interface FlagEditorProps {
   onOpenChange: (open: boolean) => void;
 }
 
-const FLAG_GRID_WIDTH = 20;
-const FLAG_GRID_HEIGHT = 10;
+const FLAG_GRID_WIDTH = 40;
+const FLAG_GRID_HEIGHT = 20;
 const defaultColor = "#ffffff";
 const colors = [
   "#ffffff", "#000000", "#ff0000", "#00ff00", "#0000ff", "#ffff00", "#ff00ff", "#00ffff",
@@ -72,7 +71,7 @@ export default function FlagEditor({ country, isOpen, onOpenChange }: FlagEditor
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl">
         <DialogHeader>
-          <DialogTitle>국기 디자인 (20x10)</DialogTitle>
+          <DialogTitle>국기 디자인 (40x20)</DialogTitle>
         </DialogHeader>
         <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-6 items-start">
           {/* Flag Grid */}
