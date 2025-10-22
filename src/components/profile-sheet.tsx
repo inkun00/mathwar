@@ -184,12 +184,12 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
   }, [currentUser.conqueredCountries, countries]);
 
   const countryMembers = useMemo(() => {
-    if (!currentUser.countryId) return [];
+    if (!currentUser.countryId || !users) return [];
     return users.filter(u => u.countryId === currentUser.countryId);
   }, [users, currentUser.countryId]);
   
   const adjacentCountries = useMemo(() => {
-    if (!currentUser || !countries) return [];
+    if (!currentUser || !countries || !landTiles || !users) return [];
     const myTiles = landTiles.filter(t => t.ownerId === currentUser.id);
     const adjacentCountryIds = new Set<string>();
 
