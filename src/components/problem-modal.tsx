@@ -132,15 +132,21 @@ export default function ProblemModal({
     const userAnswers = answers.map(parseAnswer);
     const correctAnswers = problem.answer;
   
-    const isCorrect = userAnswers.length === correctAnswers.length && userAnswers.every((userAns, i) => {
-      const correctAns = correctAnswers[i];
-      
-      // Treat user's empty input as '0' only if the correct answer is '0'.
-      const processedUserAns = (userAns === '' && correctAns === '0') ? '0' : userAns;
+    const isCorrect =
+      userAnswers.length === correctAnswers.length &&
+      userAnswers.every((userAns, i) => {
+        const correctAns = correctAnswers[i];
+        // Treat blank as "0" only if the correct answer is also "0" or a numeric representation of 0.
+        // This avoids turning blanks into 0 for non-numeric answers like ">".
+        const processedUserAns = (userAns === '' && String(correctAns) === '0') ? '0' : userAns;
+        return String(processedUserAns).trim() === String(correctAns).trim();
+      });
 
-      // Compare them as strings. This is the simplest and most robust way.
-      // e.g., '17' vs '17', '17.0' vs '17.0', '>' vs '>', '0' vs '0'
-      return String(processedUserAns).trim() === String(correctAns).trim();
+    // Debugging toast
+    toast({
+      variant: "default",
+      title: "정답 데이터 확인",
+      description: `사용자 입력: [${userAnswers.join(', ')}] | 시스템 정답: [${correctAnswers.join(', ')}]`,
     });
   
     if (isCorrect) {
