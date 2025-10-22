@@ -88,12 +88,12 @@ const generateDirectCalculationProblem = (): MathProblem => {
     let num1_raw = round(randomInt(11, 999) / 100, 2);
     let num2_raw = round(randomInt(11, 999) / 100, 2);
 
-    let num1 = num1_raw;
-    let num2 = num2_raw;
-    let operator, answer, subType, storable: StorableProblem;
+    let num1, num2, operator, answer, subType, storable: StorableProblem;
     let problemNode: React.ReactNode;
 
     if (isAddition) {
+        num1 = num1_raw;
+        num2 = num2_raw;
         operator = '+';
         answer = round(num1 + num2, 2);
         subType = 'decimal-add';
@@ -196,14 +196,17 @@ const generateConditionalProblem = (): MathProblem => {
   let num1_raw = round(randomInt(100, 800) / 100, 2);
   let num2_raw = round(randomInt(10, 500) / 100, 2);
   
-  let num1 = num1_raw;
-  let num2 = num2_raw;
+  let num1, num2;
   
-  const answer = isBigger ? round(num1 + num2, 2) : round(Math.max(num1, num2) - Math.min(num1, num2), 2);
-  if (!isBigger) {
-      num1 = Math.max(num1_raw, num2_raw);
-      num2 = Math.min(num1_raw, num2_raw);
+  if (isBigger) {
+    num1 = num1_raw;
+    num2 = num2_raw;
+  } else {
+    num1 = Math.max(num1_raw, num2_raw);
+    num2 = Math.min(num1_raw, num2_raw);
   }
+
+  const answer = isBigger ? round(num1 + num2, 2) : round(num1 - num2, 2);
 
 
   return {
@@ -340,6 +343,7 @@ const generateErrorCorrectionProblem = (): MathProblem => {
     
     if (errorType === 1) { // Decimal alignment error
         wrongAnswer = isAddition ? round(num1*10 + num2, 2) : round(num1*10 - num2, 2);
+        if(wrongAnswer < 0) wrongAnswer = round(num1*10 + num2, 2); // Ensure it's not negative
     } else { // Calculation error in one digit
         let errorDigit = randomInt(1, 9) / 100;
         wrongAnswer = round(correctAnswer + (Math.random() > 0.5 ? errorDigit : -errorDigit), 2);
@@ -395,45 +399,6 @@ const generateDecompositionProblem = (): MathProblem => {
 }
 
 
-const generateMultiComparisonProblem = (): MathProblem => {
-    const problems = [
-        { key: '㉠', num1: round(randomInt(100, 400) / 100, 2), num2: round(randomInt(100, 400) / 100, 2) },
-        { key: '㉡', num1: round(randomInt(100, 400) / 100, 2), num2: round(randomInt(100, 400) / 100, 2) },
-        { key: '㉢', num1: round(randomInt(100, 400) / 100, 2), num2: round(randomInt(100, 400) / 100, 2) },
-    ];
-    
-    const results = problems.map(p => ({
-        key: p.key,
-        value: round(p.num1 + p.num2, 2),
-    }));
-
-    results.sort((a, b) => b.value - a.value);
-    const answer = results.map(r => r.key).join(',');
-
-    return {
-        problem: (
-            <div className="space-y-2 text-base">
-                <p>계산 결과가 큰 것부터 차례로 기호를 써 보세요.</p>
-                <div className="grid grid-cols-3 gap-2 text-center">
-                   {shuffleArray(problems).map(p => (
-                       <div key={p.key} className="p-2 border rounded-md bg-muted">
-                           {p.key} {p.num1.toFixed(2)} + {p.num2.toFixed(2)}
-                       </div>
-                   ))}
-                </div>
-                <div className="pt-2">
-                    답: <AnswerInput />
-                </div>
-            </div>
-        ),
-        answer: [answer],
-        type: 'decimal',
-        subType: 'list-navigation',
-        storable: { type: 'decimal', subType: 'list-navigation', operands: problems.flatMap(p => [p.num1, p.num2]), operator: 'calculate' },
-    }
-}
-
-
 export const generateProblemFromData = (data: StorableProblem): MathProblem => {
   // This function might need more specific logic if we want to perfectly recreate
   // a problem from stored data. For now, we regenerate a similar type.
@@ -443,7 +408,7 @@ export const generateProblemFromData = (data: StorableProblem): MathProblem => {
     'comparison': generateComparisonProblem,
     'word-problem': generateWordProblem,
     'conditional': generateConditionalProblem,
-    'list-navigation': generateMultiComparisonProblem,
+    'list-navigation': generateListNavigationProblem,
     'multi-step-word-problem': generateMultiStepWordProblem,
     'decimal-to-fraction': generateUnitConversionConceptProblem, // This is a bit of a misnomer now
     'vertical-calculation': generateVerticalCalculationProblem,
@@ -486,7 +451,7 @@ export const problemNodeToString = (node: React.ReactNode): string => {
 
 const easyProblems = [generateDirectCalculationProblem, generateUnitConversionConceptProblem, generatePlaceValueProblem];
 const mediumProblems = [generateComparisonProblem, generateWordProblem, generateConditionalProblem, generateVerticalCalculationProblem, generateDiagramProblem];
-const hardProblems = [generateListNavigationProblem, generateMultiStepWordProblem, generateErrorCorrectionProblem, generateDecompositionProblem, generateMultiComparisonProblem];
+const hardProblems = [generateListNavigationProblem, generateMultiStepWordProblem, generateErrorCorrectionProblem, generateDecompositionProblem];
 
 export const generateMathProblem = (): MathProblem => {
   const chance = Math.random() * 10; // 0 to 10
@@ -604,5 +569,3 @@ export const getAIMove = (
 
   return null;
 };
-
-    
