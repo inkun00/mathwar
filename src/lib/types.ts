@@ -40,9 +40,9 @@ export type ProblemSubType =
   | 'unit-conversion-concept'
   | 'conditional-operation'
   | 'find-and-operate'
-  // Legacy types
   | 'fill-in-the-blanks-process'
   | 'fill-in-the-blanks-concept'
+  // Legacy types
   | 'comparison'
   | 'word-problem'
   | 'error-analysis'
@@ -74,7 +74,7 @@ export interface StorableProblem {
   type: ProblemType;
   subType: ProblemSubType;
   operands: (number | string)[];
-  operator: 'add' | 'subtract' | 'compare' | 'convert' | 'calculate' | 'multi-step';
+  operator: 'add' | 'subtract' | 'multiply' | 'divide' | 'compare' | 'convert' | 'calculate' | 'multi-step';
 }
 
 
