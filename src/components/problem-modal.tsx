@@ -128,36 +128,22 @@ export default function ProblemModal({
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!problem) return;
-
+  
     const userAnswers = answers.map(parseAnswer);
     const correctAnswers = problem.answer;
-    
+  
     const isCorrect = userAnswers.length === correctAnswers.length && userAnswers.every((userAns, i) => {
-        const correctAns = correctAnswers[i];
-        
-        // Check if the answer is a non-numeric symbol like '<', '>', or '='
-        if (isNaN(parseFloat(correctAns)) && isNaN(parseFloat(userAns))) {
-            return userAns.toLowerCase() === correctAns.toLowerCase();
-        }
-        
-        // For numeric answers, treat blank as 0.
-        const userNum = userAns === '' ? 0 : parseFloat(userAns);
-        const correctNum = parseFloat(correctAns);
-
-        // Check for NaN after parsing
-        if (isNaN(userNum) || isNaN(correctNum)) {
-            return false;
-        }
-
-        // If it's an integer, compare directly.
-        if (!correctAns.includes('.') && userAns.indexOf('.') === -1) {
-             return parseInt(userAns, 10) === parseInt(correctAns, 10);
-        }
-        
-        // For floating point numbers, use an epsilon comparison.
-        return Math.abs(userNum - correctNum) < 0.001;
+      const correctAns = correctAnswers[i];
+  
+      // Treat user's empty input as '0' only if the correct answer is '0' or numeric.
+      // Otherwise, an empty string is just an empty string.
+      const processedUserAns = (userAns === '' && (correctAns === '0' || !isNaN(parseFloat(correctAns)))) ? '0' : userAns;
+  
+      // Compare them as strings. This is the simplest and most robust way.
+      // e.g., '17' vs '17', '17.0' vs '17.0', '>' vs '>', '0' vs '0'
+      return String(processedUserAns).trim() === String(correctAns).trim();
     });
-
+  
     if (isCorrect) {
       toast({
         title: isInvasion ? "침략 성공!" : "정답입니다!",
