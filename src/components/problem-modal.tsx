@@ -13,11 +13,17 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import type { MathProblem, StorableProblem } from '@/lib/types';
-import { useState, type FormEvent, useEffect, useMemo } from 'react';
+import { useState, type FormEvent, useEffect, useMemo, useRef, createContext } from 'react';
 import { CheckCircle, XCircle, Swords } from 'lucide-react';
 import { useFirestore } from '@/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { generateProblemFromData, AnswerInput, problemNodeToString } from '@/lib/game-logic';
+import { generateProblemFromData, problemNodeToString } from '@/lib/game-logic';
+
+interface ProblemInputContextType {
+    getInputElement: () => React.ReactNode;
+}
+
+export const ProblemInputContext = createContext<ProblemInputContextType | null>(null);
 
 interface ProblemModalProps {
   isOpen: boolean;
@@ -45,6 +51,7 @@ export default function ProblemModal({
   const [answers, setAnswers] = useState<string[]>([]);
   const { toast } = useToast();
   const firestore = useFirestore();
+  const inputIndexRef = useRef(0);
 
   const problem = useMemo(() => {
     if (reviewProblem && reviewProblem.operands) {
@@ -61,6 +68,7 @@ export default function ProblemModal({
   useEffect(() => {
     if (isOpen) {
       setAnswers(Array(numInputs).fill(''));
+      inputIndexRef.current = 0; // Reset index when modal opens
     }
   }, [isOpen, numInputs]);
 
@@ -69,6 +77,23 @@ export default function ProblemModal({
     newAnswers[index] = value;
     setAnswers(newAnswers);
   };
+
+  const getInputElement = () => {
+    const currentIndex = inputIndexRef.current;
+    inputIndexRef.current += 1;
+    return (
+        <Input
+            type="text"
+            value={answers[currentIndex] || ''}
+            onChange={(e) => handleAnswerChange(currentIndex, e.target.value)}
+            className="inline-block w-20 h-8 text-center mx-1"
+            aria-label={`정답 입력 ${currentIndex + 1}`}
+            required
+            autoFocus={currentIndex === 0}
+        />
+    );
+  };
+
 
   const recordAttempt = async (isCorrect: boolean) => {
     if (!userId || !firestore || !problem) return;
@@ -86,49 +111,6 @@ export default function ProblemModal({
       console.error("문제 풀이 기록 오류:", error);
     }
   };
-
-  const renderProblemWithInputs = (node: React.ReactNode): React.ReactNode => {
-    if (!React.isValidElement(node)) {
-        return node;
-    }
-
-    if (React.isValidElement(node) && node.props.children) {
-        let inputIndex = 0;
-        const processChildren = (children: React.ReactNode): React.ReactNode[] => {
-            return React.Children.map(children, child => {
-                if (!React.isValidElement(child)) {
-                    return child;
-                }
-                
-                if (child.type === AnswerInput) {
-                    const currentIndex = inputIndex++;
-                    return (
-                        <Input
-                            type="text"
-                            value={answers[currentIndex] || ''}
-                            onChange={(e) => handleAnswerChange(currentIndex, e.target.value)}
-                            className="inline-block w-20 h-8 text-center mx-1"
-                            aria-label={`정답 입력 ${currentIndex + 1}`}
-                            required
-                            autoFocus={currentIndex === 0}
-                        />
-                    );
-                }
-
-                if (child.props.children) {
-                    return React.cloneElement(child, {
-                        ...child.props,
-                        children: processChildren(child.props.children)
-                    });
-                }
-                
-                return child;
-            });
-        };
-        return React.cloneElement(node, {...node.props, children: processChildren(node.props.children)})
-    }
-    return node;
-  };
   
 
   const handleSubmit = async (e: FormEvent) => {
@@ -136,15 +118,16 @@ export default function ProblemModal({
     if (!problem) return;
 
     const { answer: correctAnswers } = problem;
+    const userAnswers = answers;
 
-    const isCorrect = correctAnswers.length === answers.length && correctAnswers.every((correctAns, i) => {
-        const userAns = answers[i] || '';
+    const isCorrect = userAnswers.length === correctAnswers.length && userAnswers.every((userAns, i) => {
+        const correctAns = correctAnswers[i];
         // Treat empty user input as '0' only if the correct answer is a number that can be interpreted as 0.
-        // This avoids issues with non-numeric answers like '>'.
         const isCorrectAnsNumericZero = !isNaN(parseFloat(correctAns)) && parseFloat(correctAns) === 0;
         const processedUserAns = (userAns.trim() === '' && isCorrectAnsNumericZero) ? '0' : userAns.trim();
         return processedUserAns === correctAns.trim();
     });
+
 
     if (isCorrect) {
       toast({
@@ -160,7 +143,7 @@ export default function ProblemModal({
         title: "오답입니다",
         description: (
             <div>
-              <p>입력: [{answers.join(', ')}]</p>
+              <p>입력: [{userAnswers.join(', ')}]</p>
               <p>정답: [{correctAnswers.join(', ')}]</p>
             </div>
         ),
@@ -180,6 +163,9 @@ export default function ProblemModal({
     ? '문제를 맞춰 적의 영토를 획득하세요!'
     : (isReview ? '틀렸던 문제입니다. 다시 풀어보세요!' : '정답을 입력하여 확장 토큰을 획득하세요.');
 
+  // Reset index before rendering the problem
+  inputIndexRef.current = 0;
+
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-xl">
@@ -194,7 +180,9 @@ export default function ProblemModal({
             </DialogDescription>
           </DialogHeader>
           <div className="my-4 text-center text-lg font-semibold font-code tracking-wider bg-muted p-4 rounded-md min-h-[120px] flex items-center justify-center leading-relaxed">
-            {problem ? renderProblemWithInputs(problem.problem) : "문제를 불러오는 중..."}
+            <ProblemInputContext.Provider value={{ getInputElement }}>
+              {problem ? problem.problem : "문제를 불러오는 중..."}
+            </ProblemInputContext.Provider>
           </div>
           <DialogFooter>
             <Button type="submit">정답 제출</Button>
