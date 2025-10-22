@@ -17,7 +17,7 @@ import { useState, type FormEvent, useEffect, useMemo } from 'react';
 import { CheckCircle, XCircle, Swords } from 'lucide-react';
 import { useFirestore } from '@/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { generateProblemFromData, problemNodeToString, INPUT_PLACEHOLDER } from '@/lib/game-logic';
+import { generateProblemFromData, problemNodeToString, AnswerInput } from '@/lib/game-logic';
 
 interface ProblemModalProps {
   isOpen: boolean;
@@ -30,10 +30,6 @@ interface ProblemModalProps {
   isReview?: boolean;
   reviewProblem?: StorableProblem | null;
 }
-
-const parseAnswer = (input: string): string => {
-  return input.trim();
-};
 
 export default function ProblemModal({
   isOpen,
@@ -57,7 +53,11 @@ export default function ProblemModal({
     return initialProblem;
   }, [reviewProblem, initialProblem]);
 
-  const numInputs = useMemo(() => problem?.answer.length ?? 0, [problem]);
+  const numInputs = useMemo(() => {
+    if (!problem) return 0;
+    // This is a bit of a hack to count the number of inputs needed.
+    return problem.answer.length;
+  }, [problem]);
 
   useEffect(() => {
     if (isOpen) {
@@ -87,65 +87,63 @@ export default function ProblemModal({
       console.error("문제 풀이 기록 오류:", error);
     }
   };
-  
- const renderProblemWithInputs = (node: React.ReactNode): React.ReactNode => {
-    let currentInputIndex = 0;
-    
-    const mapChildren = (children: React.ReactNode): React.ReactNode => {
-        return React.Children.map(children, child => {
-            if (typeof child === 'string') {
-                if (child.includes(INPUT_PLACEHOLDER)) {
-                    const parts = child.split(INPUT_PLACEHOLDER);
-                    return parts.map((part, index) => {
-                        if (index < parts.length - 1) {
-                            const inputIndex = currentInputIndex++;
-                            return (
-                                <React.Fragment key={`${part}-${inputIndex}`}>
-                                    {part}
-                                    <Input
-                                        type="text"
-                                        value={answers[inputIndex] || ''}
-                                        onChange={(e) => handleAnswerChange(inputIndex, e.target.value)}
-                                        className="inline-block w-20 h-8 text-center mx-1"
-                                        aria-label={`정답 입력 ${inputIndex + 1}`}
-                                        required
-                                        autoFocus={inputIndex === 0}
-                                    />
-                                </React.Fragment>
-                            );
-                        }
-                        return part;
+
+  const renderProblemWithInputs = (node: React.ReactNode): React.ReactNode => {
+    if (!React.isValidElement(node)) {
+        return node;
+    }
+
+    if (React.isValidElement(node) && node.props.children) {
+        let inputIndex = 0;
+        const processChildren = (children: React.ReactNode): React.ReactNode[] => {
+            return React.Children.map(children, child => {
+                if (!React.isValidElement(child)) {
+                    return child;
+                }
+                
+                if (child.type === AnswerInput) {
+                    const currentIndex = inputIndex++;
+                    return (
+                        <Input
+                            type="text"
+                            value={answers[currentIndex] || ''}
+                            onChange={(e) => handleAnswerChange(currentIndex, e.target.value)}
+                            className="inline-block w-20 h-8 text-center mx-1"
+                            aria-label={`정답 입력 ${currentIndex + 1}`}
+                            required
+                            autoFocus={currentIndex === 0}
+                        />
+                    );
+                }
+
+                if (child.props.children) {
+                    return React.cloneElement(child, {
+                        ...child.props,
+                        children: processChildren(child.props.children)
                     });
                 }
+                
                 return child;
-            }
-
-            if (React.isValidElement(child) && child.props.children) {
-                return React.cloneElement(child, {
-                    ...child.props,
-                    children: mapChildren(child.props.children)
-                });
-            }
-
-            return child;
-        });
-    };
-    
-    return mapChildren(node);
+            });
+        };
+        return React.cloneElement(node, {...node.props, children: processChildren(node.props.children)})
+    }
+    return node;
   };
+  
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!problem) return;
 
-    const { correctAnswers } = problem;
-    
-    const isCorrect = correctAnswers.length === answers.length && correctAnswers.every((correctAns, i) => {
-      const userAns = answers[i] || '';
+    const { answer: correctAnswers } = problem;
+
+    const isCorrect = userAnswers.length === correctAnswers.length && correctAnswers.every((correctAns, i) => {
+      const userAns = userAnswers[i] || '';
       
       const processedUserAns = (userAns.trim() === '' && !isNaN(parseFloat(correctAns))) ? '0' : userAns.trim();
       
-      return processedUserAns === correctAns.trim();
+      return String(processedUserAns) === String(correctAns);
     });
 
     if (isCorrect) {
@@ -157,13 +155,13 @@ export default function ProblemModal({
       });
       await onCorrectAnswer(problem);
     } else {
-      toast({
+       toast({
         variant: 'destructive',
         title: "오답입니다",
         description: (
-             <div>
-                <p>입력: [{answers.join(', ')}]</p>
-                <p>정답: [{correctAnswers.join(', ')}]</p>
+            <div>
+              <p>입력: [{userAnswers.join(', ')}]</p>
+              <p>정답: [{correctAnswers.join(', ')}]</p>
             </div>
         ),
         action: <XCircle className="text-white" />,
