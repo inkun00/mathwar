@@ -22,8 +22,8 @@ export const AnswerInput = () => <div data-answer-input="true" style={{display: 
 
 
 interface FractionProps {
-  numerator?: number | string | React.ReactNode;
-  denominator?: number | string | React.ReactNode;
+  numerator?: number | string | ReactNode;
+  denominator?: number | string | ReactNode;
   className?: string;
 }
 
@@ -48,7 +48,7 @@ const Fraction = ({
 };
 
 interface MixedFractionProps extends FractionProps {
-    integer?: number | string | React.ReactNode;
+    integer?: number | string | ReactNode;
 }
 
 const MixedFraction = ({
@@ -70,25 +70,28 @@ const MixedFraction = ({
     );
 };
 
+// --- Problem Generators by Difficulty ---
 
-// 1. 직접 계산형 (단답형 입력)
+// --- EASY PROBLEMS ---
+
 const generateDirectCalculationProblem = (): MathProblem => {
-  // 2.3 - 0.8
-  const num1 = round(randomInt(11, 50) / 10, 1);
-  const num2 = round(randomInt(1, Math.floor(num1 * 10) - 10) / 10, 1);
+  const num1 = round(randomInt(11, 999) / 100, 2);
+  const num2 = round(randomInt(1, Math.floor(num1 * 100) - 1) / 100, 2);
+  const isAddition = Math.random() > 0.5;
+  const operator = isAddition ? '+' : '-';
+  const answer = isAddition ? round(num1 + num2, 2) : round(num1 - num2, 2);
+  
   return {
-    problem: <span>{num1} - {num2} = <AnswerInput /></span>,
-    answer: [String(round(num1 - num2, 2))],
+    problem: <span>{num1} {operator} {num2} = <AnswerInput /></span>,
+    answer: [String(answer)],
     type: 'decimal',
-    subType: 'decimal-subtract',
-    storable: { type: 'decimal', subType: 'decimal-subtract', operands: [num1, num2], operator: 'subtract' },
+    subType: isAddition ? 'decimal-add' : 'decimal-subtract',
+    storable: { type: 'decimal', subType: 'decimal-subtract', operands: [num1, num2], operator: isAddition ? 'add' : 'subtract' },
   };
 };
 
-// 3. 개념 단위 변환형
 const generateUnitConversionConceptProblem = (): MathProblem => {
-    // 1.97은 0.01이 [197]개입니다.
-    const num = randomInt(101, 399);
+    const num = randomInt(101, 999);
     const decimal = round(num / 100, 2);
     return {
       problem: <span>{decimal}은 0.01이 <AnswerInput />개입니다.</span>,
@@ -99,9 +102,9 @@ const generateUnitConversionConceptProblem = (): MathProblem => {
     };
 };
 
-// 4. 크기 비교형
+// --- MEDIUM PROBLEMS ---
+
 const generateComparisonProblem = (): MathProblem => {
-    // 3.45 O 3.5
     const num1 = round(randomInt(10, 500) / 100, 2);
     const num2 = round(randomInt(10, 500) / 100, 2);
     const correctSign = num1 > num2 ? '>' : num1 < num2 ? '<' : '=';
@@ -114,9 +117,7 @@ const generateComparisonProblem = (): MathProblem => {
     };
 };
 
-// 5. 문장제 문제
 const generateWordProblem = (): MathProblem => {
-    // "준호는 초콜릿 3.2kg..."
     const total = round(randomInt(200, 500) / 100, 2);
     const used = round(randomInt(100, (total * 100) - 50) / 100, 2);
     const answer = round(total - used, 2);
@@ -135,7 +136,6 @@ const generateWordProblem = (): MathProblem => {
     };
 };
 
-// 7. 조건 제시형
 const generateConditionalProblem = (): MathProblem => {
   const isBigger = Math.random() > 0.5;
   const op_text = isBigger ? '더 큰' : '더 작은';
@@ -153,17 +153,17 @@ const generateConditionalProblem = (): MathProblem => {
   };
 };
 
-// 8. 목록 탐색형
+// --- HARD PROBLEMS ---
+
 const generateListNavigationProblem = (): MathProblem => {
   const isSum = Math.random() > 0.5;
   const op_text = isSum ? '합' : '차';
-
-  // 소수점
   const nums = Array.from({ length: 4 }, () => round(randomInt(100, 999) / 100, 2));
   const sorted = [...nums].sort((a, b) => a - b);
   const smallest = sorted[0];
   const largest = sorted[sorted.length - 1];
   const answer = isSum ? round(smallest + largest, 2) : round(largest - smallest, 2);
+
   return {
     problem: (
       <div className="text-center">
@@ -185,40 +185,38 @@ const generateListNavigationProblem = (): MathProblem => {
   };
 };
 
+const generateMultiStepWordProblem = (): MathProblem => {
+  const item1 = round(randomInt(100, 300) / 100, 2); // e.g., 1.5 kg
+  const item2 = round(randomInt(100, 300) / 100, 2); // e.g., 2.1 kg
+  const container = round(randomInt(50, 90) / 100, 2); // e.g., 0.7 kg
+  const answer = round(item1 + item2 + container, 2);
+
+  return {
+    problem: (
+      <p className="text-base text-center leading-relaxed">
+        바구니의 무게는 {container}kg 입니다. <br />
+        이 바구니에 {item1}kg짜리 사과와 {item2}kg짜리 오렌지를 담았습니다. <br />
+        과일이 담긴 바구니의 총 무게는 얼마인가요? <AnswerInput /> kg
+      </p>
+    ),
+    answer: [String(answer)],
+    type: 'decimal',
+    subType: 'multi-step-word-problem',
+    storable: { type: 'decimal', subType: 'multi-step-word-problem', operands: [item1, item2, container], operator: 'multi-step' },
+  };
+};
+
 
 export const generateProblemFromData = (data: StorableProblem): MathProblem => {
-  // This function would ideally reconstruct the problem from stored data.
-  // For now, it regenerates a similar problem type as a placeholder for review.
-  const problemMap: Record<ProblemSubType, () => MathProblem> = {
+  const problemMap: Record<string, () => MathProblem> = {
     'decimal-add': generateDirectCalculationProblem,
     'decimal-subtract': generateDirectCalculationProblem,
-    'fraction-add-same-den': generateDirectCalculationProblem,
-    'fraction-subtract-same-den': generateDirectCalculationProblem,
-    'fraction-add-mixed': generateDirectCalculationProblem,
-    'fraction-subtract-mixed': generateDirectCalculationProblem,
-    'fraction-subtract-from-int': generateDirectCalculationProblem,
-    'fraction-word-problem': generateWordProblem,
-    'fraction-comparison': generateComparisonProblem,
-    'fraction-to-decimal': generateUnitConversionConceptProblem,
-    'decimal-to-fraction': generateUnitConversionConceptProblem,
+    'comparison': generateComparisonProblem,
+    'word-problem': generateWordProblem,
     'conditional': generateConditionalProblem,
     'list-navigation': generateListNavigationProblem,
-    'word-problem': generateWordProblem,
-    'comparison': generateComparisonProblem,
-    // Add other mappings if necessary, falling back to a default.
-    'direct-calculation': generateDirectCalculationProblem,
-    'process-decomposition': generateDirectCalculationProblem,
-    'unit-conversion-concept': generateUnitConversionConceptProblem,
-    'vertical-calculation': generateDirectCalculationProblem, 
-    'error-correction': generateDirectCalculationProblem, 
-    'multi-step-word-problem': generateWordProblem, 
-    'find-and-operate': generateListNavigationProblem, 
-    'error-analysis': generateComparisonProblem, 
-    'multiple-choice': generateComparisonProblem,
-    'diagram': generateDirectCalculationProblem, 
-    'conditional-operation': generateConditionalProblem,
-    'fill-in-the-blanks-process': generateDirectCalculationProblem,
-    'fill-in-the-blanks-concept': generateUnitConversionConceptProblem
+    'multi-step-word-problem': generateMultiStepWordProblem,
+    'decimal-to-fraction': generateUnitConversionConceptProblem,
   };
 
   const generator = problemMap[data.subType] || generateDirectCalculationProblem;
@@ -251,18 +249,24 @@ export const problemNodeToString = (node: React.ReactNode): string => {
 };
 
 // --- Main Problem Generation Function ---
-const problemGenerators = [
-  generateDirectCalculationProblem,
-  generateUnitConversionConceptProblem,
-  generateComparisonProblem,
-  generateWordProblem,
-  generateConditionalProblem,
-  generateListNavigationProblem,
-];
+
+const easyProblems = [generateDirectCalculationProblem, generateUnitConversionConceptProblem];
+const mediumProblems = [generateComparisonProblem, generateWordProblem, generateConditionalProblem];
+const hardProblems = [generateListNavigationProblem, generateMultiStepWordProblem];
 
 export const generateMathProblem = (): MathProblem => {
-  const generator =
-    problemGenerators[randomInt(0, problemGenerators.length - 1)];
+  const chance = Math.random() * 10; // 0 to 10
+  
+  let generator: () => MathProblem;
+
+  if (chance < 3) { // 30% chance for an easy problem
+    generator = easyProblems[randomInt(0, easyProblems.length - 1)];
+  } else if (chance < 8) { // 50% chance for a medium problem (3 to 8)
+    generator = mediumProblems[randomInt(0, mediumProblems.length - 1)];
+  } else { // 20% chance for a hard problem (8 to 10)
+    generator = hardProblems[randomInt(0, hardProblems.length - 1)];
+  }
+
   return generator();
 };
 
