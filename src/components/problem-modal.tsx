@@ -16,7 +16,7 @@ import { useState, type FormEvent, useEffect, useMemo, Children, cloneElement, i
 import { CheckCircle, XCircle, Swords } from 'lucide-react';
 import { useFirestore } from '@/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { generateProblemFromData, problemNodeToString, AnswerInput } from '@/lib/game-logic';
+import { generateProblemFromData, problemNodeToString, INPUT_PLACEHOLDER } from '@/lib/game-logic';
 
 interface ProblemModalProps {
   isOpen: boolean;
@@ -87,18 +87,13 @@ export default function ProblemModal({
     }
   };
   
-  const renderProblemWithInputs = (node: React.ReactNode): React.ReactNode => {
-    let inputCounter = 0;
-    
-    const mapChildren = (children: React.ReactNode): React.ReactNode => {
-      return Children.map(children, child => {
-        if (!isValidElement(child)) {
-          return child;
-        }
-        
-        if (child.type === AnswerInput) {
-          const index = inputCounter++;
-          return (
+ const renderProblemWithInputs = (node: React.ReactNode): React.ReactNode => {
+    if (typeof node === 'string' && node.includes(INPUT_PLACEHOLDER)) {
+      const parts = node.split(INPUT_PLACEHOLDER);
+      return parts.map((part, index) => (
+        <React.Fragment key={index}>
+          {part}
+          {index < parts.length - 1 && (
             <Input
               type="text"
               value={answers[index] || ''}
@@ -108,21 +103,51 @@ export default function ProblemModal({
               required
               autoFocus={index === 0}
             />
-          );
-        }
-        
-        if (child.props.children) {
-          return cloneElement(child, {
-            ...child.props,
-            children: mapChildren(child.props.children),
-          });
-        }
-        
-        return child;
-      });
-    };
+          )}
+        </React.Fragment>
+      ));
+    }
     
-    return mapChildren(node);
+    if (Array.isArray(node)) {
+        return node.map((child, index) => <React.Fragment key={index}>{renderProblemWithInputs(child)}</React.Fragment>);
+    }
+
+    if (React.isValidElement(node) && node.props.children) {
+        let inputIndex = 0;
+        const processChildren = (children: React.ReactNode): React.ReactNode[] => {
+            return React.Children.map(children, child => {
+                if(typeof child === 'string' && child.includes(INPUT_PLACEHOLDER)) {
+                    const parts = child.split(INPUT_PLACEHOLDER);
+                    return parts.map((part, partIndex) => (
+                        <React.Fragment key={partIndex}>
+                          {part}
+                          {partIndex < parts.length - 1 && (
+                             <Input
+                                type="text"
+                                value={answers[inputIndex] || ''}
+                                onChange={(e) => handleAnswerChange(inputIndex++, e.target.value)}
+                                className="inline-block w-20 h-8 text-center mx-1"
+                                aria-label={`정답 입력 ${inputIndex}`}
+                                required
+                                autoFocus={inputIndex === 1}
+                              />
+                          )}
+                        </React.Fragment>
+                    ));
+                }
+                if (React.isValidElement(child) && child.props.children) {
+                    return React.cloneElement(child, {
+                        ...child.props,
+                        children: processChildren(child.props.children)
+                    });
+                }
+                return child;
+            });
+        };
+        return React.cloneElement(node, {...node.props, children: processChildren(node.props.children) });
+    }
+    
+    return node;
   };
 
   const handleSubmit = async (e: FormEvent) => {
@@ -136,10 +161,9 @@ export default function ProblemModal({
       userAnswers.length === correctAnswers.length &&
       userAnswers.every((userAns, i) => {
         const correctAns = correctAnswers[i];
-        // Treat blank as "0" only if the correct answer is also "0" or a numeric representation of 0.
-        // This avoids turning blanks into 0 for non-numeric answers like ">".
-        const processedUserAns = (userAns === '' && String(correctAns) === '0') ? '0' : userAns;
-        return String(processedUserAns).trim() === String(correctAns).trim();
+        // Treat blank user input as "0" only if the correct answer is also "0".
+        const processedUserAns = (userAns.trim() === '' && correctAns === '0') ? '0' : userAns.trim();
+        return processedUserAns === correctAns;
       });
   
     if (isCorrect) {
@@ -153,9 +177,9 @@ export default function ProblemModal({
     } else {
       toast({
         variant: 'destructive',
-        title: isInvasion ? "침략 실패" : "오답입니다",
+        title: "오답입니다",
         description: (
-            <div>
+             <div>
                 <p>입력: [{userAnswers.join(', ')}]</p>
                 <p>정답: [{correctAnswers.join(', ')}]</p>
             </div>
