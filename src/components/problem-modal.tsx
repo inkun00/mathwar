@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import type { MathProblem, StorableProblem } from '@/lib/types';
-import { useState, type FormEvent, useEffect, useMemo, createContext, useContext } from 'react';
+import { useState, type FormEvent, useEffect, useMemo, useRef } from 'react';
 import { CheckCircle, XCircle, Swords, Shield } from 'lucide-react';
 import { useFirestore } from '@/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
@@ -54,6 +54,8 @@ export default function ProblemModal({
   const [answers, setAnswers] = useState<string[]>([]);
   const { toast } = useToast();
   const firestore = useFirestore();
+  const hasSubmitted = useRef(false);
+  const isCorrect = useRef(false);
 
   const problem = useMemo(() => {
     if (reviewProblem && reviewProblem.operands) {
@@ -71,6 +73,8 @@ export default function ProblemModal({
   useEffect(() => {
     if (isOpen) {
       setAnswers(Array(numInputs).fill(''));
+      hasSubmitted.current = false;
+      isCorrect.current = false;
     }
   }, [isOpen, numInputs]);
 
@@ -120,8 +124,8 @@ export default function ProblemModal({
     return processChildren(node);
   };
 
-  const recordAttempt = async (isCorrect: boolean) => {
-    if (!userId || !firestore || !problem) return;
+  const recordAttempt = async (correctStatus: boolean) => {
+    if (!userId || !firestore || !problem || isReview) return;
     try {
       await addDoc(
         collection(firestore, 'problem_attempts', userId, 'attempts'),
@@ -129,7 +133,7 @@ export default function ProblemModal({
           userId: userId,
           unit: problem.type,
           area: problem.subType,
-          correct: isCorrect,
+          correct: correctStatus,
           timestamp: serverTimestamp(),
           isReview: isReview,
           problem: problemNodeToString(problem.problem),
@@ -143,10 +147,12 @@ export default function ProblemModal({
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!problem) return;
+    
+    hasSubmitted.current = true;
 
     const { answer: correctAnswers } = problem;
 
-    const isCorrect =
+    const correct =
       correctAnswers.length === answers.length &&
       answers.every((userAns, i) => {
         const correctAns = correctAnswers[i];
@@ -162,7 +168,9 @@ export default function ProblemModal({
         return processedUserAns === processedCorrectAns;
       });
 
-    if (isCorrect) {
+    isCorrect.current = correct;
+
+    if (correct) {
        let toastTitle = '정답입니다!';
        let toastDescription = '확장 토큰을 획득했습니다.';
        if (isInvasion) {
@@ -200,12 +208,23 @@ export default function ProblemModal({
       }
     }
 
-    await recordAttempt(isCorrect);
     // Only close the modal if it's not a multi-stage wall invasion
-    if (!(isInvasion && hasWall && isCorrect)) {
+    if (!(isInvasion && hasWall && correct)) {
        onOpenChange(false);
     }
   };
+
+  const handleOpenChange = (open: boolean) => {
+    if (!open) {
+      if (!hasSubmitted.current) {
+        recordAttempt(false);
+      } else {
+        recordAttempt(isCorrect.current);
+      }
+    }
+    onOpenChange(open);
+  };
+
 
   const title = isInvasion
     ? '침략 문제'
@@ -220,7 +239,7 @@ export default function ProblemModal({
     : '정답을 입력하여 확장 토큰을 획득하세요.';
 
   return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-xl">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
