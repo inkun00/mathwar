@@ -213,90 +213,6 @@ const generateDirectCalculationProblem = (): MathProblem => {
   }
 };
 
-// 2. 연산 과정 분해형
-const generateProcessDecompositionProblem = (): MathProblem => {
-  const type = randomInt(1, 3);
-  if (type === 1) {
-    // 예시: 5 - 2 4/5 → 4 ?/5 - 2 4/5 → ? ?/5
-    const den = randomInt(5, 9);
-    const int1 = randomInt(3, 5);
-    const int2 = randomInt(1, int1 - 1);
-    const num2 = randomInt(1, den - 1);
-    const resultInt = int1 - 1 - int2;
-    const resultNumRaw = den - num2;
-    
-    return {
-      problem: (
-        <span className="flex flex-wrap items-center justify-center gap-x-2">
-          {int1} - <MixedFraction integer={int2} numerator={num2} denominator={den} />
-          <span className="mx-2">→</span>
-          <MixedFraction integer={int1 - 1} numerator={<AnswerInput />} denominator={den} /> - <MixedFraction integer={int2} numerator={num2} denominator={den} />
-          <span className="mx-2">→</span>
-          <MixedFraction integer={<AnswerInput />} numerator={<AnswerInput />} denominator={<AnswerInput />} />
-        </span>
-      ),
-      answer: [String(den), String(resultInt), String(resultNumRaw), String(den)],
-      type: 'fraction',
-      subType: 'fraction-subtract-from-int',
-      storable: { type: 'fraction', subType: 'fraction-subtract-from-int', operands: [int1, int2, num2, den], operator: 'subtract' },
-    };
-  } else if (type === 2) {
-    // 예시 (가분수 변환): 1 3/10 - 4/10 = [ ? ]/10 - 4/10 = [ ? ]/10
-    const den = randomInt(5, 12);
-    const int1 = randomInt(1, 3);
-    const num1 = randomInt(1, den - 2);
-    const num2 = randomInt(num1 + 1, den - 1); 
-    const gavunsu_num1 = int1 * den + num1;
-    const result_num = gavunsu_num1 - num2;
-    return {
-      problem: (
-        <span><MixedFraction integer={int1} numerator={num1} denominator={den} /> - <Fraction numerator={num2} denominator={den} /> = <Fraction numerator={<AnswerInput />} denominator={den} /> - <Fraction numerator={num2} denominator={den} /> = <Fraction numerator={<AnswerInput />} denominator={den} /></span>
-      ),
-      answer: [String(gavunsu_num1), String(result_num)],
-      type: 'fraction',
-      subType: 'fraction-subtract-mixed',
-      storable: { type: 'fraction', subType: 'fraction-subtract-mixed', operands: [int1, num1, num2, den], operator: 'subtract' },
-    };
-  } else {
-    // 예시 (연산 분리): 4 3/7 + 3 2/7 = (4 + [ ? ]) + ([ ? ]/7 + 2/7) = [ ? ] + [ ? ]/7 = [ ? ] [ ? ]/7
-    const den = randomInt(5, 9);
-    const int1 = randomInt(1, 5);
-    const num1 = randomInt(1, Math.floor(den / 2) -1) || 1;
-    const int2 = randomInt(1, 5);
-    const num2 = randomInt(1, Math.floor(den / 2) -1) || 1;
-    
-    const resultNumRaw = num1 + num2;
-
-    return {
-      problem: (
-        <span className="flex flex-wrap items-center justify-center gap-x-2">
-          <MixedFraction integer={int1} numerator={num1} denominator={den} />
-          <span>+</span>
-          <MixedFraction integer={int2} numerator={num2} denominator={den} />
-          <span>=</span>
-          <span>({int1} + <AnswerInput />) + (<Fraction numerator={<AnswerInput />} denominator={den} /> + <Fraction numerator={num2} denominator={den} />)</span>
-          <span>=</span>
-          <span><AnswerInput /> + <Fraction numerator={<AnswerInput />} denominator={den} /></span>
-          <span>=</span>
-          <MixedFraction integer={<AnswerInput />} numerator={<AnswerInput />} denominator={<AnswerInput />} />
-        </span>
-      ),
-      answer: [
-        String(int2),
-        String(num1),
-        String(int1 + int2),
-        String(resultNumRaw),
-        String(int1 + int2),
-        String(resultNumRaw), 
-        String(den),           
-      ],
-      type: 'fraction',
-      subType: 'fraction-add-mixed',
-      storable: { type: 'fraction', subType: 'fraction-add-mixed', operands: [int1, num1, int2, num2, den], operator: 'add' },
-    };
-  }
-};
-
 // 3. 개념 단위 변환형
 const generateUnitConversionConceptProblem = (): MathProblem => {
   if (Math.random() > 0.5) {
@@ -616,9 +532,9 @@ export const generateProblemFromData = (data: StorableProblem): MathProblem => {
     'decimal-subtract': generateDirectCalculationProblem,
     'fraction-add-same-den': generateDirectCalculationProblem,
     'fraction-subtract-same-den': generateDirectCalculationProblem,
-    'fraction-add-mixed': generateProcessDecompositionProblem,
+    'fraction-add-mixed': generateDirectCalculationProblem,
     'fraction-subtract-mixed': generateDirectCalculationProblem,
-    'fraction-subtract-from-int': generateProcessDecompositionProblem,
+    'fraction-subtract-from-int': generateDirectCalculationProblem,
     'fraction-word-problem': generateWordProblem,
     'fraction-comparison': generateComparisonProblem,
     'fraction-to-decimal': generateUnitConversionConceptProblem,
@@ -629,7 +545,7 @@ export const generateProblemFromData = (data: StorableProblem): MathProblem => {
     'comparison': generateComparisonProblem,
     // Add other mappings if necessary, falling back to a default.
     'direct-calculation': generateDirectCalculationProblem,
-    'process-decomposition': generateProcessDecompositionProblem,
+    'process-decomposition': generateDirectCalculationProblem,
     'unit-conversion-concept': generateUnitConversionConceptProblem,
     'vertical-calculation': generateDirectCalculationProblem, 
     'error-correction': generateDirectCalculationProblem, 
@@ -639,7 +555,7 @@ export const generateProblemFromData = (data: StorableProblem): MathProblem => {
     'multiple-choice': generateComparisonProblem,
     'diagram': generateDirectCalculationProblem, 
     'conditional-operation': generateConditionalProblem,
-    'fill-in-the-blanks-process': generateProcessDecompositionProblem,
+    'fill-in-the-blanks-process': generateDirectCalculationProblem,
     'fill-in-the-blanks-concept': generateUnitConversionConceptProblem
   };
 
@@ -675,7 +591,6 @@ export const problemNodeToString = (node: React.ReactNode): string => {
 // --- Main Problem Generation Function ---
 const problemGenerators = [
   generateDirectCalculationProblem,
-  generateProcessDecompositionProblem,
   generateUnitConversionConceptProblem,
   generateComparisonProblem,
   generateWordProblem,
