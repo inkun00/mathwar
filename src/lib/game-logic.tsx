@@ -18,7 +18,7 @@ const round = (num: number, places: number) => parseFloat(num.toFixed(places));
 // --- React Component Utilities for Problems ---
 
 // A placeholder component to be replaced by a real Input
-export const AnswerInput = () => <span data-answer-input="true" />;
+export const AnswerInput = () => <div data-answer-input="true" style={{display: 'none'}} />;
 
 
 interface FractionProps {
