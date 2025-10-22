@@ -37,9 +37,11 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentProblem, setCurrentProblem] = useState<MathProblem | null>(null);
   const [invasionTarget, setInvasionTarget] = useState<InvasionTarget>(null);
+  const [invasionWallBreaks, setInvasionWallBreaks] = useState(0);
   const { toast } = useToast();
   const [zoomLevel, setZoomLevel] = useState(1);
   const [isProcessingClick, setIsProcessingClick] = useState(false);
+  const [isBuildingWall, setIsBuildingWall] = useState(false);
 
 
   const currentUser = users.find(u => u.id === currentUserProfile.id);
@@ -140,6 +142,7 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
   }, [allUsers, landTiles, firestore]);
 
   const handleSolveProblemForToken = () => {
+    setIsBuildingWall(false);
     setInvasionTarget(null);
     setCurrentProblem(generateMathProblem());
     setIsModalOpen(true);
@@ -272,10 +275,23 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
   const handleInvasionSuccess = () => {
     if (!currentUser || !firestore || !invasionTarget) return;
 
+    if (invasionTarget.hasWall && invasionWallBreaks < 1) {
+      setInvasionWallBreaks(1);
+      toast({
+        title: "성벽 돌파!",
+        description: "성벽을 파괴했습니다! 한 문제만 더 맞히면 점령할 수 있습니다.",
+      });
+      setCurrentProblem(generateMathProblem());
+      setIsModalOpen(true);
+      return;
+    }
+    
+    setInvasionWallBreaks(0);
+
     const originalOwnerId = invasionTarget.originalOwnerId;
     const tileId = `${invasionTarget.x}-${invasionTarget.y}`;
     const tileRef = doc(firestore, "land_tiles", tileId);
-    const tileData = { x: invasionTarget.x, y: invasionTarget.y, ownerId: currentUser.id };
+    const tileData = { x: invasionTarget.x, y: invasionTarget.y, ownerId: currentUser.id, hasWall: false };
     const userRef = doc(firestore, "users", currentUser.id);
 
     const batch = writeBatch(firestore);
@@ -305,17 +321,54 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
   const handleTileClick = (x: number, y: number) => {
     if (!currentUser || !firestore || isProcessingClick) return;
 
+    setIsProcessingClick(true);
+    const clickedTile = mapData[y][x];
+
+    // --- Wall Building Logic ---
+    if (isBuildingWall) {
+      if (clickedTile.ownerId === currentUser.id && !clickedTile.hasWall) {
+        const tileRef = doc(firestore, "land_tiles", clickedTile.id);
+        const userRef = doc(firestore, "users", currentUser.id);
+        
+        const batch = writeBatch(firestore);
+        batch.update(tileRef, { hasWall: true });
+        batch.update(userRef, { walls: increment(-1) });
+
+        batch.commit()
+          .then(() => {
+            toast({ title: "성벽 건설!", description: "영토에 성벽을 성공적으로 건설했습니다." });
+            setIsBuildingWall(false);
+          })
+          .catch(error => {
+            console.error("성벽 건설 실패:", error);
+            errorEmitter.emit('permission-error', new FirestorePermissionError({ path: tileRef.path, operation: 'update', requestResourceData: { hasWall: true } }));
+          })
+          .finally(() => setIsProcessingClick(false));
+      } else {
+        toast({
+            variant: "destructive",
+            title: "건설 불가",
+            description: clickedTile.ownerId !== currentUser.id 
+                ? "자신의 영토에만 성벽을 건설할 수 있습니다." 
+                : "이미 성벽이 건설된 곳입니다.",
+        });
+        setIsProcessingClick(false);
+      }
+      return;
+    }
+
+
+    // --- Expansion/Invasion Logic ---
     if ((currentUser.tokens ?? 0) <= 0) {
       toast({
         variant: "destructive",
         title: "토큰이 없습니다!",
         description: "문제를 풀어 더 많은 확장 토큰을 획득하세요.",
       });
+      setIsProcessingClick(false);
       return;
     }
     
-    setIsProcessingClick(true);
-    const clickedTile = mapData[y][x];
     const originalOwnerId = clickedTile.ownerId;
 
     if (originalOwnerId === null) {
@@ -359,7 +412,8 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
             return;
         }
 
-        setInvasionTarget({ x, y, originalOwnerId: originalOwnerId! });
+        setInvasionTarget({ x, y, originalOwnerId: originalOwnerId!, hasWall: clickedTile.hasWall });
+        setInvasionWallBreaks(0);
         setCurrentProblem(generateMathProblem());
         setIsModalOpen(true);
     } else {
@@ -388,9 +442,13 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
 
   const handleZoomIn = () => setZoomLevel(prev => Math.min(prev + 0.2, 10));
   const handleZoomOut = () => setZoomLevel(prev => Math.max(prev - 0.2, 0.5));
+  
+  const handleToggleWallBuilding = () => {
+    setIsBuildingWall(prev => !prev);
+  }
 
   const canConquer = (tile: Tile) => {
-    if (!currentUser || (currentUser.tokens ?? 0) <= 0 || isProcessingClick) {
+    if (!currentUser || (currentUser.tokens ?? 0) <= 0 || isProcessingClick || isBuildingWall) {
       return false;
     }
     
@@ -426,10 +484,16 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
     return isAdjacent(tile.x, tile.y, userCountryTiles);
   };
   
+  const canBuildWall = (tile: Tile) => {
+      if (!currentUser || isProcessingClick || !isBuildingWall) return false;
+      return tile.ownerId === currentUser.id && !tile.hasWall;
+  }
+
   const handleProblemModalClose = (open: boolean) => {
     if (!open) {
       setIsProcessingClick(false);
       setInvasionTarget(null);
+      setInvasionWallBreaks(0);
     }
     setIsModalOpen(open);
   }
@@ -468,9 +532,19 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
         landTiles={landTiles}
         users={allUsers}
         wrongAnswers={wrongAnswers}
+        isBuildingWall={isBuildingWall}
+        onToggleWallBuilding={handleToggleWallBuilding}
       />
       <div className="relative h-full w-full max-w-7xl flex-grow">
-        <WorldMap mapData={mapData} users={allUsers} countries={allCountries} onTileClick={handleTileClick} canConquer={canConquer} zoomLevel={zoomLevel} />
+        <WorldMap 
+            mapData={mapData} 
+            users={allUsers} 
+            countries={allCountries} 
+            onTileClick={handleTileClick} 
+            canConquer={canConquer}
+            canBuildWall={canBuildWall}
+            zoomLevel={zoomLevel} 
+        />
         <div className="absolute bottom-4 right-4 flex gap-2">
           <Button size="icon" onClick={handleZoomIn} aria-label="확대">
             <ZoomIn />
@@ -488,6 +562,8 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
         onWrongAnswer={handleWrongAnswer}
         userId={authUser?.uid}
         isInvasion={!!invasionTarget}
+        invasionWallBreaks={invasionWallBreaks}
+        hasWall={invasionTarget?.hasWall}
       />
       {isDemise && <DemiseScreen onRestart={handleRestart} />}
     </div>

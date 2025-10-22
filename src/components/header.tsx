@@ -4,14 +4,14 @@ import { Logo } from "@/components/icons/logo";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import type { User, Tile } from "@/lib/types";
-import { UserCircle, HelpCircle, User as UserIcon, Trophy, Store } from "lucide-react";
+import { UserCircle, HelpCircle, User as UserIcon, Trophy, Store, Shield } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import ProfileSheet from "./profile-sheet";
 import LeaderboardSheet from "./leaderboard-sheet";
 import MarketSheet from "./market-sheet";
 import type { Country, ProblemAttempt, WrongAnswer } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Badge } from "./ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 import { cn } from "@/lib/utils";
@@ -24,9 +24,21 @@ interface HeaderProps {
   landTiles: Tile[];
   users: User[];
   wrongAnswers: WrongAnswer[];
+  isBuildingWall: boolean;
+  onToggleWallBuilding: () => void;
 }
 
-export default function Header({ currentUser, onSolveProblemClick, countries, problemAttempts, landTiles, users, wrongAnswers }: HeaderProps) {
+export default function Header({ 
+  currentUser, 
+  onSolveProblemClick, 
+  countries, 
+  problemAttempts, 
+  landTiles, 
+  users, 
+  wrongAnswers,
+  isBuildingWall,
+  onToggleWallBuilding
+}: HeaderProps) {
   const userCountry = countries.find(c => c.id === currentUser.countryId);
   const { toast } = useToast();
 
@@ -53,6 +65,18 @@ export default function Header({ currentUser, onSolveProblemClick, countries, pr
     }
   };
   
+  const handleWallBuildClick = () => {
+    if ((currentUser.walls ?? 0) <= 0) {
+       toast({
+        variant: "destructive",
+        title: "성벽 없음",
+        description: "마켓에서 성벽을 먼저 구매해주세요.",
+      });
+    } else {
+      onToggleWallBuilding();
+    }
+  }
+
   const continents = ["대륙 1", "대륙 2", "대륙 3", "대륙 4", "대륙 5"];
 
   return (
@@ -168,10 +192,16 @@ export default function Header({ currentUser, onSolveProblemClick, countries, pr
           <Separator orientation="vertical" className="h-10" />
           
           <div className="flex flex-col items-end gap-1">
-            <Button onClick={handleSolveClick}>
-              <HelpCircle className="mr-2 h-4 w-4" />
-              문제 풀기
-            </Button>
+             <div className="flex gap-2">
+                <Button onClick={handleWallBuildClick} variant={isBuildingWall ? "secondary" : "default"}>
+                    <Shield className="mr-2 h-4 w-4" />
+                    성벽 건설 ({currentUser.walls ?? 0})
+                </Button>
+                <Button onClick={handleSolveClick}>
+                  <HelpCircle className="mr-2 h-4 w-4" />
+                  문제 풀기
+                </Button>
+             </div>
              <Badge variant={remainingProblems > 0 ? "secondary" : "destructive"}>
               오늘 풀 수 있는 문제: {remainingProblems < 0 ? 0 : remainingProblems}/10
             </Badge>

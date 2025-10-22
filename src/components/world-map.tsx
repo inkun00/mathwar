@@ -5,6 +5,7 @@ import { isLand } from "@/lib/world-map-shape";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import React from "react";
 import { useMemo } from 'react';
+import { Shield } from "lucide-react";
 
 interface WorldMapProps {
   mapData: MapData;
@@ -12,6 +13,7 @@ interface WorldMapProps {
   countries: Country[];
   onTileClick: (x: number, y: number) => void;
   canConquer: (tile: Tile) => boolean;
+  canBuildWall: (tile: Tile) => boolean;
   zoomLevel: number;
 }
 
@@ -20,18 +22,20 @@ const TileComponent = React.memo(({
   ownerColor, 
   onClick,
   isConquerable,
+  isWallBuildable,
   tooltipContent
 }: {
   tile: Tile;
   ownerColor: string | null;
   onClick: () => void;
   isConquerable: boolean;
+  isWallBuildable: boolean;
   tooltipContent: React.ReactNode;
 }) => {
   const isLandTile = isLand(tile.x, tile.y);
 
   const tileClasses = cn(
-    "aspect-square transition-all duration-300 ease-in-out border border-border/10",
+    "relative aspect-square transition-all duration-300 ease-in-out border border-border/10",
     {
       // Land
       'bg-[#f0e6d2]': isLandTile && !ownerColor,
@@ -41,15 +45,22 @@ const TileComponent = React.memo(({
     },
     { 'shadow-inner': ownerColor },
     isConquerable && "cursor-pointer ring-2 ring-offset-1 ring-offset-background ring-primary/70 z-10 hover:brightness-110",
+    isWallBuildable && "cursor-pointer ring-2 ring-offset-1 ring-offset-background ring-yellow-500 z-10 hover:brightness-110",
   );
 
   const tileElement = (
      <div
       className={tileClasses}
       style={{ backgroundColor: ownerColor ?? undefined }}
-      onClick={isConquerable ? onClick : undefined}
+      onClick={(isConquerable || isWallBuildable) ? onClick : undefined}
       aria-label={`타일 ${tile.x}, ${tile.y}. ${ownerColor ? `플레이어 소유.` : '주인 없음.'} ${isConquerable ? '정복하려면 클릭하세요.' : ''}`}
-    />
+    >
+      {tile.hasWall && (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <Shield className="h-2/3 w-2/3 text-black/50" />
+        </div>
+      )}
+    </div>
   )
 
   return (
@@ -70,7 +81,7 @@ const TileComponent = React.memo(({
 TileComponent.displayName = "TileComponent";
 
 
-export default function WorldMap({ mapData, users, countries, onTileClick, canConquer, zoomLevel }: WorldMapProps) {
+export default function WorldMap({ mapData, users, countries, onTileClick, canConquer, canBuildWall, zoomLevel }: WorldMapProps) {
   const countryColorMap = useMemo(() => new Map(countries.map(c => [c.id, c.color])), [countries]);
   const userCountryMap = useMemo(() => new Map(users.map(u => [u.id, u.countryId])), [users]);
   const countryNameMap = useMemo(() => new Map(countries.map(c => [c.id, c.name])), [countries]);
@@ -90,7 +101,12 @@ export default function WorldMap({ mapData, users, countries, onTileClick, canCo
     if (!owner) return "알 수 없는 플레이어";
     const countryId = owner.countryId;
     const countryName = countryNameMap.get(countryId);
-    return `${countryName || '소속 없음'} (${owner.nickname})`;
+    
+    let content = `${countryName || '소속 없음'} (${owner.nickname})`;
+    if (tile.hasWall) {
+      content += ' - 성벽';
+    }
+    return content;
   };
   
   return (
@@ -110,6 +126,7 @@ export default function WorldMap({ mapData, users, countries, onTileClick, canCo
             ownerColor={getTileOwnerColor(tile.ownerId)}
             onClick={() => onTileClick(tile.x, tile.y)}
             isConquerable={canConquer(tile)}
+            isWallBuildable={canBuildWall(tile)}
             tooltipContent={getTooltipContent(tile)}
           />
         ))}

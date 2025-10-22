@@ -118,6 +118,7 @@ export default function SignUpDetails() {
         email: auth.currentUser.email,
         countryId,
         tokens: 1, // Start with 1 token
+        walls: 0, // Start with 0 walls
         gamePoints: 0,
         lastPointDistribution: new Date().toISOString().slice(0, 10), // YYYY-MM-DD
         conqueredCountries: [],

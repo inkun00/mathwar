@@ -37,6 +37,10 @@
         "lastPointDistribution": {
           "type": "string",
           "description": "The date (YYYY-MM-DD) when the last points were distributed."
+        },
+        "walls": {
+          "type": "number",
+          "description": "The number of wall items the user possesses."
         }
       },
       "required": [
@@ -96,6 +100,10 @@
         "ownerId": {
           "type": "string",
           "description": "Reference to the User who owns this land tile. (Relationship: User 1:N LandTile)"
+        },
+        "hasWall": {
+          "type": "boolean",
+          "description": "Indicates if a defensive wall is built on this tile."
         }
       },
       "required": [

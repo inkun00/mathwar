@@ -189,6 +189,10 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
                   <span className="font-medium text-muted-foreground">보유 토큰</span>
                   <span className="font-semibold">{currentUser.tokens}개</span>
                 </div>
+                <div className="flex justify-between">
+                  <span className="font-medium text-muted-foreground">보유 성벽</span>
+                  <span className="font-semibold">{currentUser.walls ?? 0}개</span>
+                </div>
                  <div className="flex justify-between">
                   <span className="font-medium text-muted-foreground">게임 포인트</span>
                   <span className="font-semibold">{currentUser.gamePoints ?? 0} 포인트</span>

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useFirestore } from "@/firebase";
 import { doc, updateDoc, increment } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
-import { Gem, Coins, HelpCircle } from "lucide-react";
+import { Coins, HelpCircle, Shield } from "lucide-react";
 
 interface MarketSheetProps {
   currentUser: User;
@@ -19,6 +19,13 @@ const marketItems = [
     description: '새로운 땅을 정복하거나, 다른 플레이어의 땅을 침략할 수 있습니다.',
     price: 100,
     icon: <HelpCircle className="h-8 w-8 text-blue-500" />
+  },
+  {
+    id: 'wall',
+    name: '성벽',
+    description: '내 땅에 설치하여 방어도를 높입니다. 침략 당할 때 문제를 한 번 더 풀어야 합니다.',
+    price: 50,
+    icon: <Shield className="h-8 w-8 text-orange-500" />
   }
 ];
 
@@ -50,8 +57,16 @@ export default function MarketSheet({ currentUser }: MarketSheetProps) {
           title: "구매 완료!",
           description: "확장 토큰 1개를 획득했습니다.",
         });
+      } else if (itemId === 'wall') {
+         await updateDoc(userRef, {
+          gamePoints: increment(-price),
+          walls: increment(1),
+        });
+        toast({
+          title: "구매 완료!",
+          description: "성벽 1개를 획득했습니다.",
+        });
       }
-      // Add other item purchase logic here
     } catch (error) {
       console.error("아이템 구매 오류:", error);
       toast({

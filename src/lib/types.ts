@@ -8,6 +8,7 @@ export interface User {
   email: string;
   countryId: string;
   tokens: number;
+  walls?: number; // Number of walls the user owns
   isAI?: boolean;
   conqueredCountries?: string[]; // Array of conquered country IDs
   gamePoints?: number;
@@ -27,6 +28,7 @@ export interface Tile {
   x: number;
   y: number;
   ownerId: string | null;
+  hasWall?: boolean; // True if the tile has a wall
 }
 
 export type MapData = Tile[][];
@@ -103,6 +105,7 @@ export type InvasionTarget = {
     x: number;
     y: number;
     originalOwnerId: string | null;
+    hasWall?: boolean;
 } | null;
 
 
