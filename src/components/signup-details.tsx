@@ -118,6 +118,8 @@ export default function SignUpDetails() {
         email: auth.currentUser.email,
         countryId,
         tokens: 1, // Start with 1 token
+        gamePoints: 0,
+        lastPointDistribution: new Date().toISOString().slice(0, 10), // YYYY-MM-DD
         conqueredCountries: [],
       });
 

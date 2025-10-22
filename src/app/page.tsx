@@ -1,11 +1,12 @@
 'use client';
 
+import { useEffect } from "react";
 import GameBoard from "@/components/game-board";
 import Login from "@/components/login";
 import SignUpDetails from "@/components/signup-details";
 import { useUser } from "@/firebase/auth/use-user";
 import { useDoc, useFirestore, useMemoFirebase, useCollection } from "@/firebase";
-import { doc, collection } from "firebase/firestore";
+import { doc, collection, updateDoc, increment } from "firebase/firestore";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { User as GameUser, Country, Tile, ProblemAttempt, WrongAnswer } from "@/lib/types";
 
@@ -51,6 +52,30 @@ export default function Home() {
   const { data: wrongAnswers, isLoading: areWrongAnswersLoading } = useCollection<WrongAnswer>(wrongAnswersQuery);
   
   const isLoading = isAuthUserLoading || (authUser && (isProfileLoading || areCountriesLoading || areLandTilesLoading || areUsersLoading || areAttemptsLoading || areWrongAnswersLoading));
+
+  useEffect(() => {
+    if (userProfile && landTiles && firestore && authUser) {
+      const today = new Date().toISOString().slice(0, 10);
+      const lastDistribution = userProfile.lastPointDistribution;
+
+      if (lastDistribution !== today) {
+        const userTilesCount = landTiles.filter(tile => tile.ownerId === authUser.uid).length;
+        if (userTilesCount > 0) {
+          const userRef = doc(firestore, "users", authUser.uid);
+          updateDoc(userRef, {
+            gamePoints: increment(userTilesCount),
+            lastPointDistribution: today,
+          }).catch(console.error);
+        } else {
+            // if user has no land, just update the date to prevent checks until tomorrow
+            const userRef = doc(firestore, "users", authUser.uid);
+            updateDoc(userRef, {
+              lastPointDistribution: today,
+            }).catch(console.error);
+        }
+      }
+    }
+  }, [userProfile, landTiles, firestore, authUser]);
 
 
   if (isLoading) {

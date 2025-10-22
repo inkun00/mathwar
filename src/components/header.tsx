@@ -4,10 +4,11 @@ import { Logo } from "@/components/icons/logo";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import type { User, Tile } from "@/lib/types";
-import { UserCircle, HelpCircle, User as UserIcon, Trophy } from "lucide-react";
+import { UserCircle, HelpCircle, User as UserIcon, Trophy, Store } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import ProfileSheet from "./profile-sheet";
 import LeaderboardSheet from "./leaderboard-sheet";
+import MarketSheet from "./market-sheet";
 import type { Country, ProblemAttempt, WrongAnswer } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 import { useMemo } from "react";
@@ -105,7 +106,7 @@ export default function Header({ currentUser, onSolveProblemClick, countries, pr
             <div className="text-right">
               <p className="font-semibold">{currentUser.nickname || '게이머'}</p>
               <p className="text-sm text-muted-foreground">
-                확장 토큰 {currentUser.tokens}개
+                토큰: {currentUser.tokens}개 / 포: {currentUser.gamePoints ?? 0}
               </p>
             </div>
           </div>
@@ -127,6 +128,21 @@ export default function Header({ currentUser, onSolveProblemClick, countries, pr
                 problemAttempts={problemAttempts}
                 wrongAnswers={wrongAnswers}
               />
+            </SheetContent>
+          </Sheet>
+
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button variant="ghost" size="icon">
+                <Store className="h-5 w-5" />
+                <span className="sr-only">마켓 보기</span>
+              </Button>
+            </SheetTrigger>
+            <SheetContent>
+              <SheetHeader>
+                <SheetTitle>마켓</SheetTitle>
+              </SheetHeader>
+              <MarketSheet currentUser={currentUser} />
             </SheetContent>
           </Sheet>
 

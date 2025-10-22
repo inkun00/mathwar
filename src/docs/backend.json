@@ -22,6 +22,21 @@
         "countryId": {
           "type": "string",
           "description": "Reference to the Country this user belongs to."
+        },
+        "conqueredCountries": {
+          "type": "array",
+          "description": "An array of country IDs that this user has conquered.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "gamePoints": {
+          "type": "number",
+          "description": "Points earned by the user for holding territory."
+        },
+        "lastPointDistribution": {
+          "type": "string",
+          "description": "The date (YYYY-MM-DD) when the last points were distributed."
         }
       },
       "required": [
@@ -52,6 +67,10 @@
         "color": {
             "type": "string",
             "description": "The HEX or HSL color string for the country."
+        },
+        "demised": {
+          "type": "boolean",
+          "description": "Whether the country has been conquered and can no longer be used."
         }
       },
       "required": ["id", "name", "createdBy", "color"]

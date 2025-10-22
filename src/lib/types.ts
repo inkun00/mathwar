@@ -7,10 +7,11 @@ export interface User {
   nickname: string;
   email: string;
   countryId: string;
-  // color: string; // This is now derived from the country
   tokens: number;
   isAI?: boolean;
   conqueredCountries?: string[]; // Array of conquered country IDs
+  gamePoints?: number;
+  lastPointDistribution?: string; // YYYY-MM-DD
 }
 
 export interface Country {
