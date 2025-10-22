@@ -191,7 +191,7 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
                 </div>
                  <div className="flex justify-between">
                   <span className="font-medium text-muted-foreground">게임 포인트</span>
-                  <span className="font-semibold">{currentUser.gamePoints ?? 0} P</span>
+                  <span className="font-semibold">{currentUser.gamePoints ?? 0} 포인트</span>
                 </div>
               </CardContent>
             </Card>

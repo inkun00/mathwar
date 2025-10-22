@@ -106,7 +106,7 @@ export default function Header({ currentUser, onSolveProblemClick, countries, pr
             <div className="text-right">
               <p className="font-semibold">{currentUser.nickname || '게이머'}</p>
               <p className="text-sm text-muted-foreground">
-                토큰: {currentUser.tokens}개 / 포: {currentUser.gamePoints ?? 0}
+                토큰: {currentUser.tokens}개 / 포인트: {currentUser.gamePoints ?? 0}
               </p>
             </div>
           </div>

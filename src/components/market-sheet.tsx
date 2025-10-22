@@ -72,7 +72,7 @@ export default function MarketSheet({ currentUser }: MarketSheetProps) {
             <Coins className="h-5 w-5 text-yellow-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{currentUser.gamePoints ?? 0} P</div>
+            <div className="text-2xl font-bold">{currentUser.gamePoints ?? 0} 포인트</div>
             <p className="text-xs text-muted-foreground">
               매일 자정에 보유한 땅 1개당 1포인트가 지급됩니다.
             </p>
@@ -95,7 +95,7 @@ export default function MarketSheet({ currentUser }: MarketSheetProps) {
             <CardFooter className="mt-auto flex items-center justify-end border-t pt-4">
               <div className="flex items-center gap-2 mr-4">
                  <Coins className="h-4 w-4 text-yellow-500" />
-                 <span className="font-bold">{item.price} P</span>
+                 <span className="font-bold">{item.price} 포인트</span>
               </div>
               <Button onClick={() => handlePurchase(item.id, item.price)}>
                 구매
