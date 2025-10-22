@@ -84,31 +84,30 @@ const MixedFraction = ({
 // --- EASY PROBLEMS ---
 
 const generateDirectCalculationProblem = (): MathProblem => {
-    const problemType = randomInt(1, 2);
-    let num1, num2, operator, answer, subType, storable: StorableProblem;
+    const isAddition = Math.random() > 0.5;
+    let num1_raw = round(randomInt(11, 999) / 100, 2);
+    let num2_raw = round(randomInt(11, 999) / 100, 2);
+
+    let num1 = num1_raw;
+    let num2 = num2_raw;
+    let operator, answer, subType, storable: StorableProblem;
     let problemNode: React.ReactNode;
 
-    switch(problemType) {
-        case 1: // Addition
-            num1 = round(randomInt(11, 999) / 100, 2);
-            num2 = round(randomInt(1, Math.floor(num1 * 100) - 1) / 100, 2);
-            operator = '+';
-            answer = round(num1 + num2, 2);
-            subType = 'decimal-add';
-            storable = { type: 'decimal', subType: 'decimal-add', operands: [num1, num2], operator: 'add' };
-            problemNode = <span>{num1} {operator} {num2} = <AnswerInput /></span>;
-            break;
-        case 2: // Subtraction
-        default:
-            num1 = round(randomInt(11, 999) / 100, 2);
-            num2 = round(randomInt(1, Math.floor(num1 * 100) - 1) / 100, 2);
-            operator = '-';
-            answer = round(num1 - num2, 2);
-            subType = 'decimal-subtract';
-            storable = { type: 'decimal', subType: 'decimal-subtract', operands: [num1, num2], operator: 'subtract' };
-            problemNode = <span>{num1} {operator} {num2} = <AnswerInput /></span>;
-            break;
+    if (isAddition) {
+        operator = '+';
+        answer = round(num1 + num2, 2);
+        subType = 'decimal-add';
+        storable = { type: 'decimal', subType: 'decimal-add', operands: [num1, num2], operator: 'add' };
+    } else { // Subtraction
+        num1 = Math.max(num1_raw, num2_raw);
+        num2 = Math.min(num1_raw, num2_raw);
+        operator = '-';
+        answer = round(num1 - num2, 2);
+        subType = 'decimal-subtract';
+        storable = { type: 'decimal', subType: 'decimal-subtract', operands: [num1, num2], operator: 'subtract' };
     }
+    
+    problemNode = <span>{num1.toFixed(2)} {operator} {num2.toFixed(2)} = <AnswerInput /></span>;
 
     return {
         problem: problemNode,
@@ -194,9 +193,18 @@ const generateConditionalProblem = (): MathProblem => {
   const isBigger = Math.random() > 0.5;
   const op_text = isBigger ? '더 큰' : '더 작은';
 
-  let num1 = round(randomInt(100, 800) / 100, 2);
-  let num2 = round(randomInt(10, (num1 * 100) - 50) / 100, 2);
-  const answer = isBigger ? round(num1 + num2, 2) : round(num1 - num2, 2);
+  let num1_raw = round(randomInt(100, 800) / 100, 2);
+  let num2_raw = round(randomInt(10, 500) / 100, 2);
+  
+  let num1 = num1_raw;
+  let num2 = num2_raw;
+  
+  const answer = isBigger ? round(num1 + num2, 2) : round(Math.max(num1, num2) - Math.min(num1, num2), 2);
+  if (!isBigger) {
+      num1 = Math.max(num1_raw, num2_raw);
+      num2 = Math.min(num1_raw, num2_raw);
+  }
+
 
   return {
     problem: <span>{num1}보다 {num2}만큼 {op_text} 수는? <AnswerInput /></span>,
@@ -208,9 +216,13 @@ const generateConditionalProblem = (): MathProblem => {
 };
 
 const generateVerticalCalculationProblem = (): MathProblem => {
-  const num1 = round(randomInt(100, 999) / 10, 2);
-  const num2 = round(randomInt(10, (num1 * 100) - 1) / 10, 2);
   const isAddition = Math.random() > 0.5;
+  let num1_raw = round(randomInt(100, 999) / 10, 2);
+  let num2_raw = round(randomInt(100, 999) / 10, 2);
+
+  const num1 = isAddition ? num1_raw : Math.max(num1_raw, num2_raw);
+  const num2 = isAddition ? num2_raw : Math.min(num1_raw, num2_raw);
+  
   const operator = isAddition ? '+' : '-';
   const answer = isAddition ? round(num1 + num2, 2) : round(num1 - num2, 2);
 
@@ -276,7 +288,7 @@ const generateListNavigationProblem = (): MathProblem => {
         <div className="flex justify-center gap-2 my-2">
           {nums.map((n, index) => (
             <div key={`${n}-${index}`} className="p-3 border rounded bg-gray-100 font-mono">
-              {n}
+              {n.toFixed(2)}
             </div>
           ))}
         </div>
@@ -299,8 +311,8 @@ const generateMultiStepWordProblem = (): MathProblem => {
   return {
     problem: (
       <p className="text-base text-center leading-relaxed">
-        바구니의 무게는 {container}kg 입니다. <br />
-        이 바구니에 {item1}kg짜리 사과와 {item2}kg짜리 오렌지를 담았습니다. <br />
+        바구니의 무게는 {container.toFixed(2)}kg 입니다. <br />
+        이 바구니에 {item1.toFixed(2)}kg짜리 사과와 {item2.toFixed(2)}kg짜리 오렌지를 담았습니다. <br />
         과일이 담긴 바구니의 총 무게는 얼마인가요? <AnswerInput /> kg
       </p>
     ),
@@ -313,8 +325,12 @@ const generateMultiStepWordProblem = (): MathProblem => {
 
 const generateErrorCorrectionProblem = (): MathProblem => {
     const isAddition = Math.random() > 0.5;
-    const num1 = round(randomInt(100, 800) / 100, 2);
-    const num2 = round(randomInt(10, (num1*100) - 50) / 100, 2);
+    let num1_raw = round(randomInt(100, 800) / 100, 2);
+    let num2_raw = round(randomInt(100, 800) / 100, 2);
+
+    const num1 = isAddition ? num1_raw : Math.max(num1_raw, num2_raw);
+    const num2 = isAddition ? num2_raw : Math.min(num1_raw, num2_raw);
+
     const correctAnswer = isAddition ? round(num1 + num2, 2) : round(num1 - num2, 2);
 
     // Create a plausible error by misaligning decimals
@@ -401,7 +417,7 @@ const generateMultiComparisonProblem = (): MathProblem => {
                 <div className="grid grid-cols-3 gap-2 text-center">
                    {shuffleArray(problems).map(p => (
                        <div key={p.key} className="p-2 border rounded-md bg-muted">
-                           {p.key} {p.num1} + {p.num2}
+                           {p.key} {p.num1.toFixed(2)} + {p.num2.toFixed(2)}
                        </div>
                    ))}
                 </div>
@@ -588,3 +604,5 @@ export const getAIMove = (
 
   return null;
 };
+
+    
