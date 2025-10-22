@@ -305,22 +305,25 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
                   <span className="font-semibold">{currentUser.nickname}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="font-medium text-muted-foreground">국가</span>
-                  <div className="flex items-center gap-2">
-                    {currentUser.isCountryOwner ? (
-                       <button 
-                            onClick={() => setFlagEditorOpen(true)}
-                            className="cursor-pointer hover:opacity-80 transition-opacity"
-                        >
-                            {userCountry && <FlagDisplay flagData={userCountry.flag} width={40} />}
+                   <span className="font-medium text-muted-foreground">국가</span>
+                   <div className="flex items-center gap-2">
+                     {currentUser.isCountryOwner ? (
+                       <button
+                         onClick={() => setFlagEditorOpen(true)}
+                         className="relative group cursor-pointer hover:opacity-80 transition-opacity"
+                       >
+                         {userCountry && <FlagDisplay flagData={userCountry.flag} width={40} />}
+                         <div className="absolute inset-0 bg-black/50 flex items-center justify-center rounded-sm opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Pencil className="w-4 h-4 text-white" />
+                         </div>
                        </button>
-                    ) : (
-                        <div>
-                             {userCountry && <FlagDisplay flagData={userCountry.flag} width={40} />}
-                        </div>
-                    )}
-                    <Badge variant="secondary" style={{ backgroundColor: userCountry?.color }}>{userCountry?.name || '미지정'}</Badge>
-                  </div>
+                     ) : (
+                       <div>
+                         {userCountry && <FlagDisplay flagData={userCountry.flag} width={40} />}
+                       </div>
+                     )}
+                     <Badge variant="secondary" style={{ backgroundColor: userCountry?.color }}>{userCountry?.name || '미지정'}</Badge>
+                   </div>
                 </div>
                  <div className="flex justify-between">
                   <span className="font-medium text-muted-foreground">보유 토큰</span>
@@ -544,3 +547,5 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
     </>
   );
 }
+
+    
