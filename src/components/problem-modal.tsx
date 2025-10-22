@@ -17,7 +17,7 @@ import { useState, type FormEvent, useEffect, useMemo } from 'react';
 import { CheckCircle, XCircle, Swords } from 'lucide-react';
 import { useFirestore } from '@/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { generateProblemFromData, problemNodeToString, AnswerInput } from '@/lib/game-logic';
+import { generateProblemFromData, AnswerInput, problemNodeToString } from '@/lib/game-logic';
 
 interface ProblemModalProps {
   isOpen: boolean;
@@ -55,7 +55,6 @@ export default function ProblemModal({
 
   const numInputs = useMemo(() => {
     if (!problem) return 0;
-    // This is a bit of a hack to count the number of inputs needed.
     return problem.answer.length;
   }, [problem]);
 
@@ -138,12 +137,13 @@ export default function ProblemModal({
 
     const { answer: correctAnswers } = problem;
 
-    const isCorrect = userAnswers.length === correctAnswers.length && correctAnswers.every((correctAns, i) => {
-      const userAns = userAnswers[i] || '';
-      
-      const processedUserAns = (userAns.trim() === '' && !isNaN(parseFloat(correctAns))) ? '0' : userAns.trim();
-      
-      return String(processedUserAns) === String(correctAns);
+    const isCorrect = correctAnswers.length === answers.length && correctAnswers.every((correctAns, i) => {
+        const userAns = answers[i] || '';
+        // Treat empty user input as '0' only if the correct answer is a number that can be interpreted as 0.
+        // This avoids issues with non-numeric answers like '>'.
+        const isCorrectAnsNumericZero = !isNaN(parseFloat(correctAns)) && parseFloat(correctAns) === 0;
+        const processedUserAns = (userAns.trim() === '' && isCorrectAnsNumericZero) ? '0' : userAns.trim();
+        return processedUserAns === correctAns.trim();
     });
 
     if (isCorrect) {
@@ -160,7 +160,7 @@ export default function ProblemModal({
         title: "오답입니다",
         description: (
             <div>
-              <p>입력: [{userAnswers.join(', ')}]</p>
+              <p>입력: [{answers.join(', ')}]</p>
               <p>정답: [{correctAnswers.join(', ')}]</p>
             </div>
         ),
