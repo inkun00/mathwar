@@ -350,7 +350,7 @@ const generateComparisonProblem = (): MathProblem => {
     // 3.45 O 3.5
     const num1 = round(randomInt(10, 500) / 100, 2);
     const num2 = round(randomInt(10, 500) / 100, 2);
-    const correctSign = num1 > num2 ? '>' : num1 < val2 ? '<' : '=';
+    const correctSign = num1 > num2 ? '>' : num1 < num2 ? '<' : '=';
     return {
       problem: <span>{num1.toFixed(2)} {INPUT_PLACEHOLDER} {num2.toFixed(2)}</span>,
       answer: [correctSign],
@@ -572,7 +572,7 @@ const generateListNavigationProblem = (): MathProblem => {
       };
     } else {
       return {
-        problem: <div>{problemDisplay}<p className="mt-2">답: <Fraction numerator={INPUT_PLACEHolder} denominator={INPUT_PLACEHOLDER} /></p></div>,
+        problem: <div>{problemDisplay}<p className="mt-2">답: <Fraction numerator={INPUT_PLACEHOLDER} denominator={INPUT_PLACEHOLDER} /></p></div>,
         answer: [String(resultNumRem), String(den)],
         type: 'fraction',
         subType: 'list-navigation',
@@ -640,6 +640,8 @@ export const generateProblemFromData = (data: StorableProblem): MathProblem => {
     'multiple-choice': generateComparisonProblem,
     'diagram': generateDirectCalculationProblem, 
     'conditional-operation': generateConditionalProblem,
+    'fill-in-the-blanks-process': generateProcessDecompositionProblem,
+    'fill-in-the-blanks-concept': generateUnitConversionConceptProblem
   };
 
   const generator = problemMap[data.subType] || generateDirectCalculationProblem;
