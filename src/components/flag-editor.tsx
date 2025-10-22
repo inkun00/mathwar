@@ -9,6 +9,7 @@ import { useFirestore } from "@/firebase";
 import { doc, updateDoc } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "./ui/dialog";
+import { errorEmitter, FirestorePermissionError } from "@/firebase";
 
 interface FlagEditorProps {
   country: Country;
@@ -44,27 +45,37 @@ export default function FlagEditor({ country, isOpen, onOpenChange }: FlagEditor
     setPixels(newPixels);
   };
 
-  const handleSave = async () => {
+  const handleSave = () => {
     if (!firestore || !country) return;
     setIsProcessing(true);
     const countryRef = doc(firestore, "countries", country.id);
-    try {
-      await updateDoc(countryRef, { flag: pixels });
-      toast({
-        title: "국기 저장 완료!",
-        description: "새로운 국기가 성공적으로 저장되었습니다.",
+    const updateData = { flag: pixels };
+
+    updateDoc(countryRef, updateData)
+      .then(() => {
+        toast({
+          title: "국기 저장 완료!",
+          description: "새로운 국기가 성공적으로 저장되었습니다.",
+        });
+        onOpenChange(false);
+      })
+      .catch((error) => {
+        const permissionError = new FirestorePermissionError({
+          path: countryRef.path,
+          operation: 'update',
+          requestResourceData: updateData,
+        });
+        errorEmitter.emit('permission-error', permissionError);
+
+        toast({
+          variant: "destructive",
+          title: "오류",
+          description: "국기를 저장하는 중 오류가 발생했습니다. 권한을 확인해주세요.",
+        });
+      })
+      .finally(() => {
+        setIsProcessing(false);
       });
-      onOpenChange(false);
-    } catch (error) {
-      console.error("국기 저장 오류:", error);
-      toast({
-        variant: "destructive",
-        title: "오류",
-        description: "국기를 저장하는 중 오류가 발생했습니다.",
-      });
-    } finally {
-      setIsProcessing(false);
-    }
   };
 
   return (
