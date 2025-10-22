@@ -1,7 +1,8 @@
+
 'use client';
 
 import { useState } from "react";
-import { Circle, Eraser } from "lucide-react";
+import { Eraser } from "lucide-react";
 import { Button } from "./ui/button";
 import { cn } from "@/lib/utils";
 import type { Country } from "@/lib/types";
@@ -16,7 +17,8 @@ interface FlagEditorProps {
   onOpenChange: (open: boolean) => void;
 }
 
-const FLAG_GRID_SIZE = 10;
+const FLAG_GRID_WIDTH = 20;
+const FLAG_GRID_HEIGHT = 10;
 const defaultColor = "#ffffff";
 const colors = [
   "#ffffff", "#000000", "#ff0000", "#00ff00", "#0000ff", "#ffff00", "#ff00ff", "#00ffff",
@@ -29,7 +31,9 @@ export default function FlagEditor({ country, isOpen, onOpenChange }: FlagEditor
   const firestore = useFirestore();
   const { toast } = useToast();
   const [pixels, setPixels] = useState<string[]>(() => 
-    country.flag || Array(FLAG_GRID_SIZE * FLAG_GRID_SIZE).fill(defaultColor)
+    country.flag && country.flag.length === FLAG_GRID_WIDTH * FLAG_GRID_HEIGHT 
+      ? country.flag 
+      : Array(FLAG_GRID_WIDTH * FLAG_GRID_HEIGHT).fill(defaultColor)
   );
   const [selectedColor, setSelectedColor] = useState(colors[1]);
   const [isErasing, setIsErasing] = useState(false);
@@ -66,15 +70,15 @@ export default function FlagEditor({ country, isOpen, onOpenChange }: FlagEditor
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="max-w-4xl">
         <DialogHeader>
-          <DialogTitle>국기 디자인</DialogTitle>
+          <DialogTitle>국기 디자인 (20x10)</DialogTitle>
         </DialogHeader>
         <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-6 items-start">
           {/* Flag Grid */}
           <div
-            className="grid aspect-square touch-none cursor-pointer border"
-            style={{ gridTemplateColumns: `repeat(${FLAG_GRID_SIZE}, 1fr)` }}
+            className="grid touch-none cursor-pointer border aspect-[2/1]"
+            style={{ gridTemplateColumns: `repeat(${FLAG_GRID_WIDTH}, 1fr)` }}
             onMouseDown={(e) => e.preventDefault()} // Prevent text selection
           >
             {pixels.map((color, i) => (

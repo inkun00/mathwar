@@ -1,3 +1,4 @@
+
 'use client';
 import type { MapData, User, Tile, Country } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -96,6 +97,7 @@ export default function WorldMap({ mapData, users, countries, onTileClick, canCo
   };
 
   const getTooltipContent = (tile: Tile): React.ReactNode => {
+    if (!isLand(tile.x, tile.y)) return null;
     if (!tile.ownerId) return <p>미개척지</p>;
     const owner = users.find(u => u.id === tile.ownerId);
     if (!owner) return <p>알 수 없는 플레이어</p>;
@@ -108,7 +110,7 @@ export default function WorldMap({ mapData, users, countries, onTileClick, canCo
 
     return (
         <div className="flex items-center gap-2">
-            {country && <FlagDisplay flagData={country.flag} size={24} />}
+            {country && <FlagDisplay flagData={country.flag} width={32} />}
             <p>{content}</p>
         </div>
     );
