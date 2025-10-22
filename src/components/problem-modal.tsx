@@ -141,13 +141,6 @@ export default function ProblemModal({
         const processedUserAns = (userAns === '' && String(correctAns) === '0') ? '0' : userAns;
         return String(processedUserAns).trim() === String(correctAns).trim();
       });
-
-    // Debugging toast
-    toast({
-      variant: "default",
-      title: "정답 데이터 확인",
-      description: `사용자 입력: [${userAnswers.join(', ')}] | 시스템 정답: [${correctAnswers.join(', ')}]`,
-    });
   
     if (isCorrect) {
       toast({
@@ -161,7 +154,12 @@ export default function ProblemModal({
       toast({
         variant: 'destructive',
         title: isInvasion ? "침략 실패" : "오답입니다",
-        description: isInvasion ? "토큰을 잃고 영토 획득에 실패했습니다." : `정답: ${correctAnswers.join(', ')}`,
+        description: (
+            <div>
+                <p>입력: [{userAnswers.join(', ')}]</p>
+                <p>정답: [{correctAnswers.join(', ')}]</p>
+            </div>
+        ),
         action: <XCircle className="text-white" />,
       });
       if (onWrongAnswer) {
