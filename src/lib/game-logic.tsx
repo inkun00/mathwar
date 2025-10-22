@@ -217,7 +217,7 @@ const generateDirectCalculationProblem = (): MathProblem => {
 const generateProcessDecompositionProblem = (): MathProblem => {
   const type = randomInt(1, 3);
   if (type === 1) {
-    // 예시: 5 - 2 4/5 = 4 [ ? ]/5 - 2 4/5 = [ ? ] [ ? ]/5
+    // 예시: 5 - 2 4/5 → 4 ?/5 - 2 4/5 → ? ?/5
     const den = randomInt(5, 9);
     const int1 = randomInt(3, 5);
     const int2 = randomInt(1, int1 - 1);
@@ -228,7 +228,11 @@ const generateProcessDecompositionProblem = (): MathProblem => {
     return {
       problem: (
         <span className="flex flex-wrap items-center justify-center gap-x-2">
-          {int1} - <MixedFraction integer={int2} numerator={num2} denominator={den} /> = <MixedFraction integer={int1 - 1} numerator={<AnswerInput />} denominator={den} /> - <MixedFraction integer={int2} numerator={num2} denominator={den} /> = <MixedFraction integer={<AnswerInput />} numerator={<AnswerInput />} denominator={<AnswerInput />} />
+          {int1} - <MixedFraction integer={int2} numerator={num2} denominator={den} />
+          <span className="mx-2">→</span>
+          <MixedFraction integer={int1 - 1} numerator={<AnswerInput />} denominator={den} /> - <MixedFraction integer={int2} numerator={num2} denominator={den} />
+          <span className="mx-2">→</span>
+          <MixedFraction integer={<AnswerInput />} numerator={<AnswerInput />} denominator={<AnswerInput />} />
         </span>
       ),
       answer: [String(den), String(resultInt), String(resultNumRaw), String(den)],
