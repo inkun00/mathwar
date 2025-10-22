@@ -14,6 +14,15 @@ import { cn } from './utils';
 const randomInt = (min: number, max: number) =>
   Math.floor(Math.random() * (max - min + 1)) + min;
 const round = (num: number, places: number) => parseFloat(num.toFixed(places));
+const shuffleArray = <T,>(array: T[]): T[] => {
+  const newArray = [...array];
+  for (let i = newArray.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+  }
+  return newArray;
+};
+
 
 // --- React Component Utilities for Problems ---
 
@@ -77,6 +86,7 @@ const MixedFraction = ({
 const generateDirectCalculationProblem = (): MathProblem => {
     const problemType = randomInt(1, 2);
     let num1, num2, operator, answer, subType, storable: StorableProblem;
+    let problemNode: React.ReactNode;
 
     switch(problemType) {
         case 1: // Addition
@@ -86,6 +96,7 @@ const generateDirectCalculationProblem = (): MathProblem => {
             answer = round(num1 + num2, 2);
             subType = 'decimal-add';
             storable = { type: 'decimal', subType: 'decimal-add', operands: [num1, num2], operator: 'add' };
+            problemNode = <span>{num1} {operator} {num2} = <AnswerInput /></span>;
             break;
         case 2: // Subtraction
         default:
@@ -95,11 +106,12 @@ const generateDirectCalculationProblem = (): MathProblem => {
             answer = round(num1 - num2, 2);
             subType = 'decimal-subtract';
             storable = { type: 'decimal', subType: 'decimal-subtract', operands: [num1, num2], operator: 'subtract' };
+            problemNode = <span>{num1} {operator} {num2} = <AnswerInput /></span>;
             break;
     }
 
     return {
-        problem: <span>{num1} {operator} {num2} = <AnswerInput /></span>,
+        problem: problemNode,
         answer: [String(answer)],
         type: 'decimal',
         subType: subType as ProblemSubType,
@@ -118,6 +130,31 @@ const generateUnitConversionConceptProblem = (): MathProblem => {
       storable: { type: 'conversion', subType: 'decimal-to-fraction', operands: [decimal], operator: 'convert' },
     };
 };
+
+const generatePlaceValueProblem = (): MathProblem => {
+    const baseNum = round(randomInt(10, 999) / 100, 2); // e.g., 4.35
+    const multiplier = Math.random() > 0.5 ? 10 : 100;
+    const isMultiply = Math.random() > 0.5;
+
+    let questionText, answer;
+
+    if (isMultiply) {
+        questionText = `${baseNum}의 ${multiplier}배`;
+        answer = round(baseNum * multiplier, 2);
+    } else {
+        questionText = `${baseNum * multiplier}의 1/${multiplier}`;
+        answer = baseNum;
+    }
+
+    return {
+        problem: <span>{questionText}인 수는? <AnswerInput /></span>,
+        answer: [String(answer)],
+        type: 'decimal',
+        subType: 'conditional-operation',
+        storable: { type: 'decimal', subType: 'conditional-operation', operands: [baseNum, multiplier, isMultiply ? 1 : 0], operator: 'calculate' },
+    };
+};
+
 
 // --- MEDIUM PROBLEMS ---
 
@@ -196,6 +233,31 @@ const generateVerticalCalculationProblem = (): MathProblem => {
   };
 };
 
+const generateDiagramProblem = (): MathProblem => {
+    const startNum = round(randomInt(200, 500) / 100, 2);
+    const subtractNum = round(randomInt(10, 150) / 100, 2);
+    const answer = round(startNum - subtractNum, 2);
+    
+    return {
+        problem: (
+            <div className="flex justify-center items-center gap-2">
+                <span className="border rounded-md p-4 bg-muted">{startNum.toFixed(2)}</span>
+                <div className="flex flex-col items-center">
+                    <span className="text-sm px-2 py-1 rounded-full bg-green-200 text-green-800">-{subtractNum.toFixed(2)}</span>
+                    <span className="text-2xl font-bold text-green-600">→</span>
+                </div>
+                <div className="border rounded-md p-2 bg-background">
+                    <AnswerInput />
+                </div>
+            </div>
+        ),
+        answer: [String(answer)],
+        type: 'decimal',
+        subType: 'diagram',
+        storable: { type: 'decimal', subType: 'diagram', operands: [startNum, subtractNum], operator: 'subtract' },
+    }
+}
+
 // --- HARD PROBLEMS ---
 
 const generateListNavigationProblem = (): MathProblem => {
@@ -258,11 +320,10 @@ const generateErrorCorrectionProblem = (): MathProblem => {
     // Create a plausible error by misaligning decimals
     const errorType = randomInt(1, 2);
     let wrongAnswer;
-    let explanation;
+    let explanation = "소수점 위치를 잘못 맞추었습니다.";
     
     if (errorType === 1) { // Decimal alignment error
         wrongAnswer = isAddition ? round(num1*10 + num2, 2) : round(num1*10 - num2, 2);
-        explanation = "소수점 위치를 잘못 맞추었습니다.";
     } else { // Calculation error in one digit
         let errorDigit = randomInt(1, 9) / 100;
         wrongAnswer = round(correctAnswer + (Math.random() > 0.5 ? errorDigit : -errorDigit), 2);
@@ -295,47 +356,85 @@ const generateErrorCorrectionProblem = (): MathProblem => {
     };
 };
 
-const generateFillInTheBlanksProcessProblem = (): MathProblem => {
-    const num1Int = randomInt(2, 9);
-    const num2Int = randomInt(11, 29);
-    const num1 = num1Int;
-    const num2 = round(num2Int / 10, 1);
+const generateDecompositionProblem = (): MathProblem => {
+    const num1 = round(randomInt(101, 199) / 100, 2); // 1.xx
+    const num2 = round(randomInt(1, 99) / 100, 2);   // 0.xx
+    const num1_in_0_01 = Math.round(num1 * 100);
+    const num2_in_0_01 = Math.round(num2 * 100);
+    const sum_in_0_01 = num1_in_0_01 + num2_in_0_01;
+    const sum = round(num1 + num2, 2);
 
     return {
         problem: (
-            <div className="text-base text-center">
-                <p>빈칸에 알맞은 수를 써넣으세요.</p>
-                <div className="mt-2 font-mono flex flex-col items-center">
-                    <span>{num1} + {num2}</span>
-                    <span>= ({num1Int*10}/10) + ({num2Int} / 10)</span>
-                    <span>= ({num1Int*10} + {num2Int}) / 10</span>
-                    <span>= {num1Int*10 + num2Int} / <AnswerInput /></span>
-                    <span>= <AnswerInput /></span>
+            <div className="text-base text-center leading-relaxed">
+                <p>{num1}은 0.01이 <AnswerInput />개이고, {num2}는 0.01이 <AnswerInput />개입니다.</p>
+                <p className="mt-2">{num1}+{num2}는 0.01이 모두 <AnswerInput />개이므로 <AnswerInput />입니다.</p>
+            </div>
+        ),
+        answer: [String(num1_in_0_01), String(num2_in_0_01), String(sum_in_0_01), String(sum)],
+        type: 'decimal',
+        subType: 'process-decomposition',
+        storable: { type: 'decimal', subType: 'process-decomposition', operands: [num1, num2], operator: 'calculate' }
+    };
+}
+
+
+const generateMultiComparisonProblem = (): MathProblem => {
+    const problems = [
+        { key: '㉠', num1: round(randomInt(100, 400) / 100, 2), num2: round(randomInt(100, 400) / 100, 2) },
+        { key: '㉡', num1: round(randomInt(100, 400) / 100, 2), num2: round(randomInt(100, 400) / 100, 2) },
+        { key: '㉢', num1: round(randomInt(100, 400) / 100, 2), num2: round(randomInt(100, 400) / 100, 2) },
+    ];
+    
+    const results = problems.map(p => ({
+        key: p.key,
+        value: round(p.num1 + p.num2, 2),
+    }));
+
+    results.sort((a, b) => b.value - a.value);
+    const answer = results.map(r => r.key).join(',');
+
+    return {
+        problem: (
+            <div className="space-y-2 text-base">
+                <p>계산 결과가 큰 것부터 차례로 기호를 써 보세요.</p>
+                <div className="grid grid-cols-3 gap-2 text-center">
+                   {shuffleArray(problems).map(p => (
+                       <div key={p.key} className="p-2 border rounded-md bg-muted">
+                           {p.key} {p.num1} + {p.num2}
+                       </div>
+                   ))}
+                </div>
+                <div className="pt-2">
+                    답: <AnswerInput />
                 </div>
             </div>
         ),
-        answer: ["10", String(round(num1+num2, 1))],
+        answer: [answer],
         type: 'decimal',
-        subType: 'fill-in-the-blanks-process',
-        storable: { type: 'decimal', subType: 'fill-in-the-blanks-process', operands: [num1, num2], operator: 'calculate' }
-    };
-};
-
+        subType: 'list-navigation',
+        storable: { type: 'decimal', subType: 'list-navigation', operands: problems.flatMap(p => [p.num1, p.num2]), operator: 'calculate' },
+    }
+}
 
 
 export const generateProblemFromData = (data: StorableProblem): MathProblem => {
+  // This function might need more specific logic if we want to perfectly recreate
+  // a problem from stored data. For now, we regenerate a similar type.
   const problemMap: Record<string, () => MathProblem> = {
     'decimal-add': generateDirectCalculationProblem,
     'decimal-subtract': generateDirectCalculationProblem,
     'comparison': generateComparisonProblem,
     'word-problem': generateWordProblem,
     'conditional': generateConditionalProblem,
-    'list-navigation': generateListNavigationProblem,
+    'list-navigation': generateMultiComparisonProblem,
     'multi-step-word-problem': generateMultiStepWordProblem,
-    'decimal-to-fraction': generateUnitConversionConceptProblem,
+    'decimal-to-fraction': generateUnitConversionConceptProblem, // This is a bit of a misnomer now
     'vertical-calculation': generateVerticalCalculationProblem,
     'error-correction': generateErrorCorrectionProblem,
-    'fill-in-the-blanks-process': generateFillInTheBlanksProcessProblem,
+    'process-decomposition': generateDecompositionProblem,
+    'conditional-operation': generatePlaceValueProblem,
+    'diagram': generateDiagramProblem
   };
 
   const generator = problemMap[data.subType] || generateDirectCalculationProblem;
@@ -369,9 +468,9 @@ export const problemNodeToString = (node: React.ReactNode): string => {
 
 // --- Main Problem Generation Function ---
 
-const easyProblems = [generateDirectCalculationProblem, generateUnitConversionConceptProblem];
-const mediumProblems = [generateComparisonProblem, generateWordProblem, generateConditionalProblem, generateVerticalCalculationProblem];
-const hardProblems = [generateListNavigationProblem, generateMultiStepWordProblem, generateErrorCorrectionProblem, generateFillInTheBlanksProcessProblem];
+const easyProblems = [generateDirectCalculationProblem, generateUnitConversionConceptProblem, generatePlaceValueProblem];
+const mediumProblems = [generateComparisonProblem, generateWordProblem, generateConditionalProblem, generateVerticalCalculationProblem, generateDiagramProblem];
+const hardProblems = [generateListNavigationProblem, generateMultiStepWordProblem, generateErrorCorrectionProblem, generateDecompositionProblem, generateMultiComparisonProblem];
 
 export const generateMathProblem = (): MathProblem => {
   const chance = Math.random() * 10; // 0 to 10
@@ -489,5 +588,3 @@ export const getAIMove = (
 
   return null;
 };
-
-    
