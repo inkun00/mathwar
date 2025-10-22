@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/firebase';
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged } from 'firebase/auth';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
@@ -12,12 +12,27 @@ import { User, Mail, KeyRound } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
 import { signInAnonymously } from 'firebase/auth';
 
+const LAST_LOGIN_TIMESTAMP_KEY = 'decimalConquestLastLogin';
+const LOGIN_COOLDOWN_MS = 60 * 60 * 1000; // 1 hour
+
 export default function Login() {
   const auth = useAuth();
   const { toast } = useToast();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
+
+  useEffect(() => {
+    if (!auth) return;
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        // If a user successfully logs in, set the timestamp.
+        localStorage.setItem(LAST_LOGIN_TIMESTAMP_KEY, Date.now().toString());
+      }
+    });
+    return () => unsubscribe();
+  }, [auth]);
+
 
   const handleAuthError = (err: any) => {
     let errorMessage = "알 수 없는 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.";
@@ -51,9 +66,27 @@ export default function Login() {
       description: errorMessage,
     });
   };
+
+  const checkLoginCooldown = (): boolean => {
+    const lastLoginTimestamp = localStorage.getItem(LAST_LOGIN_TIMESTAMP_KEY);
+    if (lastLoginTimestamp) {
+      const timeSinceLastLogin = Date.now() - parseInt(lastLoginTimestamp, 10);
+      if (timeSinceLastLogin < LOGIN_COOLDOWN_MS) {
+        const minutesRemaining = Math.ceil((LOGIN_COOLDOWN_MS - timeSinceLastLogin) / 60000);
+        toast({
+          variant: "destructive",
+          title: "로그인 제한",
+          description: `동일한 기기에서는 ${minutesRemaining}분 후에 다른 계정으로 접속할 수 있습니다.`,
+        });
+        return false;
+      }
+    }
+    return true;
+  };
   
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!checkLoginCooldown()) return;
     try {
       await signInWithEmailAndPassword(auth, email, password);
     } catch (err) {
@@ -63,6 +96,7 @@ export default function Login() {
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!checkLoginCooldown()) return;
     try {
       await createUserWithEmailAndPassword(auth, email, password);
       toast({ title: '회원가입 성공!', description: '게임에 오신 것을 환영합니다.' });
@@ -73,6 +107,7 @@ export default function Login() {
 
 
   const handleAnonymousLogin = async () => {
+    if (!checkLoginCooldown()) return;
     try {
       await signInAnonymously(auth);
     } catch (error) {
