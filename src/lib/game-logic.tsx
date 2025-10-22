@@ -7,9 +7,8 @@ import type {
   StorableProblem,
 } from './types';
 import { isLand } from './world-map-shape';
-import React, { ReactNode, useContext } from 'react';
+import React, { ReactNode } from 'react';
 import { cn } from './utils';
-import { ProblemInputContext } from '@/components/problem-modal';
 
 // --- Utility Functions ---
 const randomInt = (min: number, max: number) =>
@@ -18,33 +17,24 @@ const round = (num: number, places: number) => parseFloat(num.toFixed(places));
 
 // --- React Component Utilities for Problems ---
 
+// A placeholder component to be replaced by a real Input
+export const AnswerInput = () => <span data-answer-input="true" />;
+
+
 interface FractionProps {
-  numerator?: number | string;
-  denominator?: number | string;
-  isNumeratorInput?: boolean;
-  isDenominatorInput?: boolean;
+  numerator?: number | string | React.ReactNode;
+  denominator?: number | string | React.ReactNode;
   className?: string;
 }
 
 const Fraction = ({
   numerator,
   denominator,
-  isNumeratorInput = false,
-  isDenominatorInput = false,
   className,
 }: FractionProps) => {
-  const context = useContext(ProblemInputContext);
 
-  const numElement = isNumeratorInput ? (
-    context?.getInputElement()
-  ) : (
-    <span className="text-xl leading-none">{numerator}</span>
-  );
-  const denElement = isDenominatorInput ? (
-    context?.getInputElement()
-  ) : (
-    <span className="text-xl leading-none">{denominator}</span>
-  );
+  const numElement = <span className="text-xl leading-none">{numerator}</span>;
+  const denElement = <span className="text-xl leading-none">{denominator}</span>;
 
   return (
     <span
@@ -58,21 +48,16 @@ const Fraction = ({
 };
 
 interface MixedFractionProps extends FractionProps {
-    integer?: number | string;
-    isIntegerInput?: boolean;
+    integer?: number | string | React.ReactNode;
 }
 
 const MixedFraction = ({
   integer,
   numerator,
   denominator,
-  isIntegerInput = false,
-  isNumeratorInput = false,
-  isDenominatorInput = false,
   className,
 }: MixedFractionProps) => {
-    const context = useContext(ProblemInputContext);
-    const intElement = isIntegerInput ? context?.getInputElement() : <span className="text-2xl mr-1">{integer}</span>;
+    const intElement = <span className="text-2xl mr-1">{integer}</span>;
 
     return (
         <span className={cn('inline-flex items-center align-middle', className)}>
@@ -80,8 +65,6 @@ const MixedFraction = ({
             <Fraction 
                 numerator={numerator} 
                 denominator={denominator}
-                isNumeratorInput={isNumeratorInput}
-                isDenominatorInput={isDenominatorInput}
             />
         </span>
     );
@@ -115,7 +98,7 @@ const generateDirectCalculationProblem = (): MathProblem => {
       }
       
       return {
-        problem: <span>{int1} - <MixedFraction integer={int2} numerator={num2} denominator={den} /> = <MixedFraction isIntegerInput isNumeratorInput isDenominatorInput /></span>,
+        problem: <span>{int1} - <MixedFraction integer={int2} numerator={num2} denominator={den} /> = <MixedFraction integer={<AnswerInput />} numerator={<AnswerInput />} denominator={<AnswerInput />} /></span>,
         answer: [String(resultInt), String(resultNumRaw), String(den)],
         type: 'fraction',
         subType: 'fraction-subtract-from-int',
@@ -148,7 +131,7 @@ const generateDirectCalculationProblem = (): MathProblem => {
       
       if (resultInt > 0) {
         return {
-          problem: <span><MixedFraction integer={int1} numerator={num1} denominator={den} /> - <MixedFraction integer={int2} numerator={num2} denominator={den} /> = <MixedFraction isIntegerInput isNumeratorInput isDenominatorInput /></span>,
+          problem: <span><MixedFraction integer={int1} numerator={num1} denominator={den} /> - <MixedFraction integer={int2} numerator={num2} denominator={den} /> = <MixedFraction integer={<AnswerInput />} numerator={<AnswerInput />} denominator={<AnswerInput />} /></span>,
           answer: [String(resultInt), String(resultRem), String(den)],
           type: 'fraction',
           subType: 'fraction-subtract-mixed',
@@ -156,7 +139,7 @@ const generateDirectCalculationProblem = (): MathProblem => {
         };
       } else {
           return {
-          problem: <span><MixedFraction integer={int1} numerator={num1} denominator={den} /> - <MixedFraction integer={int2} numerator={num2} denominator={den} /> = <Fraction isNumeratorInput isDenominatorInput /></span>,
+          problem: <span><MixedFraction integer={int1} numerator={num1} denominator={den} /> - <MixedFraction integer={int2} numerator={num2} denominator={den} /> = <Fraction numerator={<AnswerInput />} denominator={<AnswerInput />} /></span>,
           answer: [String(resultRem), String(den)],
           type: 'fraction',
           subType: 'fraction-subtract-mixed',
@@ -182,7 +165,7 @@ const generateDirectCalculationProblem = (): MathProblem => {
         }
         
         return {
-            problem: <span><MixedFraction integer={int1} numerator={num1} denominator={den} /> - <Fraction numerator={num2} denominator={den} /> = <MixedFraction isIntegerInput isNumeratorInput isDenominatorInput /></span>,
+            problem: <span><MixedFraction integer={int1} numerator={num1} denominator={den} /> - <Fraction numerator={num2} denominator={den} /> = <MixedFraction integer={<AnswerInput />} numerator={<AnswerInput />} denominator={<AnswerInput />} /></span>,
             answer: [String(int1), String(resultNum), String(den)],
             type: 'fraction',
             subType: 'fraction-subtract-same-den',
@@ -209,7 +192,7 @@ const generateDirectCalculationProblem = (): MathProblem => {
         }
 
         return {
-            problem: <span><MixedFraction integer={int1} numerator={num1} denominator={den} /> - <MixedFraction integer={int2} numerator={num2} denominator={den} /> = <Fraction isNumeratorInput isDenominatorInput /></span>,
+            problem: <span><MixedFraction integer={int1} numerator={num1} denominator={den} /> - <MixedFraction integer={int2} numerator={num2} denominator={den} /> = <Fraction numerator={<AnswerInput />} denominator={<AnswerInput />} /></span>,
             answer: [String(resultNumRaw), String(den)],
             type: 'fraction',
             subType: 'fraction-subtract-mixed',
@@ -245,7 +228,7 @@ const generateProcessDecompositionProblem = (): MathProblem => {
     return {
       problem: (
         <span className="flex flex-wrap items-center justify-center gap-x-2">
-          {int1} - <MixedFraction integer={int2} numerator={num2} denominator={den} /> = <MixedFraction integer={int1 - 1} numerator={<AnswerInput />} denominator={den} /> - <MixedFraction integer={int2} numerator={num2} denominator={den} /> = <MixedFraction isIntegerInput isNumeratorInput isDenominatorInput />
+          {int1} - <MixedFraction integer={int2} numerator={num2} denominator={den} /> = <MixedFraction integer={int1 - 1} numerator={<AnswerInput />} denominator={den} /> - <MixedFraction integer={int2} numerator={num2} denominator={den} /> = <MixedFraction integer={<AnswerInput />} numerator={<AnswerInput />} denominator={<AnswerInput />} />
         </span>
       ),
       answer: [String(den), String(resultInt), String(resultNumRaw), String(den)],
@@ -291,7 +274,7 @@ const generateProcessDecompositionProblem = (): MathProblem => {
           <span>=</span>
           <span><AnswerInput /> + <Fraction numerator={<AnswerInput />} denominator={den} /></span>
           <span>=</span>
-          <MixedFraction isIntegerInput isNumeratorInput isDenominatorInput />
+          <MixedFraction integer={<AnswerInput />} numerator={<AnswerInput />} denominator={<AnswerInput />} />
         </span>
       ),
       answer: [
@@ -423,7 +406,7 @@ const generateWordProblem = (): MathProblem => {
         problem: (
           <p className="text-base text-center leading-relaxed">
             지효는 마트에서 돼지고기 <Fraction numerator={num1} denominator={den}/>kg, 소고기 <Fraction numerator={num2} denominator={den}/>kg을 샀습니다. <br />
-            고기는 모두 몇 kg인가요? <MixedFraction isIntegerInput isNumeratorInput isDenominatorInput /> kg
+            고기는 모두 몇 kg인가요? <MixedFraction integer={<AnswerInput />} numerator={<AnswerInput />} denominator={<AnswerInput />} /> kg
           </p>
         ),
         answer: [String(resultInt), String(resultNumRem), String(den)],
@@ -436,7 +419,7 @@ const generateWordProblem = (): MathProblem => {
         problem: (
           <p className="text-base text-center leading-relaxed">
             지효는 마트에서 돼지고기 <Fraction numerator={num1} denominator={den}/>kg, 소고기 <Fraction numerator={num2} denominator={den}/>kg을 샀습니다. <br />
-            고기는 모두 몇 kg인가요? <Fraction isNumeratorInput isDenominatorInput /> kg
+            고기는 모두 몇 kg인가요? <Fraction numerator={<AnswerInput />} denominator={<AnswerInput />} /> kg
           </p>
         ),
         answer: [String(resultNumRem), String(den)],
@@ -490,7 +473,7 @@ const generateConditionalProblem = (): MathProblem => {
     
     if (resultInt > 0) {
       return {
-        problem: <span><Fraction numerator={num1} denominator={den} /> 보다 <Fraction numerator={num2} denominator={den} /> 만큼 {op_text} 수는? <MixedFraction isIntegerInput isNumeratorInput isDenominatorInput /></span>,
+        problem: <span><Fraction numerator={num1} denominator={den} /> 보다 <Fraction numerator={num2} denominator={den} /> 만큼 {op_text} 수는? <MixedFraction integer={<AnswerInput />} numerator={<AnswerInput />} denominator={<AnswerInput />} /></span>,
         answer: [String(resultInt), String(resultNumRem), String(den)],
         type: 'fraction',
         subType: 'conditional',
@@ -498,7 +481,7 @@ const generateConditionalProblem = (): MathProblem => {
       };
     } else {
       return {
-        problem: <span><Fraction numerator={num1} denominator={den} /> 보다 <Fraction numerator={num2} denominator={den} /> 만큼 {op_text} 수는? <Fraction isNumeratorInput isDenominatorInput /></span>,
+        problem: <span><Fraction numerator={num1} denominator={den} /> 보다 <Fraction numerator={num2} denominator={den} /> 만큼 {op_text} 수는? <Fraction numerator={<AnswerInput />} denominator={<AnswerInput />} /></span>,
         answer: [String(resultNumRem), String(den)],
         type: 'fraction',
         subType: 'conditional',
@@ -576,7 +559,7 @@ const generateListNavigationProblem = (): MathProblem => {
 
     if (resultInt > 0) {
       return {
-        problem: <div>{problemDisplay}<p className="mt-2">답: <MixedFraction isIntegerInput isNumeratorInput isDenominatorInput /></p></div>,
+        problem: <div>{problemDisplay}<p className="mt-2">답: <MixedFraction integer={<AnswerInput />} numerator={<AnswerInput />} denominator={<AnswerInput />} /></p></div>,
         answer: [String(resultInt), String(resultNumRem), String(den)],
         type: 'fraction',
         subType: 'list-navigation',
@@ -584,7 +567,7 @@ const generateListNavigationProblem = (): MathProblem => {
       };
     } else {
       return {
-        problem: <div>{problemDisplay}<p className="mt-2">답: <Fraction isNumeratorInput isDenominatorInput /></p></div>,
+        problem: <div>{problemDisplay}<p className="mt-2">답: <Fraction numerator={<AnswerInput />} denominator={<AnswerInput />} /></p></div>,
         answer: [String(resultNumRem), String(den)],
         type: 'fraction',
         subType: 'list-navigation',
@@ -660,7 +643,6 @@ export const generateProblemFromData = (data: StorableProblem): MathProblem => {
   return generator();
 };
 
-const AnswerInput = () => <span data-answer-input="true" />;
 
 
 export const problemNodeToString = (node: React.ReactNode): string => {
@@ -673,13 +655,15 @@ export const problemNodeToString = (node: React.ReactNode): string => {
   if (Array.isArray(node)) {
     return node.map(child => problemNodeToString(child)).join('');
   }
-  if (React.isValidElement(node) && node.props.children) {
-      if (node.type === "span" && node.props['data-answer-input']) {
+  if (React.isValidElement(node)) {
+      if (node.type === AnswerInput) {
         return '[?]';
       }
-    return React.Children.toArray(node.props.children)
-      .map(child => problemNodeToString(child))
-      .join('');
+      if (node.props.children) {
+        return React.Children.toArray(node.props.children)
+            .map(child => problemNodeToString(child))
+            .join('');
+      }
   }
   return '';
 };
