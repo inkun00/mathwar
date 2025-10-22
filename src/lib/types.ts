@@ -13,6 +13,7 @@ export interface User {
   conqueredCountries?: string[]; // Array of conquered country IDs
   gamePoints?: number;
   lastPointDistribution?: string; // YYYY-MM-DD
+  isCountryOwner?: boolean;
 }
 
 export interface Country {

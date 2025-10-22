@@ -1,25 +1,33 @@
 'use client';
 
-import type { User, Country, ProblemAttempt, ProblemSubType, WrongAnswer, StorableProblem } from "@/lib/types";
+import type { User, Country, ProblemAttempt, ProblemSubType, WrongAnswer, StorableProblem, Tile } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { LogOut, BookOpen, ChevronsUpDown, Check, Crown } from "lucide-react";
+import { LogOut, BookOpen, ChevronsUpDown, Check, Crown, Handshake, Flag, Swords } from "lucide-react";
 import { useAuth, useFirestore, useCollection, useMemoFirebase } from "@/firebase";
 import { signOut } from "firebase/auth";
 import ProblemModal from "./problem-modal";
 import { deleteWrongAnswer } from "@/firebase/firestore/data";
-import { doc, updateDoc, increment, collection } from "firebase/firestore";
+import { doc, updateDoc, increment, collection, addDoc } from "firebase/firestore";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "./ui/command";
 import { cn } from "@/lib/utils";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "./ui/alert-dialog";
+import { Input } from "./ui/input";
+import { Label } from "./ui/label";
+import { useToast } from "@/hooks/use-toast";
+import { moderateText } from "@/ai/flows/moderate-text-flow";
+import { isAdjacent } from "@/lib/game-logic";
 
 interface ProfileSheetProps {
   currentUser: User;
   userCountry?: Country;
   problemAttempts: ProblemAttempt[];
   wrongAnswers: WrongAnswer[];
+  landTiles: Tile[];
+  users: User[];
 }
 
 const areaLabels: Record<ProblemSubType, string> = {
@@ -53,13 +61,19 @@ const areaLabels: Record<ProblemSubType, string> = {
   'diagram': '도형 문제',
 };
 
-export default function ProfileSheet({ currentUser, userCountry, problemAttempts, wrongAnswers }: ProfileSheetProps) {
+export default function ProfileSheet({ currentUser, userCountry, problemAttempts, wrongAnswers, landTiles, users }: ProfileSheetProps) {
   const auth = useAuth();
   const firestore = useFirestore();
+  const { toast } = useToast();
 
   const [isReviewModalOpen, setReviewModalOpen] = useState(false);
   const [selectedReviewProblem, setSelectedReviewProblem] = useState<WrongAnswer | null>(null);
-  const [isComboboxOpen, setComboboxOpen] = useState(false);
+  const [isWrongAnswerComboboxOpen, setWrongAnswerComboboxOpen] = useState(false);
+  const [isAllianceComboboxOpen, setAllianceComboboxOpen] = useState(false);
+  const [isIndependenceAlertOpen, setIndependenceAlertOpen] = useState(false);
+  const [newCountryName, setNewCountryName] = useState("");
+  const [isProcessing, setIsProcessing] = useState(false);
+
 
   const countriesQuery = useMemoFirebase(() => collection(firestore, 'countries'), [firestore]);
   const { data: countries } = useCollection<Country>(countriesQuery);
@@ -72,7 +86,7 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
   const handleReviewProblemClick = (problem: WrongAnswer) => {
     setSelectedReviewProblem(problem);
     setReviewModalOpen(true);
-    setComboboxOpen(false); // Close combobox when a problem is selected
+    setWrongAnswerComboboxOpen(false); // Close combobox when a problem is selected
   };
 
   const handleCorrectReview = async () => {
@@ -167,6 +181,113 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
     }).filter(name => name !== null);
   }, [currentUser.conqueredCountries, countries]);
 
+  const countryMembers = useMemo(() => {
+    if (!currentUser.countryId) return [];
+    return users.filter(u => u.countryId === currentUser.countryId);
+  }, [users, currentUser.countryId]);
+  
+  const adjacentCountries = useMemo(() => {
+    if (!currentUser || !countries) return [];
+    const myTiles = landTiles.filter(t => t.ownerId === currentUser.id);
+    const adjacentCountryIds = new Set<string>();
+
+    for (const tile of myTiles) {
+      const neighbors = [
+        landTiles.find(t => t.x === tile.x && t.y === tile.y - 1),
+        landTiles.find(t => t.x === tile.x && t.y === tile.y + 1),
+        landTiles.find(t => t.x === tile.x - 1 && t.y === tile.y),
+        landTiles.find(t => t.x === tile.x + 1 && t.y === tile.y),
+      ];
+
+      for (const neighbor of neighbors) {
+        if (neighbor && neighbor.ownerId && neighbor.ownerId !== currentUser.id) {
+          const neighborUser = users.find(u => u.id === neighbor.ownerId);
+          if (neighborUser && neighborUser.countryId !== currentUser.countryId) {
+            adjacentCountryIds.add(neighborUser.countryId);
+          }
+        }
+      }
+    }
+    return countries.filter(c => adjacentCountryIds.has(c.id));
+  }, [landTiles, users, countries, currentUser]);
+
+  const handleJoinCountry = async (countryId: string) => {
+    if (!firestore || !currentUser) return;
+    setIsProcessing(true);
+    const userRef = doc(firestore, 'users', currentUser.id);
+    try {
+      await updateDoc(userRef, { countryId: countryId });
+      toast({
+        title: "동맹 체결!",
+        description: `새로운 국가에 가입했습니다.`,
+      });
+      setAllianceComboboxOpen(false);
+    } catch (error) {
+      console.error("국가 가입 오류:", error);
+      toast({
+        variant: "destructive",
+        title: "오류",
+        description: "동맹 체결 중 오류가 발생했습니다.",
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleDeclareIndependence = async () => {
+    if (!firestore || !currentUser) return;
+
+    if (!newCountryName || newCountryName.length === 0) {
+      toast({ variant: 'destructive', title: '입력 오류', description: '새 국가 이름을 입력해주세요.' });
+      return;
+    }
+    if (newCountryName.length > 6) {
+      toast({ variant: 'destructive', title: '입력 오류', description: '국가 이름은 6자 이하로만 만들 수 있습니다.' });
+      return;
+    }
+
+    setIsProcessing(true);
+
+    try {
+      const nameModeration = await moderateText(newCountryName);
+      if (!nameModeration.isAppropriate) {
+        toast({
+          variant: 'destructive',
+          title: '부적절한 국가 이름',
+          description: nameModeration.reason || '입력한 국가 이름은 사용할 수 없습니다.',
+        });
+        return;
+      }
+
+      const countryRef = await addDoc(collection(firestore, 'countries'), {
+        name: newCountryName,
+        createdBy: currentUser.id,
+        color: `hsl(${Math.random() * 360}, 60%, 70%)`,
+        demised: false,
+      });
+
+      const userRef = doc(firestore, 'users', currentUser.id);
+      await updateDoc(userRef, { countryId: countryRef.id });
+
+      toast({
+        title: "독립 선언!",
+        description: `새로운 국가 '${newCountryName}'를 건국했습니다!`,
+      });
+      setNewCountryName("");
+      setIndependenceAlertOpen(false);
+    } catch (error) {
+      console.error("독립 선언 오류:", error);
+       toast({
+        variant: "destructive",
+        title: "오류",
+        description: "독립 선언 중 오류가 발생했습니다.",
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+
   return (
     <>
       <div className="mt-6 flex h-[calc(100%-3rem)] flex-col justify-between">
@@ -181,7 +302,7 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
                   <span className="font-medium text-muted-foreground">닉네임</span>
                   <span className="font-semibold">{currentUser.nickname}</span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex justify-between items-center">
                   <span className="font-medium text-muted-foreground">국가</span>
                   <Badge variant="secondary" style={{ backgroundColor: userCountry?.color }}>{userCountry?.name || '미지정'}</Badge>
                 </div>
@@ -218,6 +339,86 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
               </Card>
             </div>
           )}
+
+           <div className="space-y-4">
+            <h3 className="text-lg font-semibold tracking-tight">외교</h3>
+            <Card>
+              <CardContent className="pt-6 space-y-2">
+                {!currentUser.isCountryOwner ? (
+                   <AlertDialog open={isIndependenceAlertOpen} onOpenChange={setIndependenceAlertOpen}>
+                    <AlertDialogTrigger asChild>
+                       <Button variant="outline" className="w-full">
+                          <Flag className="mr-2 h-4 w-4" /> 독립 선언
+                       </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>독립을 선언하시겠습니까?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          현재 소속된 국가를 떠나 자신만의 새로운 국가를 건국합니다. 현재 보유한 모든 영토는 새로운 국가의 영토가 됩니다.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <div className="space-y-2">
+                        <Label htmlFor="new-country-name">새 국가 이름</Label>
+                        <Input
+                          id="new-country-name"
+                          value={newCountryName}
+                          onChange={(e) => setNewCountryName(e.target.value)}
+                          placeholder="새로운 국가의 이름 (6자 이하)"
+                          disabled={isProcessing}
+                        />
+                      </div>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isProcessing}>취소</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleDeclareIndependence} disabled={isProcessing}>
+                          {isProcessing ? "처리 중..." : "독립 선언"}
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                ) : countryMembers.length === 1 && (
+                  <Popover open={isAllianceComboboxOpen} onOpenChange={setAllianceComboboxOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={isAllianceComboboxOpen}
+                        className="w-full justify-between"
+                      >
+                         <Handshake className="mr-2 h-4 w-4" /> 동맹 요청
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                      <Command>
+                        <CommandInput placeholder="국가 검색..." />
+                        <CommandEmpty>동맹을 맺을 수 있는 인접 국가가 없습니다.</CommandEmpty>
+                        <CommandGroup>
+                          <CommandList>
+                            {adjacentCountries.map((country) => (
+                              <CommandItem
+                                key={country.id}
+                                value={country.name}
+                                onSelect={() => handleJoinCountry(country.id)}
+                              >
+                                {country.name}
+                              </CommandItem>
+                            ))}
+                          </CommandList>
+                        </CommandGroup>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                )}
+                <p className="text-xs text-muted-foreground px-1">
+                  {currentUser.isCountryOwner && countryMembers.length > 1 && "국가의 소유주는 다른 국가에 가입할 수 없습니다. (소속 인원: " + countryMembers.length + "명)"}
+                   {currentUser.isCountryOwner && countryMembers.length === 1 && "국경이 맞닿은 다른 국가에 가입하여 동맹을 맺을 수 있습니다."}
+                   {!currentUser.isCountryOwner && "현재 소속된 국가에서 나와 자신만의 국가를 세울 수 있습니다."}
+                </p>
+              </CardContent>
+            </Card>
+           </div>
+
 
           <div className="space-y-4">
              <h3 className="text-lg font-semibold tracking-tight">정답률 현황</h3>
@@ -259,12 +460,12 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
             <Card>
               <CardContent className="pt-4">
                 {wrongAnswers.length > 0 ? (
-                  <Popover open={isComboboxOpen} onOpenChange={setComboboxOpen}>
+                  <Popover open={isWrongAnswerComboboxOpen} onOpenChange={setWrongAnswerComboboxOpen}>
                     <PopoverTrigger asChild>
                       <Button
                         variant="outline"
                         role="combobox"
-                        aria-expanded={isComboboxOpen}
+                        aria-expanded={isWrongAnswerComboboxOpen}
                         className="w-full justify-between"
                       >
                         다시 풀 문제 선택하기...

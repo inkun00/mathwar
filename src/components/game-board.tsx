@@ -44,7 +44,18 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
   const [isBuildingWall, setIsBuildingWall] = useState(false);
 
 
-  const currentUser = users.find(u => u.id === currentUserProfile.id);
+  const currentUserCountry = useMemo(() => countries.find(c => c.id === currentUserProfile.countryId), [countries, currentUserProfile.countryId]);
+  
+  const isCountryOwner = useMemo(() => {
+    if (!currentUserCountry || !authUser) return false;
+    return currentUserCountry.createdBy === authUser.uid;
+  }, [currentUserCountry, authUser]);
+
+  const currentUser = useMemo(() => {
+    const user = users.find(u => u.id === currentUserProfile.id);
+    if (!user) return undefined;
+    return { ...user, isCountryOwner };
+  }, [users, currentUserProfile.id, isCountryOwner]);
   
   const allUsers = useMemo(() => {
     const firestoreUsers = users.map(u => ({...u, isAI: false}));
