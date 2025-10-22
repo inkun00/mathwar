@@ -75,6 +75,13 @@
         "demised": {
           "type": "boolean",
           "description": "Whether the country has been conquered and can no longer be used."
+        },
+        "flag": {
+            "type": "array",
+            "description": "A 10x10 grid of colors for the country's flag.",
+            "items": {
+                "type": "string"
+            }
         }
       },
       "required": ["id", "name", "createdBy", "color"]
@@ -191,7 +198,7 @@
             "$ref": "#/backend/entities/Country"
           },
           "description": "Stores all countries created by users. Accessible to all authenticated users.",
-          "allow": ["list", "get", "create"],
+          "allow": ["list", "get", "create", "update"],
           "params": [
             {
               "name": "countryId",

@@ -22,6 +22,7 @@ export interface Country {
   createdBy: string;
   color: string;
   demised?: boolean; // True if the country has fallen
+  flag?: string[]; // 10x10 grid of colors
 }
 
 export interface Tile {

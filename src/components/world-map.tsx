@@ -6,6 +6,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import React from "react";
 import { useMemo } from 'react';
 import { Shield } from "lucide-react";
+import FlagDisplay from "./flag-display";
 
 interface WorldMapProps {
   mapData: MapData;
@@ -71,7 +72,7 @@ const TileComponent = React.memo(({
         </TooltipTrigger>
         {tooltipContent && (
           <TooltipContent>
-            <p>{tooltipContent}</p>
+            {tooltipContent}
           </TooltipContent>
         )}
       </Tooltip>
@@ -84,8 +85,7 @@ TileComponent.displayName = "TileComponent";
 export default function WorldMap({ mapData, users, countries, onTileClick, canConquer, canBuildWall, zoomLevel }: WorldMapProps) {
   const countryColorMap = useMemo(() => new Map(countries.map(c => [c.id, c.color])), [countries]);
   const userCountryMap = useMemo(() => new Map(users.map(u => [u.id, u.countryId])), [users]);
-  const countryNameMap = useMemo(() => new Map(countries.map(c => [c.id, c.name])), [countries]);
-
+  
   const getTileOwnerColor = (ownerId: string | null): string | null => {
     if (!ownerId) return null;
     const countryId = userCountryMap.get(ownerId);
@@ -96,17 +96,22 @@ export default function WorldMap({ mapData, users, countries, onTileClick, canCo
   };
 
   const getTooltipContent = (tile: Tile): React.ReactNode => {
-    if (!tile.ownerId) return '미개척지';
+    if (!tile.ownerId) return <p>미개척지</p>;
     const owner = users.find(u => u.id === tile.ownerId);
-    if (!owner) return "알 수 없는 플레이어";
-    const countryId = owner.countryId;
-    const countryName = countryNameMap.get(countryId);
+    if (!owner) return <p>알 수 없는 플레이어</p>;
+    const country = countries.find(c => c.id === owner.countryId);
     
-    let content = `${countryName || '소속 없음'} (${owner.nickname})`;
+    let content = `${country?.name || '소속 없음'} (${owner.nickname})`;
     if (tile.hasWall) {
       content += ' - 성벽';
     }
-    return content;
+
+    return (
+        <div className="flex items-center gap-2">
+            {country && <FlagDisplay flagData={country.flag} size={24} />}
+            <p>{content}</p>
+        </div>
+    );
   };
   
   return (

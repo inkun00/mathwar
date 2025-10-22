@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { LogOut, BookOpen, ChevronsUpDown, Check, Crown, Handshake, Flag, Swords } from "lucide-react";
+import { LogOut, BookOpen, ChevronsUpDown, Check, Crown, Handshake, Flag, Swords, Pencil } from "lucide-react";
 import { useAuth, useFirestore, useCollection, useMemoFirebase } from "@/firebase";
 import { signOut } from "firebase/auth";
 import ProblemModal from "./problem-modal";
@@ -19,7 +19,8 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { moderateText } from "@/ai/flows/moderate-text-flow";
-import { isAdjacent } from "@/lib/game-logic";
+import FlagDisplay from "./flag-display";
+import FlagEditor from "./flag-editor";
 
 interface ProfileSheetProps {
   currentUser: User;
@@ -73,6 +74,7 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
   const [isIndependenceAlertOpen, setIndependenceAlertOpen] = useState(false);
   const [newCountryName, setNewCountryName] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isFlagEditorOpen, setFlagEditorOpen] = useState(false);
 
 
   const countriesQuery = useMemoFirebase(() => collection(firestore, 'countries'), [firestore]);
@@ -304,7 +306,10 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="font-medium text-muted-foreground">국가</span>
-                  <Badge variant="secondary" style={{ backgroundColor: userCountry?.color }}>{userCountry?.name || '미지정'}</Badge>
+                  <div className="flex items-center gap-2">
+                    {userCountry && <FlagDisplay flagData={userCountry.flag} size={20} />}
+                    <Badge variant="secondary" style={{ backgroundColor: userCountry?.color }}>{userCountry?.name || '미지정'}</Badge>
+                  </div>
                 </div>
                  <div className="flex justify-between">
                   <span className="font-medium text-muted-foreground">보유 토큰</span>
@@ -318,6 +323,11 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
                   <span className="font-medium text-muted-foreground">게임 포인트</span>
                   <span className="font-semibold">{currentUser.gamePoints ?? 0} 포인트</span>
                 </div>
+                {currentUser.isCountryOwner && userCountry && (
+                    <Button variant="outline" className="w-full" onClick={() => setFlagEditorOpen(true)}>
+                        <Pencil className="mr-2 h-4 w-4" /> 국기 수정
+                    </Button>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -518,6 +528,13 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
         onWrongAnswer={handleWrongReview}
         userId={currentUser.id}
       />
+      {userCountry && (
+        <FlagEditor 
+            country={userCountry}
+            isOpen={isFlagEditorOpen}
+            onOpenChange={setFlagEditorOpen}
+        />
+      )}
     </>
   );
 }
