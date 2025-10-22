@@ -547,5 +547,3 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
     </>
   );
 }
-
-    
