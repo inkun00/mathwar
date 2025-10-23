@@ -47,7 +47,7 @@ const TileComponent = React.memo(({
     { 'shadow-inner': ownerColor },
     isConquerable && "cursor-pointer ring-2 ring-offset-1 ring-offset-background ring-primary/70 z-10 hover:brightness-110",
     isWallBuildable && "cursor-pointer ring-2 ring-offset-1 ring-offset-background ring-yellow-500 z-10 hover:brightness-110",
-    tile.hasWall && "border-4 border-slate-700 dark:border-slate-300 z-5"
+    tile.hasWall && "border-2 border-slate-700 dark:border-slate-300 z-5"
   );
 
   const tileElement = (
