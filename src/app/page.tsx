@@ -106,6 +106,9 @@ export default function Home() {
                 .catch(error => {
                     console.error("영토 회수 실패:", error);
                 });
+        } else {
+           // If user has less than or equal to MAX_TILES, just set the flag to not check again in this session.
+           sessionStorage.setItem(`territory_check_${authUser.uid}`, 'true');
         }
     }
 }, [firestore, authUser, landTiles, userProfile, toast]);
