@@ -68,6 +68,9 @@ export default function Login() {
   };
 
   const checkLoginCooldown = (): boolean => {
+    // Temporarily disabled by user request.
+    return true;
+    /*
     const lastLoginTimestamp = localStorage.getItem(LAST_LOGIN_TIMESTAMP_KEY);
     if (lastLoginTimestamp) {
       const timeSinceLastLogin = Date.now() - parseInt(lastLoginTimestamp, 10);
@@ -82,6 +85,7 @@ export default function Login() {
       }
     }
     return true;
+    */
   };
   
   const handleSignIn = async (e: React.FormEvent) => {
