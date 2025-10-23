@@ -303,13 +303,8 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
     const tileId = `${invasionTarget.x}-${invasionTarget.y}`;
     const tileRef = doc(firestore, "land_tiles", tileId);
     const tileData = { x: invasionTarget.x, y: invasionTarget.y, ownerId: currentUser.id, hasWall: false };
-    const userRef = doc(firestore, "users", currentUser.id);
 
-    const batch = writeBatch(firestore);
-    batch.set(tileRef, tileData, { merge: true });
-    batch.update(userRef, { tokens: increment(-1) });
-
-    batch.commit()
+    setDoc(tileRef, tileData, { merge: true })
         .then(() => {
             if (originalOwnerId) {
                 handleTerritoryCut(originalOwnerId, currentUser.id);
@@ -381,13 +376,13 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
     }
     
     const originalOwnerId = clickedTile.ownerId;
+    const userRef = doc(firestore, "users", currentUser.id);
 
-    if (originalOwnerId === null) {
+    if (originalOwnerId === null) { // Unclaimed land
         const tileId = `${x}-${y}`;
         const tileRef = doc(firestore, "land_tiles", tileId);
         const tileData = { x, y, ownerId: currentUser.id };
-        const userRef = doc(firestore, "users", currentUser.id);
-
+        
         const batch = writeBatch(firestore);
         batch.set(tileRef, tileData, { merge: true });
         batch.update(userRef, { tokens: increment(-1) });
@@ -409,11 +404,9 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
                 setIsProcessingClick(false);
             });
     }
-    else if (originalOwnerId !== currentUser.id) {
-        // Find if the owner is from the same country
+    else if (originalOwnerId !== currentUser.id) { // Invasion
         const owner = allUsers.find(u => u.id === originalOwnerId);
         if (owner && owner.countryId === currentUser.countryId) {
-            // Cannot attack a player from the same country
              toast({
                 variant: "default",
                 title: "공격 불가",
@@ -423,12 +416,21 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
             return;
         }
 
-        setInvasionTarget({ x, y, originalOwnerId: originalOwnerId!, hasWall: clickedTile.hasWall });
-        setInvasionWallBreaks(0);
-        setCurrentProblem(generateMathProblem());
-        setIsModalOpen(true);
+        // Decrement token immediately
+        updateDoc(userRef, { tokens: increment(-1) })
+            .then(() => {
+                setInvasionTarget({ x, y, originalOwnerId: originalOwnerId!, hasWall: clickedTile.hasWall });
+                setInvasionWallBreaks(0);
+                setCurrentProblem(generateMathProblem());
+                setIsModalOpen(true);
+            })
+            .catch(error => {
+                console.error("토큰 감소 실패:", error);
+                errorEmitter.emit('permission-error', new FirestorePermissionError({ path: userRef.path, operation: 'update', requestResourceData: { tokens: increment(-1) } }));
+                setIsProcessingClick(false); // Release lock if token decrement fails
+            });
     } else {
-        setIsProcessingClick(false);
+        setIsProcessingClick(false); // Clicked on own tile
     }
   };
   
@@ -511,19 +513,7 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
 
   const handleWrongAnswer = (problem: MathProblem) => {
     if (!authUser || !firestore) return;
-    
-    if (invasionTarget) {
-      // If it's an invasion and the answer is wrong, decrement a token.
-      const userRef = doc(firestore, "users", authUser.uid);
-      const updateData = { tokens: increment(-1) };
-      updateDoc(userRef, updateData).catch(error => {
-        console.error("토큰 감소 실패:", error);
-        errorEmitter.emit('permission-error', new FirestorePermissionError({ path: userRef.path, operation: 'update', requestResourceData: updateData }));
-      });
-    } else {
-      // If it's a regular problem, add to wrong answers list.
-      addWrongAnswer(firestore, authUser.uid, problem);
-    }
+    addWrongAnswer(firestore, authUser.uid, problem);
   };
 
   if (!currentUser) {

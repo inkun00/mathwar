@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import type { MathProblem, StorableProblem } from '@/lib/types';
-import { useState, type FormEvent, useEffect, useMemo, useRef } from 'react';
+import { useState, type FormEvent, useEffect, useMemo } from 'react';
 import { CheckCircle, XCircle, Swords, Shield } from 'lucide-react';
 import { useFirestore } from '@/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
@@ -64,61 +64,8 @@ export default function ProblemModal({
 
   const numInputs = useMemo(() => {
     if (!problem) return 0;
-    // This is a bit of a hack to count the inputs, but it's reliable
     return problem.answer.length;
   }, [problem]);
-
-  useEffect(() => {
-    if (isOpen) {
-      setAnswers(Array(numInputs).fill(''));
-    }
-  }, [isOpen, numInputs]);
-
-  const handleAnswerChange = (index: number, value: string) => {
-    const newAnswers = [...answers];
-    newAnswers[index] = value;
-    setAnswers(newAnswers);
-  };
-  
-  const renderProblemWithInputs = (node: React.ReactNode): React.ReactNode => {
-    let inputIndex = 0;
-
-    const processChildren = (children: React.ReactNode): React.ReactNode[] => {
-      return React.Children.map(children, child => {
-        if (!React.isValidElement(child)) {
-          return child;
-        }
-
-        // If the child is the component we want to replace
-        if (child.type === AnswerInput) {
-          const currentIndex = inputIndex++;
-          return (
-            <Input
-              type="text"
-              value={answers[currentIndex] || ''}
-              onChange={e => handleAnswerChange(currentIndex, e.target.value)}
-              className="inline-block w-20 h-8 text-center mx-1"
-              aria-label={`정답 입력 ${currentIndex + 1}`}
-              required
-              autoFocus={currentIndex === 0}
-            />
-          );
-        }
-
-        // If the child has its own children, process them recursively
-        if (child.props.children) {
-          return React.cloneElement(child, {
-            ...child.props,
-            children: processChildren(child.props.children),
-          });
-        }
-
-        return child;
-      });
-    };
-    
-    return processChildren(node);
-  };
 
   const recordAttempt = async (correctStatus: boolean) => {
     if (!userId || !firestore || !problem || isReview) return;
@@ -140,6 +87,61 @@ export default function ProblemModal({
     }
   };
 
+  useEffect(() => {
+    if (isOpen) {
+      setAnswers(Array(numInputs).fill(''));
+      // Immediately record an attempt when the modal opens for a non-review problem
+      if (!isReview && !isInvasion) {
+        recordAttempt(false); // Record as incorrect initially, will be updated on correct answer if needed, but for now just decrements
+      }
+    }
+  }, [isOpen, numInputs, isReview, isInvasion]);
+
+  const handleAnswerChange = (index: number, value: string) => {
+    const newAnswers = [...answers];
+    newAnswers[index] = value;
+    setAnswers(newAnswers);
+  };
+  
+  const renderProblemWithInputs = (node: React.ReactNode): React.ReactNode => {
+    let inputIndex = 0;
+
+    const processChildren = (children: React.ReactNode): React.ReactNode[] => {
+      return React.Children.map(children, child => {
+        if (!React.isValidElement(child)) {
+          return child;
+        }
+
+        if (child.type === AnswerInput) {
+          const currentIndex = inputIndex++;
+          return (
+            <Input
+              type="text"
+              value={answers[currentIndex] || ''}
+              onChange={e => handleAnswerChange(currentIndex, e.target.value)}
+              className="inline-block w-20 h-8 text-center mx-1"
+              aria-label={`정답 입력 ${currentIndex + 1}`}
+              required
+              autoFocus={currentIndex === 0}
+            />
+          );
+        }
+
+        if (child.props.children) {
+          return React.cloneElement(child, {
+            ...child.props,
+            children: processChildren(child.props.children),
+          });
+        }
+
+        return child;
+      });
+    };
+    
+    return processChildren(node);
+  };
+
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!problem) return;
@@ -150,19 +152,15 @@ export default function ProblemModal({
       correctAnswers.length === answers.length &&
       answers.every((userAns, i) => {
         const correctAns = correctAnswers[i];
-        // Special case for empty input which should match '0' for numeric-like answers
         const processedUserAns = userAns.trim() === '' ? '0' : userAns.trim();
         const processedCorrectAns = correctAns.trim() === '' ? '0' : correctAns.trim();
         
-        // If the expected answer is '0', an empty input is correct.
         if (processedCorrectAns === '0' && userAns.trim() === '') {
             return true;
         }
 
         return processedUserAns === processedCorrectAns;
       });
-
-    recordAttempt(correct);
 
     if (correct) {
        let toastTitle = '정답입니다!';
@@ -202,7 +200,6 @@ export default function ProblemModal({
       }
     }
 
-    // Only close the modal if it's not a multi-stage wall invasion
     if (!(isInvasion && hasWall && correct)) {
        onOpenChange(false);
     }
