@@ -23,6 +23,10 @@
           "type": "string",
           "description": "Reference to the Country this user belongs to."
         },
+        "tokens": {
+          "type": "number",
+          "description": "The number of expansion tokens the user has."
+        },
         "conqueredCountries": {
           "type": "array",
           "description": "An array of country IDs that this user has conquered.",
