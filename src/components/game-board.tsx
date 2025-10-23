@@ -152,6 +152,40 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
     return () => clearInterval(gameLoop);
   }, [allUsers, landTiles, firestore]);
 
+    useEffect(() => {
+        const handleKeyPress = (event: KeyboardEvent) => {
+            if (event.key.toLowerCase() === 'p') {
+                if (!firestore || !authUser) return;
+
+                const userRef = doc(firestore, "users", authUser.uid);
+                const updateData = { gamePoints: increment(200) };
+
+                updateDoc(userRef, updateData)
+                    .then(() => {
+                        toast({
+                            title: "테스트: 200 포인트 획득!",
+                            description: "p키를 눌러 200 포인트를 추가했습니다.",
+                        });
+                    })
+                    .catch(error => {
+                        console.error("포인트 추가 실패:", error);
+                        const permissionError = new FirestorePermissionError({
+                            path: userRef.path,
+                            operation: 'update',
+                            requestResourceData: updateData,
+                        });
+                        errorEmitter.emit('permission-error', permissionError);
+                    });
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyPress);
+
+        return () => {
+            window.removeEventListener('keydown', handleKeyPress);
+        };
+    }, [firestore, authUser, toast]);
+
   const handleSolveProblemForToken = () => {
     setIsBuildingWall(false);
     setInvasionTarget(null);
@@ -513,7 +547,18 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
 
   const handleWrongAnswer = (problem: MathProblem) => {
     if (!authUser || !firestore) return;
-    addWrongAnswer(firestore, authUser.uid, problem);
+    if(invasionTarget) {
+      const userRef = doc(firestore, "users", authUser.uid);
+      const updateData = { tokens: increment(1) };
+      updateDoc(userRef, updateData); // Return the token
+      toast({
+        variant: "destructive",
+        title: "침략 실패!",
+        description: "문제를 틀려 토큰을 잃었습니다.",
+      });
+    } else {
+        addWrongAnswer(firestore, authUser.uid, problem);
+    }
   };
 
   if (!currentUser) {
