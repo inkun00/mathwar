@@ -47,6 +47,7 @@ const TileComponent = React.memo(({
     { 'shadow-inner': ownerColor },
     isConquerable && "cursor-pointer ring-2 ring-offset-1 ring-offset-background ring-primary/70 z-10 hover:brightness-110",
     isWallBuildable && "cursor-pointer ring-2 ring-offset-1 ring-offset-background ring-yellow-500 z-10 hover:brightness-110",
+    tile.hasWall && "border-4 border-slate-700 dark:border-slate-300 z-5"
   );
 
   const tileElement = (
@@ -56,11 +57,6 @@ const TileComponent = React.memo(({
       onClick={(isConquerable || isWallBuildable) ? onClick : undefined}
       aria-label={`타일 ${tile.x}, ${tile.y}. ${ownerColor ? `플레이어 소유.` : '주인 없음.'} ${isConquerable ? '정복하려면 클릭하세요.' : ''}`}
     >
-      {tile.hasWall && (
-        <div className="absolute inset-0 flex items-center justify-center text-base opacity-75">
-          🛡️
-        </div>
-      )}
     </div>
   )
 
