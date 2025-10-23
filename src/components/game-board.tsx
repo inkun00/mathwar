@@ -209,7 +209,7 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
   };
 
   const handleTerritoryCut = async (originalOwnerId: string, conquerorId: string | null) => {
-    if (!firestore) return;
+    if (!firestore || !currentUser) return;
 
     try {
         const tilesCollectionRef = collection(firestore, "land_tiles");
@@ -218,16 +218,13 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
 
         const ownedTiles = currentLandTiles.filter(t => t.ownerId === originalOwnerId);
         if (ownedTiles.length === 0) {
-          // This was the last tile. The country is defeated.
           if (conquerorId) {
             const originalOwnerUser = allUsers.find(u => u.id === originalOwnerId);
             if (originalOwnerUser && originalOwnerUser.countryId) {
                 const conquerorRef = doc(firestore, "users", conquerorId);
                 const countryRef = doc(firestore, "countries", originalOwnerUser.countryId);
                 const batch = writeBatch(firestore);
-                // Record the conquest for the conqueror
                 batch.update(conquerorRef, { conqueredCountries: arrayUnion(originalOwnerUser.countryId) });
-                // Mark the country as demised
                 batch.update(countryRef, { demised: true });
 
                 await batch.commit().catch(error => {
@@ -293,9 +290,10 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
                     errorEmitter.emit('permission-error', new FirestorePermissionError({ path: 'land_tiles or users', operation: 'update'}));
                 });
 
-                const ownerIsCurrentUser = originalOwnerId === currentUser?.id;
-                const toastTitle = ownerIsCurrentUser ? "영토 분단!" : "공격 성공!";
-                let toastDescription = `상대방의 영토가 분단되어 일부가 미개척지가 되었습니다.`;
+                const ownerIsCurrentUser = originalOwnerId === currentUser.id;
+                let toastTitle = ownerIsCurrentUser ? "영토 분단!" : "공격 성공!";
+                let toastDescription = ``;
+                
                 if(ownerIsCurrentUser) {
                   toastDescription = `영토가 분단되어 타일 ${tilesToNeutralize.length}개를 잃고 토큰 ${tokensToCompensate}개를 얻었습니다.`
                 } else {
