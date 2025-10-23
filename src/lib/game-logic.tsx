@@ -157,6 +157,25 @@ const generatePlaceValueProblem = (): MathProblem => {
 
 // --- MEDIUM PROBLEMS ---
 
+const generatePlaceValueRelationshipProblem = (): MathProblem => {
+    const scenarios = [
+        { big: 0.1, small: 0.01, answer: 10 },
+        { big: 0.01, small: 0.001, answer: 10 },
+        { big: 1, small: 0.1, answer: 10 },
+        { big: 1, small: 0.01, answer: 100 },
+        { big: 1, small: 0.001, answer: 1000 },
+    ];
+    const scenario = scenarios[randomInt(0, scenarios.length - 1)];
+
+    return {
+        problem: <span>{scenario.big}은(는) {scenario.small}이/가 <AnswerInput />개 모인 수입니다.</span>,
+        answer: [String(scenario.answer)],
+        type: 'decimal',
+        subType: 'unit-conversion-concept',
+        storable: { type: 'decimal', subType: 'unit-conversion-concept', operands: [scenario.big, scenario.small], operator: 'calculate' },
+    };
+};
+
 const generateComparisonProblem = (): MathProblem => {
     const num1 = round(randomInt(10, 500) / 100, 2);
     const num2 = round(randomInt(10, 500) / 100, 2);
@@ -411,6 +430,7 @@ export const generateProblemFromData = (data: StorableProblem): MathProblem => {
     'list-navigation': generateListNavigationProblem,
     'multi-step-word-problem': generateMultiStepWordProblem,
     'decimal-to-fraction': generateUnitConversionConceptProblem, // This is a bit of a misnomer now
+    'unit-conversion-concept': generatePlaceValueRelationshipProblem,
     'vertical-calculation': generateVerticalCalculationProblem,
     'error-correction': generateErrorCorrectionProblem,
     'process-decomposition': generateDecompositionProblem,
@@ -450,7 +470,7 @@ export const problemNodeToString = (node: React.ReactNode): string => {
 // --- Main Problem Generation Function ---
 
 const easyProblems = [generateDirectCalculationProblem, generateUnitConversionConceptProblem, generatePlaceValueProblem];
-const mediumProblems = [generateComparisonProblem, generateWordProblem, generateConditionalProblem, generateVerticalCalculationProblem, generateDiagramProblem];
+const mediumProblems = [generateComparisonProblem, generateWordProblem, generateConditionalProblem, generateVerticalCalculationProblem, generateDiagramProblem, generatePlaceValueRelationshipProblem];
 const hardProblems = [generateListNavigationProblem, generateMultiStepWordProblem, generateErrorCorrectionProblem, generateDecompositionProblem];
 
 export const generateMathProblem = (): MathProblem => {
