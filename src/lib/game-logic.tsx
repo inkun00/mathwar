@@ -197,9 +197,26 @@ const generatePlaceValueRelationshipProblem = (): MathProblem => {
 };
 
 const generateComparisonProblem = (): MathProblem => {
-    const num1 = round(randomInt(10, 500) / 100, 2);
-    const num2 = round(randomInt(10, 500) / 100, 2);
-    const correctSign = num1 > num2 ? '>' : num1 < num2 ? '<' : '=';
+    const num1_int = randomInt(100, 999); // e.g., 345
+    const num1 = num1_int / 100; // e.g., 3.45
+
+    const digitToChange = randomInt(0, 2); // 0: ones, 1: tenths, 2: hundredths
+    const str_num1 = num1.toFixed(2); // "3.45"
+    let chars = str_num1.split('');
+    chars.splice(1, 1); // remove dot -> ['3', '4', '5']
+
+    let originalDigit = parseInt(chars[digitToChange]);
+    let newDigit;
+    do {
+      newDigit = randomInt(0, 9);
+    } while (newDigit === originalDigit);
+    
+    chars[digitToChange] = newDigit.toString();
+    const num2_int = parseInt(chars.join(''));
+    const num2 = num2_int / 100;
+
+    const correctSign = num1 > num2 ? '>' : '<';
+
     return {
       problem: <span>{num1.toFixed(2)} <AnswerInput /> {num2.toFixed(2)}</span>,
       answer: [correctSign],
@@ -372,43 +389,52 @@ const generateErrorCorrectionProblem = (): MathProblem => {
 
     const num1 = isAddition ? num1_raw : Math.max(num1_raw, num2_raw);
     const num2 = isAddition ? num2_raw : Math.min(num1_raw, num2_raw);
-
+    const operator = isAddition ? '+' : '-';
     const correctAnswer = isAddition ? round(num1 + num2, 2) : round(num1 - num2, 2);
 
-    // Create a plausible error by misaligning decimals
+    // Create a plausible error
     const errorType = randomInt(1, 2);
     let wrongAnswer;
-    let explanation = "소수점 위치를 잘못 맞추었습니다.";
-    
     if (errorType === 1) { // Decimal alignment error
         wrongAnswer = isAddition ? round(num1*10 + num2, 2) : round(num1*10 - num2, 2);
-        if(wrongAnswer < 0) wrongAnswer = round(num1*10 + num2, 2); // Ensure it's not negative
+        if(wrongAnswer < 0) wrongAnswer = round(num1*10 + num2, 2);
     } else { // Calculation error in one digit
-        let errorDigit = randomInt(1, 9) / 100;
-        wrongAnswer = round(correctAnswer + (Math.random() > 0.5 ? errorDigit : -errorDigit), 2);
-        if(wrongAnswer < 0) wrongAnswer = round(correctAnswer + errorDigit, 2);
-        explanation = "계산 실수가 있습니다.";
+        let errorDigit = randomInt(1, 9) / 100 * (Math.random() > 0.5 ? 1 : -1);
+        wrongAnswer = round(correctAnswer + errorDigit, 2);
+        if(wrongAnswer < 0 || wrongAnswer === correctAnswer) wrongAnswer = round(correctAnswer + 0.1, 2);
     }
+    
+    const people = shuffleArray(['철수', '영희', '민수']);
+    const [person1, person2, person3] = people;
+    const wrongPerson = people[randomInt(0,2)];
+
+    const statements = {
+        [person1]: `철수: "계산 결과는 ${wrongPerson === person1 ? wrongAnswer : correctAnswer} 같아."`,
+        [person2]: `영희: "계산 결과는 ${wrongPerson === person2 ? wrongAnswer : correctAnswer} 같아."`,
+        [person3]: `민수: "계산 결과는 ${wrongPerson === person3 ? wrongAnswer : correctAnswer} 같아."`,
+    };
 
     return {
         problem: (
-            <div className="text-center text-base">
-                <p>계산이 잘못된 곳을 찾아 이유를 쓰고, 바르게 계산하시오.</p>
-                <div className="font-mono bg-muted p-4 my-2 rounded-md inline-block">
-                     <div className="text-right">
-                        <p>{num1.toFixed(2)}</p>
-                        <p>{isAddition ? '+' : '-'} {num2.toFixed(2)}</p>
-                        <hr className="border-foreground my-1" />
-                        <p className="text-destructive">{wrongAnswer.toFixed(2)}</p>
+            <div className="text-base text-left space-y-2">
+                <p className="text-center font-semibold text-lg mb-4">{num1.toFixed(2)} {operator} {num2.toFixed(2)} 계산에 대해 세 친구가 이야기합니다.</p>
+                <p>{statements[person1]}</p>
+                <p>{statements[person2]}</p>
+                <p>{statements[person3]}</p>
+                <div className="pt-4">
+                    <p>잘못 설명한 사람은 누구이며, 바른 계산 결과는 무엇인가요?</p>
+                    <div className="flex items-center gap-2 mt-2">
+                        <span>잘못 설명한 사람:</span>
+                        <AnswerInput />
                     </div>
-                </div>
-                <div className="text-left mt-2 space-y-2">
-                    <p>이유: <AnswerInput /></p>
-                    <p>바른 계산: <AnswerInput /></p>
+                    <div className="flex items-center gap-2 mt-2">
+                         <span>바른 계산 결과:</span>
+                        <AnswerInput />
+                    </div>
                 </div>
             </div>
         ),
-        answer: [explanation, String(correctAnswer)],
+        answer: [wrongPerson, String(correctAnswer)],
         type: 'decimal',
         subType: 'error-correction',
         storable: { type: 'decimal', subType: 'error-correction', operands: [num1, num2, isAddition? 1: 0], operator: 'calculate' },
