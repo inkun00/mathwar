@@ -152,40 +152,6 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
     return () => clearInterval(gameLoop);
   }, [allUsers, landTiles, firestore]);
 
-    useEffect(() => {
-        const handleKeyPress = (event: KeyboardEvent) => {
-            if (event.key.toLowerCase() === 'p') {
-                if (!firestore || !authUser) return;
-
-                const userRef = doc(firestore, "users", authUser.uid);
-                const updateData = { gamePoints: increment(200) };
-
-                updateDoc(userRef, updateData)
-                    .then(() => {
-                        toast({
-                            title: "테스트: 200 포인트 획득!",
-                            description: "p키를 눌러 200 포인트를 추가했습니다.",
-                        });
-                    })
-                    .catch(error => {
-                        console.error("포인트 추가 실패:", error);
-                        const permissionError = new FirestorePermissionError({
-                            path: userRef.path,
-                            operation: 'update',
-                            requestResourceData: updateData,
-                        });
-                        errorEmitter.emit('permission-error', permissionError);
-                    });
-            }
-        };
-
-        window.addEventListener('keydown', handleKeyPress);
-
-        return () => {
-            window.removeEventListener('keydown', handleKeyPress);
-        };
-    }, [firestore, authUser, toast]);
-
   const handleSolveProblemForToken = () => {
     setIsBuildingWall(false);
     setInvasionTarget(null);
@@ -531,16 +497,16 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
 
   const handleWrongAnswer = (problem: MathProblem) => {
     if (!authUser || !firestore) return;
-    
+
     if (invasionTarget) {
       // Invasion failed, token was already used. Just show a toast.
       toast({
-        variant: "destructive",
-        title: "침략 실패!",
-        description: "문제를 틀려 영토 획득에 실패했습니다.",
+        variant: 'destructive',
+        title: '침략 실패!',
+        description: '문제를 틀려 영토 획득에 실패했습니다.',
       });
     } else {
-      // This is a regular problem for a token, record it as a wrong answer.
+      // This is for getting a token, record it as wrong
       addWrongAnswer(firestore, authUser.uid, problem);
     }
   };
