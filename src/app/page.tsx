@@ -80,7 +80,15 @@ export default function Home() {
   }, [userProfile, landTiles, firestore, authUser]);
 
   useEffect(() => {
-    if (firestore && authUser && landTiles && userProfile && !sessionStorage.getItem(`territory_check_${authUser.uid}`)) {
+    const targetNicknames = ['초코송이', '지냥김밥', '앵무새김밥'];
+    if (
+        firestore && 
+        authUser && 
+        landTiles && 
+        userProfile && 
+        targetNicknames.includes(userProfile.nickname) && 
+        !sessionStorage.getItem(`territory_check_${authUser.uid}`)
+    ) {
         const userTiles = landTiles.filter(tile => tile.ownerId === authUser.uid);
         const MAX_TILES = 10;
 
