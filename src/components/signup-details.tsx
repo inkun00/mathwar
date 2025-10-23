@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useAuth, useCollection, useFirestore, useMemoFirebase } from '@/firebase';
+import { useAuth, useCollection, useFirestore, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { collection, addDoc, doc, setDoc } from 'firebase/firestore';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
@@ -110,8 +110,8 @@ export default function SignUpDetails() {
         }
       }
 
-      // Create user profile
-      await setDoc(doc(firestore, 'users', auth.currentUser.uid), {
+      const userDocRef = doc(firestore, 'users', auth.currentUser.uid);
+      const userData = {
         id: auth.currentUser.uid,
         uid: auth.currentUser.uid,
         nickname,
@@ -122,15 +122,32 @@ export default function SignUpDetails() {
         gamePoints: 0,
         lastPointDistribution: new Date().toISOString().slice(0, 10), // YYYY-MM-DD
         conqueredCountries: [],
-      });
+        isCountryOwner: countryOption === 'new'
+      };
 
-      toast({ title: '프로필 생성 완료!', description: '이제 게임을 시작할 수 있습니다.' });
-      // The page should auto-refresh via the listener in page.tsx
+      // Create user profile
+      setDoc(userDocRef, userData)
+        .then(() => {
+           toast({ title: '프로필 생성 완료!', description: '이제 게임을 시작할 수 있습니다.' });
+           // The page should auto-refresh via the listener in page.tsx
+        })
+        .catch((error) => {
+            const permissionError = new FirestorePermissionError({
+              path: userDocRef.path,
+              operation: 'create',
+              requestResourceData: userData,
+            });
+            errorEmitter.emit('permission-error', permissionError);
+            toast({ variant: 'destructive', title: '프로필 생성 오류', description: '프로필을 만드는 중 오류가 발생했습니다. 권한을 확인해주세요.' });
+        })
+        .finally(() => {
+            setIsLoading(false);
+        });
+
     } catch (error: any) {
       console.error('프로필 생성 오류:', error);
       toast({ variant: 'destructive', title: '프로필 생성 오류', description: error.message || '프로필을 만드는 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.' });
-    } finally {
-      setIsLoading(false);
+       setIsLoading(false);
     }
   };
   
