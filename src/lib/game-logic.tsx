@@ -136,17 +136,37 @@ const generatePlaceValueProblem = (): MathProblem => {
     const isMultiply = Math.random() > 0.5;
 
     let questionText, answer;
-
+    let questionType: 'findMultiplier' | 'findResult';
+    let biggerNum, smallerNum;
+    
     if (isMultiply) {
-        questionText = `${baseNum}의 ${multiplier}배`;
-        answer = round(baseNum * multiplier, 2);
+      biggerNum = round(baseNum * multiplier, 2);
+      smallerNum = baseNum;
     } else {
-        questionText = `${baseNum * multiplier}의 1/${multiplier}`;
-        answer = baseNum;
+      biggerNum = baseNum;
+      smallerNum = round(baseNum / multiplier, 2);
+    }
+    
+    // 50% chance to ask for the multiplier
+    if (Math.random() > 0.5) {
+      questionType = 'findMultiplier';
+      questionText = `${biggerNum}은(는) ${smallerNum}의 몇 배인가요?`;
+      answer = (biggerNum / smallerNum).toString();
+    } else { // 50% chance to ask for the result
+      questionType = 'findResult';
+      const isFindingBigger = Math.random() > 0.5;
+      if (isFindingBigger) {
+        questionText = `${smallerNum}의 ${multiplier}배인 수는?`;
+        answer = biggerNum.toString();
+      } else {
+        questionText = `${biggerNum}의 1/${multiplier}배인 수는?`;
+        answer = smallerNum.toString();
+      }
     }
 
+
     return {
-        problem: <span>{questionText}인 수는? <AnswerInput /></span>,
+        problem: <span>{questionText} <AnswerInput /></span>,
         answer: [String(answer)],
         type: 'decimal',
         subType: 'conditional-operation',
