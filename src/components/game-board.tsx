@@ -279,33 +279,19 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
                     batch.update(tileRef, { ownerId: null });
                 });
 
-                const tokensToCompensate = Math.round(tilesToNeutralize.length / 2);
-                if (tokensToCompensate > 0) {
-                  const originalOwnerRef = doc(firestore, "users", originalOwnerId);
-                  batch.update(originalOwnerRef, { tokens: increment(tokensToCompensate) });
-                }
-
                 await batch.commit().catch(error => {
                     console.error("영토 분단 처리 실패:", error);
                     errorEmitter.emit('permission-error', new FirestorePermissionError({ path: 'land_tiles or users', operation: 'update'}));
                 });
 
                 const ownerIsCurrentUser = originalOwnerId === currentUser.id;
-                let toastTitle = ownerIsCurrentUser ? "영토 분단!" : "공격 성공!";
-                let toastDescription = ``;
-                
-                if(ownerIsCurrentUser) {
-                  toastDescription = `영토가 분단되어 타일 ${tilesToNeutralize.length}개를 잃고 토큰 ${tokensToCompensate}개를 얻었습니다.`
-                } else {
-                  const originalOwner = allUsers.find(u => u.id === originalOwnerId);
-                  const ownerName = originalOwner?.nickname || '상대방';
-                  toastDescription = `${ownerName}의 영토가 분단되었습니다. ${tokensToCompensate > 0 ? `${ownerName}에게 보상으로 토큰 ${tokensToCompensate}개가 지급되었습니다.` : ''}`
-                }
+                const originalOwner = allUsers.find(u => u.id === originalOwnerId);
+                const ownerName = originalOwner?.nickname || '상대방';
 
                 toast({
                     variant: ownerIsCurrentUser ? "destructive" : "default",
-                    title: toastTitle,
-                    description: toastDescription,
+                    title: ownerIsCurrentUser ? "영토 분단!" : `공격 성공! (${ownerName})`,
+                    description: `영토가 분단되어 타일 ${tilesToNeutralize.length}개를 잃었습니다.`,
                 });
             }
         }
@@ -545,15 +531,17 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
 
   const handleWrongAnswer = (problem: MathProblem) => {
     if (!authUser || !firestore) return;
-    if(invasionTarget) {
-      // Token was already decremented on tile click. Do nothing here.
+    
+    if (invasionTarget) {
+      // Invasion failed, token was already used. Just show a toast.
       toast({
         variant: "destructive",
         title: "침략 실패!",
         description: "문제를 틀려 영토 획득에 실패했습니다.",
       });
     } else {
-        addWrongAnswer(firestore, authUser.uid, problem);
+      // This is a regular problem for a token, record it as a wrong answer.
+      addWrongAnswer(firestore, authUser.uid, problem);
     }
   };
 

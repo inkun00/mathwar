@@ -6,13 +6,15 @@ import Login from "@/components/login";
 import SignUpDetails from "@/components/signup-details";
 import { useUser } from "@/firebase/auth/use-user";
 import { useDoc, useFirestore, useMemoFirebase, useCollection } from "@/firebase";
-import { doc, collection, updateDoc, increment } from "firebase/firestore";
+import { doc, collection, updateDoc, increment, writeBatch } from "firebase/firestore";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { User as GameUser, Country, Tile, ProblemAttempt, WrongAnswer } from "@/lib/types";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Home() {
   const { user: authUser, isUserLoading: isAuthUserLoading } = useUser();
   const firestore = useFirestore();
+  const { toast } = useToast();
 
   const userDocRef = useMemoFirebase(() => {
     if (!firestore || !authUser) return null;
@@ -76,6 +78,37 @@ export default function Home() {
       }
     }
   }, [userProfile, landTiles, firestore, authUser]);
+
+  useEffect(() => {
+    if (firestore && authUser && landTiles && userProfile && !sessionStorage.getItem(`territory_check_${authUser.uid}`)) {
+        const userTiles = landTiles.filter(tile => tile.ownerId === authUser.uid);
+        const MAX_TILES = 10;
+
+        if (userTiles.length > MAX_TILES) {
+            const tilesToConfiscate = userTiles.slice(MAX_TILES);
+            const batch = writeBatch(firestore);
+
+            tilesToConfiscate.forEach(tile => {
+                const tileRef = doc(firestore, "land_tiles", tile.id);
+                batch.update(tileRef, { ownerId: null });
+            });
+
+            batch.commit()
+                .then(() => {
+                    toast({
+                        variant: "destructive",
+                        title: "비정상 영토 점유 수정",
+                        description: `보유 한도(${MAX_TILES}개)를 초과한 영토 ${tilesToConfiscate.length}개가 반납되었습니다.`,
+                        duration: 5000,
+                    });
+                    sessionStorage.setItem(`territory_check_${authUser.uid}`, 'true');
+                })
+                .catch(error => {
+                    console.error("영토 회수 실패:", error);
+                });
+        }
+    }
+}, [firestore, authUser, landTiles, userProfile, toast]);
 
 
   if (isLoading) {
