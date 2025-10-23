@@ -513,6 +513,7 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
     if (!authUser || !firestore) return;
     
     if (invasionTarget) {
+      // If it's an invasion and the answer is wrong, decrement a token.
       const userRef = doc(firestore, "users", authUser.uid);
       const updateData = { tokens: increment(-1) };
       updateDoc(userRef, updateData).catch(error => {
@@ -520,6 +521,7 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
         errorEmitter.emit('permission-error', new FirestorePermissionError({ path: userRef.path, operation: 'update', requestResourceData: updateData }));
       });
     } else {
+      // If it's a regular problem, add to wrong answers list.
       addWrongAnswer(firestore, authUser.uid, problem);
     }
   };

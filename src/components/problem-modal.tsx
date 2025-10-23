@@ -54,8 +54,6 @@ export default function ProblemModal({
   const [answers, setAnswers] = useState<string[]>([]);
   const { toast } = useToast();
   const firestore = useFirestore();
-  const hasSubmitted = useRef(false);
-  const isCorrect = useRef(false);
 
   const problem = useMemo(() => {
     if (reviewProblem && reviewProblem.operands) {
@@ -73,8 +71,6 @@ export default function ProblemModal({
   useEffect(() => {
     if (isOpen) {
       setAnswers(Array(numInputs).fill(''));
-      hasSubmitted.current = false;
-      isCorrect.current = false;
     }
   }, [isOpen, numInputs]);
 
@@ -147,8 +143,6 @@ export default function ProblemModal({
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!problem) return;
-    
-    hasSubmitted.current = true;
 
     const { answer: correctAnswers } = problem;
 
@@ -168,7 +162,7 @@ export default function ProblemModal({
         return processedUserAns === processedCorrectAns;
       });
 
-    isCorrect.current = correct;
+    recordAttempt(correct);
 
     if (correct) {
        let toastTitle = '정답입니다!';
@@ -214,17 +208,6 @@ export default function ProblemModal({
     }
   };
 
-  const handleOpenChange = (open: boolean) => {
-    if (!open) {
-      if (!hasSubmitted.current) {
-        recordAttempt(false);
-      } else {
-        recordAttempt(isCorrect.current);
-      }
-    }
-    onOpenChange(open);
-  };
-
 
   const title = isInvasion
     ? '침략 문제'
@@ -239,7 +222,7 @@ export default function ProblemModal({
     : '정답을 입력하여 확장 토큰을 획득하세요.';
 
   return (
-    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-xl">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
