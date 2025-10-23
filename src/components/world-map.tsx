@@ -57,7 +57,7 @@ const TileComponent = React.memo(({
       aria-label={`타일 ${tile.x}, ${tile.y}. ${ownerColor ? `플레이어 소유.` : '주인 없음.'} ${isConquerable ? '정복하려면 클릭하세요.' : ''}`}
     >
       {tile.hasWall && (
-        <div className="absolute inset-0 flex items-center justify-center text-xl opacity-75">
+        <div className="absolute inset-0 flex items-center justify-center text-base opacity-75">
           🛡️
         </div>
       )}
