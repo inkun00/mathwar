@@ -546,13 +546,11 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
   const handleWrongAnswer = (problem: MathProblem) => {
     if (!authUser || !firestore) return;
     if(invasionTarget) {
-      const userRef = doc(firestore, "users", authUser.uid);
-      const updateData = { tokens: increment(1) };
-      updateDoc(userRef, updateData); // Return the token
+      // Token was already decremented on tile click. Do nothing here.
       toast({
         variant: "destructive",
         title: "침략 실패!",
-        description: "문제를 틀려 토큰을 잃었습니다.",
+        description: "문제를 틀려 영토 획득에 실패했습니다.",
       });
     } else {
         addWrongAnswer(firestore, authUser.uid, problem);
