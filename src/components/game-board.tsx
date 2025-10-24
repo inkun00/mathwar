@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import type { Tile, MathProblem, Country, User, ProblemAttempt, InvasionTarget, WrongAnswer } from "@/lib/types";
-import { generateMathProblem, isAdjacent, getAIMove } from "@/lib/game-logic";
+import { generateMathProblem, isAdjacent } from "@/lib/game-logic";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { ZoomIn, ZoomOut } from "lucide-react";
@@ -25,11 +25,6 @@ interface GameBoardProps {
   problemAttempts: ProblemAttempt[];
   wrongAnswers: WrongAnswer[];
 }
-
-const aiUsers: (Omit<User, 'uid' | 'email'> & {country: Omit<Country, 'id' | 'createdBy'>})[] = [
-    { id: "player2", nickname: "AI 플레이어 A", tokens: 1, countryId: 'ai-country-a', country: { name: 'AI 제국 A', color: "hsl(200, 80%, 60%)"} },
-    { id: "player3", nickname: "AI 플레이어 B", tokens: 1, countryId: 'ai-country-b', country: { name: 'AI 제국 B', color: "hsl(340, 80%, 60%)"} },
-];
 
 export default function GameBoard({ users, countries, landTiles, currentUserProfile, problemAttempts, wrongAnswers }: GameBoardProps) {
   const firestore = useFirestore();
@@ -58,18 +53,11 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
   }, [users, currentUserProfile.id, isCountryOwner]);
   
   const allUsers = useMemo(() => {
-    const firestoreUsers = users.map(u => ({...u, isAI: false}));
-    const aiWithDefaults = aiUsers.map(ai => {
-      const existingAI = firestoreUsers.find(u => u.id === ai.id);
-      return existingAI ? {...ai, ...existingAI, isAI: true} : {...ai, email: '', uid: ai.id, isAI: true};
-    });
-    return [...firestoreUsers.filter(u => !aiUsers.some(ai => ai.id === u.id)), ...aiWithDefaults];
+    return users.map(u => ({...u, isAI: false}));
   }, [users]);
   
   const allCountries = useMemo(() => {
-    const aiApiCountries = aiUsers.map(ai => ({...ai.country, id: ai.countryId, createdBy: 'ai', color: ai.country.color}));
-    const humanCountries = countries.map(c => ({...c}));
-    return [...humanCountries, ...aiApiCountries];
+    return countries.map(c => ({...c}));
   }, [countries]);
 
   const mapData = useMemo(() => {
@@ -105,52 +93,6 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
       return !hasLand && (currentUser.tokens ?? 0) === 0;
   }, [landTiles, currentUser]);
 
-
-  useEffect(() => {
-    const gameLoop = setInterval(async () => {
-      if (!firestore) return;
-
-      const activeAIs = allUsers.filter(u => u.isAI);
-
-      for (const ai of activeAIs) {
-        // Find the AI's current data from the live user list
-        const currentAiData = allUsers.find(u => u.id === ai.id);
-        if (!currentAiData || (currentAiData.tokens ?? 0) <= 0) continue;
-
-        const allAiTiles = landTiles.filter(t => t.ownerId === ai.id);
-        const move = getAIMove(ai, allAiTiles, landTiles, allUsers);
-        
-        if (move) {
-          const originalOwnerId = move.ownerId;
-          const tileData = { x: move.x, y: move.y, ownerId: ai.id };
-          const tileRef = doc(firestore, 'land_tiles', move.id || `${move.x}-${move.y}`);
-          const aiUserRef = doc(firestore, 'users', ai.id);
-
-          const batch = writeBatch(firestore);
-          batch.update(aiUserRef, { tokens: increment(-1) });
-          batch.set(tileRef, tileData, { merge: true });
-
-          batch.commit()
-            .then(async () => {
-              if (originalOwnerId && originalOwnerId !== ai.id) {
-                await handleTerritoryCut(originalOwnerId, ai.id);
-              }
-            })
-            .catch(error => {
-              console.error("AI 이동 실패:", error);
-              const permissionError = new FirestorePermissionError({
-                path: tileRef.path,
-                operation: 'write',
-                requestResourceData: tileData,
-              });
-              errorEmitter.emit('permission-error', permissionError);
-            });
-        }
-      }
-    }, 3000); // AI acts every 3 seconds
-
-    return () => clearInterval(gameLoop);
-  }, [allUsers, landTiles, firestore]);
 
   const handleSolveProblemForToken = () => {
     setIsBuildingWall(false);
@@ -237,6 +179,7 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
         if (territories.length > 1) {
             territories.sort((a, b) => b.length - a.length);
             const tilesToNeutralize = territories.slice(1).flat();
+            const tokensToCompensate = Math.floor(tilesToNeutralize.length / 2);
             
             if (tilesToNeutralize.length > 0) {
                 const batch = writeBatch(firestore);
@@ -257,7 +200,9 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
                 toast({
                     variant: ownerIsCurrentUser ? "destructive" : "default",
                     title: ownerIsCurrentUser ? "영토 분단!" : `공격 성공! (${ownerName})`,
-                    description: `영토가 분단되어 타일 ${tilesToNeutralize.length}개를 잃었습니다.`,
+                    description: ownerIsCurrentUser
+                      ? `영토가 분단되어 타일 ${tilesToNeutralize.length}개를 잃었습니다.`
+                      : `${ownerName}의 영토가 분단되어 타일 ${tilesToNeutralize.length}개를 잃었습니다.`,
                 });
             }
         }

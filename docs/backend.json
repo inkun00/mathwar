@@ -23,12 +23,28 @@
           "type": "string",
           "description": "Reference to the Country this user belongs to."
         },
+        "tokens": {
+          "type": "number",
+          "description": "The number of expansion tokens the user has."
+        },
         "conqueredCountries": {
           "type": "array",
           "description": "An array of country IDs that this user has conquered.",
           "items": {
             "type": "string"
           }
+        },
+        "gamePoints": {
+          "type": "number",
+          "description": "Points earned by the user for holding territory."
+        },
+        "lastPointDistribution": {
+          "type": "string",
+          "description": "The date (YYYY-MM-DD) when the last points were distributed."
+        },
+        "walls": {
+          "type": "number",
+          "description": "The number of wall items the user possesses."
         }
       },
       "required": [
@@ -63,6 +79,13 @@
         "demised": {
           "type": "boolean",
           "description": "Whether the country has been conquered and can no longer be used."
+        },
+        "flag": {
+            "type": "array",
+            "description": "A 10x10 grid of colors for the country's flag.",
+            "items": {
+                "type": "string"
+            }
         }
       },
       "required": ["id", "name", "createdBy", "color"]
@@ -88,6 +111,10 @@
         "ownerId": {
           "type": "string",
           "description": "Reference to the User who owns this land tile. (Relationship: User 1:N LandTile)"
+        },
+        "hasWall": {
+          "type": "boolean",
+          "description": "Indicates if a defensive wall is built on this tile."
         }
       },
       "required": [
@@ -144,8 +171,8 @@
           "schema": {
             "$ref": "#/backend/entities/User"
           },
-          "description": "Stores user profiles. Any authenticated user can read for game state, but only the user can modify their own profile.",
-          "allow": ["get", "list", "update"],
+          "description": "Stores user profiles. Any authenticated user can read for game state. Users can create their own profile. Only the user can modify their own profile.",
+          "allow": ["get", "list", "create", "update"],
           "params": [
             {
               "name": "userId",
@@ -175,7 +202,7 @@
             "$ref": "#/backend/entities/Country"
           },
           "description": "Stores all countries created by users. Accessible to all authenticated users.",
-          "allow": ["list", "get", "create"],
+          "allow": ["list", "get", "create", "update"],
           "params": [
             {
               "name": "countryId",
