@@ -171,8 +171,8 @@
           "schema": {
             "$ref": "#/backend/entities/User"
           },
-          "description": "Stores user profiles. Any authenticated user can read for game state, but only the user can modify their own profile.",
-          "allow": ["get", "list", "update"],
+          "description": "Stores user profiles. Any authenticated user can read for game state. Users can create their own profile. Only the user can modify their own profile. AI player documents can be updated by game logic.",
+          "allow": ["get", "list", "create", "update"],
           "params": [
             {
               "name": "userId",
