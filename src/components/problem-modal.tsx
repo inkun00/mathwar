@@ -21,6 +21,7 @@ import {
   generateProblemFromData,
   problemNodeToString,
   AnswerInput,
+  isAnswerCorrect,
 } from '@/lib/game-logic';
 import { cn } from '@/lib/utils';
 
@@ -90,12 +91,8 @@ export default function ProblemModal({
   useEffect(() => {
     if (isOpen) {
       setAnswers(Array(numInputs).fill(''));
-      // Immediately record an attempt when the modal opens for a non-review problem
-      if (!isReview && !isInvasion) {
-        recordAttempt(false); // Record as incorrect initially, will be updated on correct answer if needed, but for now just decrements
-      }
     }
-  }, [isOpen, numInputs, isReview, isInvasion]);
+  }, [isOpen, numInputs]);
 
   const handleAnswerChange = (index: number, value: string) => {
     const newAnswers = [...answers];
@@ -146,21 +143,11 @@ export default function ProblemModal({
     e.preventDefault();
     if (!problem) return;
 
-    const { answer: correctAnswers } = problem;
+    const correct = isAnswerCorrect(answers, problem.answer);
 
-    const correct =
-      correctAnswers.length === answers.length &&
-      answers.every((userAns, i) => {
-        const correctAns = correctAnswers[i];
-        const processedUserAns = userAns.trim() === '' ? '0' : userAns.trim();
-        const processedCorrectAns = correctAns.trim() === '' ? '0' : correctAns.trim();
-        
-        if (processedCorrectAns === '0' && userAns.trim() === '') {
-            return true;
-        }
-
-        return processedUserAns === processedCorrectAns;
-      });
+    if (!isReview) {
+      await recordAttempt(correct);
+    }
 
     if (correct) {
        let toastTitle = '정답입니다!';
@@ -190,7 +177,7 @@ export default function ProblemModal({
         description: (
           <div>
             <p>입력: [{answers.join(', ')}]</p>
-            <p>정답: [{correctAnswers.join(', ')}]</p>
+            <p>정답: [{problem.answer.join(', ')}]</p>
           </div>
         ),
         action: <XCircle className="text-white" />,

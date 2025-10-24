@@ -13,7 +13,10 @@ import { cn } from './utils';
 // --- Utility Functions ---
 const randomInt = (min: number, max: number) =>
   Math.floor(Math.random() * (max - min + 1)) + min;
-const round = (num: number, places: number) => parseFloat(num.toFixed(places));
+const round = (num: number, places: number) => {
+  const factor = 10 ** places;
+  return Math.round(num * factor) / factor;
+}
 const shuffleArray = <T,>(array: T[]): T[] => {
   const newArray = [...array];
   for (let i = newArray.length - 1; i > 0; i--) {
@@ -534,6 +537,46 @@ export const generateMathProblem = (): MathProblem => {
 
   return generator();
 };
+
+/**
+ * Checks if the user's answers are correct, accounting for floating point inaccuracies
+ * and different string representations of the same number (e.g., '1.4' vs '1.40').
+ * @param userAnswers An array of strings submitted by the user.
+ * @param correctAnswers An array of strings representing the correct answers.
+ * @returns True if the answers are correct, false otherwise.
+ */
+export const isAnswerCorrect = (userAnswers: string[], correctAnswers: string[]): boolean => {
+    if (userAnswers.length !== correctAnswers.length) {
+        return false;
+    }
+
+    const tolerance = 1e-4; // A small tolerance for float comparison
+
+    return userAnswers.every((userAns, i) => {
+        const correctAns = correctAnswers[i];
+        
+        // Trim whitespace from both answers
+        const processedUserAns = userAns.trim();
+        const processedCorrectAns = correctAns.trim();
+
+        // Try to parse both answers as numbers
+        const userNum = parseFloat(processedUserAns);
+        const correctNum = parseFloat(processedCorrectAns);
+        
+        // If both are valid numbers, compare them with tolerance
+        if (!isNaN(userNum) && !isNaN(correctNum)) {
+             // Special case: if correct is 0, user can input '0', '.0', '0.0' etc. or be empty
+            if (correctNum === 0 && (userNum === 0 || processedUserAns === '' || processedUserAns === '.')) {
+                return true;
+            }
+            return Math.abs(userNum - correctNum) < tolerance;
+        }
+
+        // If they are not numbers (e.g., '철수', '<', '>'), do a case-insensitive string comparison
+        return processedUserAns.toLowerCase() === processedCorrectAns.toLowerCase();
+    });
+};
+
 
 // --- Game Logic Functions ---
 export const isAdjacent = (tileX: number, tileY: number, userTiles: Tile[]) => {
