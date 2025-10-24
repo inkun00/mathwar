@@ -179,7 +179,6 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
         if (territories.length > 1) {
             territories.sort((a, b) => b.length - a.length);
             const tilesToNeutralize = territories.slice(1).flat();
-            const tokensToCompensate = Math.floor(tilesToNeutralize.length / 2);
             
             if (tilesToNeutralize.length > 0) {
                 const batch = writeBatch(firestore);
