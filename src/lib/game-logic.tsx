@@ -134,37 +134,36 @@ const generateUnitConversionConceptProblem = (): MathProblem => {
 };
 
 const generatePlaceValueProblem = (): MathProblem => {
-    // 1. Create a base integer
     const baseInt = randomInt(1, 999);
-
-    // 2. Create two different multipliers from a set
     const multipliers = [0.01, 0.1, 1, 10, 100, 1000];
-    const index1 = randomInt(0, multipliers.length - 2);
-    const index2 = randomInt(index1 + 1, multipliers.length - 1); // Ensure index2 > index1
+    let index1, index2;
+    do {
+      index1 = randomInt(0, multipliers.length - 1);
+      index2 = randomInt(0, multipliers.length - 1);
+    } while (index1 === index2);
+
+    const num1 = baseInt * multipliers[index1];
+    const num2 = baseInt * multipliers[index2];
     
-    const smallerMultiplier = multipliers[index1];
-    const biggerMultiplier = multipliers[index2];
-
-    const num1 = baseInt * biggerMultiplier;
-    const num2 = baseInt * smallerMultiplier;
-
-    // 3. Decide which number is bigger and smaller
-    const [biggerNum, smallerNum] = Math.random() > 0.5 ? [num1, num2] : [num2, num1];
+    const [biggerNum, smallerNum] = num1 > num2 ? [num1, num2] : [num2, num1];
     const actualMultiplier = biggerNum / smallerNum;
-    
+
     let questionText, answer;
 
-    // 4. Decide question type (50/50 chance)
-    if (Math.random() > 0.5) { // Ask for the multiplier
+    if (Math.random() > 0.5) {
         questionText = `${biggerNum}은(는) ${smallerNum}의 몇 배인가요?`;
         answer = actualMultiplier.toString();
-    } else { // Ask for the resulting number
+    } else {
         const isFindingBigger = Math.random() > 0.5;
         if (isFindingBigger) {
             questionText = `${smallerNum}의 ${actualMultiplier}배인 수는?`;
             answer = biggerNum.toString();
         } else {
-            questionText = `${biggerNum}의 1/${actualMultiplier}배인 수는?`;
+             if (actualMultiplier >= 1) {
+                questionText = `${biggerNum}의 1/${actualMultiplier}배인 수는?`;
+            } else {
+                questionText = `${biggerNum}의 ${1/actualMultiplier}배인 수는?`;
+            }
             answer = smallerNum.toString();
         }
     }
@@ -500,16 +499,17 @@ export const isAnswerCorrect = (userAnswers: string[], correctAnswers: string[])
         const processedUserAns = userAns.trim();
         const processedCorrectAns = correctAns.trim();
 
+        // If user answer is empty, but correct one is 0, consider it correct.
+        if (processedUserAns === '' && parseFloat(processedCorrectAns) === 0) {
+            return true;
+        }
+        
         // Try to parse both answers as numbers
         const userNum = parseFloat(processedUserAns);
         const correctNum = parseFloat(processedCorrectAns);
         
         // If both are valid numbers, compare them with tolerance
         if (!isNaN(userNum) && !isNaN(correctNum)) {
-             // Special case: if correct is 0, user can input '0', '.0', '0.0' etc. or be empty
-            if (correctNum === 0 && (userNum === 0 || processedUserAns === '' || processedUserAns === '.')) {
-                return true;
-            }
             return Math.abs(userNum - correctNum) < tolerance;
         }
 
