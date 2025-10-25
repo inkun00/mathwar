@@ -134,46 +134,47 @@ const generateUnitConversionConceptProblem = (): MathProblem => {
 };
 
 const generatePlaceValueProblem = (): MathProblem => {
-    const baseNum = round(randomInt(10, 999) / 100, 2); // e.g., 4.35
-    const multiplier = Math.random() > 0.5 ? 10 : 100;
-    const isMultiply = Math.random() > 0.5;
+    // 1. Create a base integer
+    const baseInt = randomInt(1, 999);
 
+    // 2. Create two different multipliers from a set
+    const multipliers = [0.01, 0.1, 1, 10, 100, 1000];
+    const index1 = randomInt(0, multipliers.length - 2);
+    const index2 = randomInt(index1 + 1, multipliers.length - 1); // Ensure index2 > index1
+    
+    const smallerMultiplier = multipliers[index1];
+    const biggerMultiplier = multipliers[index2];
+
+    const num1 = baseInt * biggerMultiplier;
+    const num2 = baseInt * smallerMultiplier;
+
+    // 3. Decide which number is bigger and smaller
+    const [biggerNum, smallerNum] = Math.random() > 0.5 ? [num1, num2] : [num2, num1];
+    const actualMultiplier = biggerNum / smallerNum;
+    
     let questionText, answer;
-    let questionType: 'findMultiplier' | 'findResult';
-    let biggerNum, smallerNum;
-    
-    if (isMultiply) {
-      biggerNum = round(baseNum * multiplier, 2);
-      smallerNum = baseNum;
-    } else {
-      biggerNum = baseNum;
-      smallerNum = round(baseNum / multiplier, 2);
-    }
-    
-    // 50% chance to ask for the multiplier
-    if (Math.random() > 0.5) {
-      questionType = 'findMultiplier';
-      questionText = `${biggerNum}은(는) ${smallerNum}의 몇 배인가요?`;
-      answer = (biggerNum / smallerNum).toString();
-    } else { // 50% chance to ask for the result
-      questionType = 'findResult';
-      const isFindingBigger = Math.random() > 0.5;
-      if (isFindingBigger) {
-        questionText = `${smallerNum}의 ${multiplier}배인 수는?`;
-        answer = biggerNum.toString();
-      } else {
-        questionText = `${biggerNum}의 1/${multiplier}배인 수는?`;
-        answer = smallerNum.toString();
-      }
-    }
 
+    // 4. Decide question type (50/50 chance)
+    if (Math.random() > 0.5) { // Ask for the multiplier
+        questionText = `${biggerNum}은(는) ${smallerNum}의 몇 배인가요?`;
+        answer = actualMultiplier.toString();
+    } else { // Ask for the resulting number
+        const isFindingBigger = Math.random() > 0.5;
+        if (isFindingBigger) {
+            questionText = `${smallerNum}의 ${actualMultiplier}배인 수는?`;
+            answer = biggerNum.toString();
+        } else {
+            questionText = `${biggerNum}의 1/${actualMultiplier}배인 수는?`;
+            answer = smallerNum.toString();
+        }
+    }
 
     return {
         problem: <span>{questionText} <AnswerInput /></span>,
         answer: [String(answer)],
         type: 'decimal',
         subType: 'conditional-operation',
-        storable: { type: 'decimal', subType: 'conditional-operation', operands: [baseNum, multiplier, isMultiply ? 1 : 0], operator: 'calculate' },
+        storable: { type: 'decimal', subType: 'conditional-operation', operands: [biggerNum, smallerNum], operator: 'calculate' },
     };
 };
 
