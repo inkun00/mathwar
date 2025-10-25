@@ -40,7 +40,6 @@ export type ProblemSubType =
   | 'direct-calculation'
   | 'process-decomposition'
   | 'vertical-calculation'
-  | 'error-correction'
   | 'multi-step-word-problem'
   | 'unit-conversion-concept'
   | 'conditional-operation'

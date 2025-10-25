@@ -386,65 +386,6 @@ const generateMultiStepWordProblem = (): MathProblem => {
   };
 };
 
-const generateErrorCorrectionProblem = (): MathProblem => {
-    const isAddition = Math.random() > 0.5;
-    let num1_raw = round(randomInt(100, 800) / 100, 2);
-    let num2_raw = round(randomInt(100, 800) / 100, 2);
-
-    const num1 = isAddition ? num1_raw : Math.max(num1_raw, num2_raw);
-    const num2 = isAddition ? num2_raw : Math.min(num1_raw, num2_raw);
-    const operator = isAddition ? '+' : '-';
-    const correctAnswer = isAddition ? round(num1 + num2, 2) : round(num1 - num2, 2);
-
-    // Create a plausible error
-    const errorType = randomInt(1, 2);
-    let wrongAnswer;
-    if (errorType === 1) { // Decimal alignment error
-        wrongAnswer = isAddition ? round(num1*10 + num2, 2) : round(num1*10 - num2, 2);
-        if(wrongAnswer < 0) wrongAnswer = round(num1*10 + num2, 2);
-    } else { // Calculation error in one digit
-        let errorDigit = randomInt(1, 9) / 100 * (Math.random() > 0.5 ? 1 : -1);
-        wrongAnswer = round(correctAnswer + errorDigit, 2);
-        if(wrongAnswer < 0 || wrongAnswer === correctAnswer) wrongAnswer = round(correctAnswer + 0.1, 2);
-    }
-    
-    const people = shuffleArray(['철수', '영희', '민수']);
-    const [person1, person2, person3] = people;
-    const wrongPerson = people[randomInt(0,2)];
-
-    const statements = {
-        [person1]: `철수: "계산 결과는 ${wrongPerson === person1 ? wrongAnswer : correctAnswer} 같아."`,
-        [person2]: `영희: "계산 결과는 ${wrongPerson === person2 ? wrongAnswer : correctAnswer} 같아."`,
-        [person3]: `민수: "계산 결과는 ${wrongPerson === person3 ? wrongAnswer : correctAnswer} 같아."`,
-    };
-
-    return {
-        problem: (
-            <div className="text-base text-left space-y-2">
-                <p className="text-center font-semibold text-lg mb-4">{num1.toFixed(2)} {operator} {num2.toFixed(2)} 계산에 대해 세 친구가 이야기합니다.</p>
-                <p>{statements[person1]}</p>
-                <p>{statements[person2]}</p>
-                <p>{statements[person3]}</p>
-                <div className="pt-4">
-                    <p>잘못 설명한 사람은 누구이며, 바른 계산 결과는 무엇인가요?</p>
-                    <div className="flex items-center gap-2 mt-2">
-                        <span>잘못 설명한 사람:</span>
-                        <AnswerInput />
-                    </div>
-                    <div className="flex items-center gap-2 mt-2">
-                         <span>바른 계산 결과:</span>
-                        <AnswerInput />
-                    </div>
-                </div>
-            </div>
-        ),
-        answer: [wrongPerson, String(correctAnswer)],
-        type: 'decimal',
-        subType: 'error-correction',
-        storable: { type: 'decimal', subType: 'error-correction', operands: [num1, num2, isAddition? 1: 0], operator: 'calculate' },
-    };
-};
-
 const generateDecompositionProblem = (): MathProblem => {
     const num1 = round(randomInt(101, 199) / 100, 2); // 1.xx
     const num2 = round(randomInt(1, 99) / 100, 2);   // 0.xx
@@ -482,7 +423,6 @@ export const generateProblemFromData = (data: StorableProblem): MathProblem => {
     'decimal-to-fraction': generateUnitConversionConceptProblem, // This is a bit of a misnomer now
     'unit-conversion-concept': generatePlaceValueRelationshipProblem,
     'vertical-calculation': generateVerticalCalculationProblem,
-    'error-correction': generateErrorCorrectionProblem,
     'process-decomposition': generateDecompositionProblem,
     'conditional-operation': generatePlaceValueProblem,
     'diagram': generateDiagramProblem
@@ -521,7 +461,7 @@ export const problemNodeToString = (node: React.ReactNode): string => {
 
 const easyProblems = [generateDirectCalculationProblem, generateUnitConversionConceptProblem, generatePlaceValueProblem];
 const mediumProblems = [generateComparisonProblem, generateWordProblem, generateConditionalProblem, generateVerticalCalculationProblem, generateDiagramProblem, generatePlaceValueRelationshipProblem];
-const hardProblems = [generateListNavigationProblem, generateMultiStepWordProblem, generateErrorCorrectionProblem, generateDecompositionProblem];
+const hardProblems = [generateListNavigationProblem, generateMultiStepWordProblem, generateDecompositionProblem];
 
 export const generateMathProblem = (): MathProblem => {
   const chance = Math.random() * 10; // 0 to 10
