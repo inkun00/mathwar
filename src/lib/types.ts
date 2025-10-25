@@ -42,6 +42,7 @@ export type ProblemSubType =
   | 'vertical-calculation'
   | 'multi-step-word-problem'
   | 'unit-conversion-concept'
+  | 'finer-unit-conversion-concept'
   | 'conditional-operation'
   | 'find-and-operate'
   | 'fill-in-the-blanks-process'

@@ -133,10 +133,23 @@ const generateUnitConversionConceptProblem = (): MathProblem => {
     };
 };
 
+const generateFinerUnitConversionConceptProblem = (): MathProblem => {
+    const num = randomInt(1001, 9999);
+    const decimal = round(num / 1000, 3);
+    return {
+      problem: <span>{parseFloat(decimal.toFixed(3))}은 0.001이 <AnswerInput />개입니다.</span>,
+      answer: [String(num)],
+      type: 'conversion',
+      subType: 'finer-unit-conversion-concept',
+      storable: { type: 'conversion', subType: 'finer-unit-conversion-concept', operands: [decimal], operator: 'convert' },
+    };
+}
+
 const generatePlaceValueProblem = (): MathProblem => {
     const baseInt = randomInt(1, 9999);
-    const exponents = [-3, -2, -1, 0, 1, 2, 3];
+    const exponents = [-3, -2, -1, 1, 2, 3]; // Exclude 0 to avoid num1 === num2
     let index1, index2;
+
     do {
       index1 = randomInt(0, exponents.length - 1);
       index2 = randomInt(0, exponents.length - 1);
@@ -146,24 +159,26 @@ const generatePlaceValueProblem = (): MathProblem => {
     const num2 = round(baseInt * (10 ** exponents[index2]), 3);
 
     const [biggerNum, smallerNum] = num1 > num2 ? [num1, num2] : [num2, num1];
-    const actualMultiplier = round(biggerNum / smallerNum, 0);
-
+    
+    // Format numbers to remove trailing zeros for display
     const formatNum = (num: number) => parseFloat(num.toFixed(3));
     
     let questionText, answer;
-
-    const isQuestionFindingMultiplier = Math.random() > 0.5;
+    const isQuestionFindingMultiplier = Math.random() < 0.33;
+    const isFindingBigger = Math.random() < 0.5;
 
     if (isQuestionFindingMultiplier) {
+        const actualMultiplier = round(biggerNum / smallerNum, 0);
         questionText = `${formatNum(biggerNum)}은(는) ${formatNum(smallerNum)}의 몇 배인가요?`;
         answer = actualMultiplier.toString();
     } else {
-        const isFindingBigger = Math.random() > 0.5;
         if (isFindingBigger) {
-            questionText = `${formatNum(smallerNum)}의 ${actualMultiplier}배인 수는?`;
+            const multiplier = round(biggerNum/smallerNum, 0);
+            questionText = `${formatNum(smallerNum)}의 ${multiplier}배인 수는?`;
             answer = biggerNum.toString();
         } else {
-            questionText = `${formatNum(biggerNum)}의 1/${actualMultiplier}배인 수는?`;
+            const multiplier = round(biggerNum/smallerNum, 0);
+            questionText = `${formatNum(biggerNum)}의 1/${multiplier}배인 수는?`;
             answer = smallerNum.toString();
         }
     }
@@ -421,6 +436,7 @@ export const generateProblemFromData = (data: StorableProblem): MathProblem => {
     'list-navigation': generateListNavigationProblem,
     'multi-step-word-problem': generateMultiStepWordProblem,
     'decimal-to-fraction': generateUnitConversionConceptProblem, // This is a bit of a misnomer now
+    'finer-unit-conversion-concept': generateFinerUnitConversionConceptProblem,
     'unit-conversion-concept': generatePlaceValueRelationshipProblem,
     'vertical-calculation': generateVerticalCalculationProblem,
     'process-decomposition': generateDecompositionProblem,
@@ -459,7 +475,7 @@ export const problemNodeToString = (node: React.ReactNode): string => {
 
 // --- Main Problem Generation Function ---
 
-const easyProblems = [generateDirectCalculationProblem, generateUnitConversionConceptProblem, generatePlaceValueProblem];
+const easyProblems = [generateDirectCalculationProblem, generateUnitConversionConceptProblem, generatePlaceValueProblem, generateFinerUnitConversionConceptProblem];
 const mediumProblems = [generateComparisonProblem, generateWordProblem, generateConditionalProblem, generateVerticalCalculationProblem, generateDiagramProblem, generatePlaceValueRelationshipProblem];
 const hardProblems = [generateListNavigationProblem, generateMultiStepWordProblem, generateDecompositionProblem];
 
@@ -565,4 +581,3 @@ export const canConquer = (tile: Tile, currentUser: User, allUsers: User[], user
     // Check for adjacency with any tile from the same country
     return isAdjacent(tile.x, tile.y, userCountryTiles);
   };
-
