@@ -134,48 +134,49 @@ const generateUnitConversionConceptProblem = (): MathProblem => {
 };
 
 const generatePlaceValueProblem = (): MathProblem => {
-    const baseInt = randomInt(1, 999);
-    const multipliers = [0.01, 0.1, 1, 10, 100, 1000];
+    const baseInt = randomInt(1, 9999);
+    const exponents = [-3, -2, -1, 0, 1, 2, 3];
     let index1, index2;
     do {
-      index1 = randomInt(0, multipliers.length - 1);
-      index2 = randomInt(0, multipliers.length - 1);
+      index1 = randomInt(0, exponents.length - 1);
+      index2 = randomInt(0, exponents.length - 1);
     } while (index1 === index2);
 
-    const num1 = baseInt * multipliers[index1];
-    const num2 = baseInt * multipliers[index2];
-    
-    const [biggerNum, smallerNum] = num1 > num2 ? [num1, num2] : [num2, num1];
-    const actualMultiplier = biggerNum / smallerNum;
+    const num1 = round(baseInt * (10 ** exponents[index1]), 3);
+    const num2 = round(baseInt * (10 ** exponents[index2]), 3);
 
+    const [biggerNum, smallerNum] = num1 > num2 ? [num1, num2] : [num2, num1];
+    const actualMultiplier = round(biggerNum / smallerNum, 0);
+
+    const formatNum = (num: number) => parseFloat(num.toFixed(3));
+    
     let questionText, answer;
 
-    if (Math.random() > 0.5) {
-        questionText = `${biggerNum}은(는) ${smallerNum}의 몇 배인가요?`;
+    const isQuestionFindingMultiplier = Math.random() > 0.5;
+
+    if (isQuestionFindingMultiplier) {
+        questionText = `${formatNum(biggerNum)}은(는) ${formatNum(smallerNum)}의 몇 배인가요?`;
         answer = actualMultiplier.toString();
     } else {
         const isFindingBigger = Math.random() > 0.5;
         if (isFindingBigger) {
-            questionText = `${smallerNum}의 ${actualMultiplier}배인 수는?`;
+            questionText = `${formatNum(smallerNum)}의 ${actualMultiplier}배인 수는?`;
             answer = biggerNum.toString();
         } else {
-             if (actualMultiplier >= 1) {
-                questionText = `${biggerNum}의 1/${actualMultiplier}배인 수는?`;
-            } else {
-                questionText = `${biggerNum}의 ${1/actualMultiplier}배인 수는?`;
-            }
+            questionText = `${formatNum(biggerNum)}의 1/${actualMultiplier}배인 수는?`;
             answer = smallerNum.toString();
         }
     }
 
     return {
         problem: <span>{questionText} <AnswerInput /></span>,
-        answer: [String(answer)],
+        answer: [answer],
         type: 'decimal',
         subType: 'conditional-operation',
         storable: { type: 'decimal', subType: 'conditional-operation', operands: [biggerNum, smallerNum], operator: 'calculate' },
     };
 };
+
 
 
 // --- MEDIUM PROBLEMS ---
@@ -498,11 +499,6 @@ export const isAnswerCorrect = (userAnswers: string[], correctAnswers: string[])
         // Trim whitespace from both answers
         const processedUserAns = userAns.trim();
         const processedCorrectAns = correctAns.trim();
-
-        // If user answer is empty, but correct one is 0, consider it correct.
-        if (processedUserAns === '' && parseFloat(processedCorrectAns) === 0) {
-            return true;
-        }
         
         // Try to parse both answers as numbers
         const userNum = parseFloat(processedUserAns);
@@ -513,7 +509,7 @@ export const isAnswerCorrect = (userAnswers: string[], correctAnswers: string[])
             return Math.abs(userNum - correctNum) < tolerance;
         }
 
-        // If they are not numbers (e.g., '철수', '<', '>'), do a case-insensitive string comparison
+        // If they are not numbers (e.g., '<', '>'), do a case-insensitive string comparison
         return processedUserAns.toLowerCase() === processedCorrectAns.toLowerCase();
     });
 };
@@ -569,3 +565,4 @@ export const canConquer = (tile: Tile, currentUser: User, allUsers: User[], user
     // Check for adjacency with any tile from the same country
     return isAdjacent(tile.x, tile.y, userCountryTiles);
   };
+
