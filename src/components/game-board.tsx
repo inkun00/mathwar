@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import type { Tile, MathProblem, Country, User, ProblemAttempt, InvasionTarget, WrongAnswer } from "@/lib/types";
-import { generateMathProblem, isAdjacent } from "@/lib/game-logic";
+import { generateMathProblem, isAdjacent, canConquer as canConquerLogic } from "@/lib/game-logic";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { ZoomIn, ZoomOut } from "lucide-react";
@@ -186,7 +186,7 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
                     const tileRef = doc(firestore, "land_tiles", tile.id);
                     batch.update(tileRef, { ownerId: null });
                 });
-
+                
                 await batch.commit().catch(error => {
                     console.error("영토 분단 처리 실패:", error);
                     errorEmitter.emit('permission-error', new FirestorePermissionError({ path: 'land_tiles or users', operation: 'update'}));
@@ -199,9 +199,7 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
                 toast({
                     variant: ownerIsCurrentUser ? "destructive" : "default",
                     title: ownerIsCurrentUser ? "영토 분단!" : `공격 성공! (${ownerName})`,
-                    description: ownerIsCurrentUser
-                      ? `영토가 분단되어 타일 ${tilesToNeutralize.length}개를 잃었습니다.`
-                      : `${ownerName}의 영토가 분단되어 타일 ${tilesToNeutralize.length}개를 잃었습니다.`,
+                    description: `영토가 분단되어 타일 ${tilesToNeutralize.length}개를 잃었습니다.`,
                 });
             }
         }
@@ -392,37 +390,7 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
     if (!currentUser || (currentUser.tokens ?? 0) <= 0 || isProcessingClick || isBuildingWall) {
       return false;
     }
-    
-    // 타일 소유자가 같은 국가 소속인지 확인
-    const owner = tile.ownerId ? allUsers.find(u => u.id === tile.ownerId) : null;
-    if (owner && owner.countryId === currentUser.countryId) {
-      return false; // Cannot conquer a tile owned by a countryman
-    }
-    
-    if (userCountryTiles.length === 0) {
-      // Rule for the very first tile placement.
-      if (tile.ownerId !== null || !isLand(tile.x, tile.y)) {
-        return false;
-      }
-      
-      // Check distance from all other players' tiles.
-      const otherPlayersTiles = landTiles.filter(t => t.ownerId !== null && t.ownerId !== currentUser.id);
-      if (otherPlayersTiles.length === 0) {
-        return true; // No other players, can place anywhere.
-      }
-
-      for (const otherTile of otherPlayersTiles) {
-        const distance = Math.abs(tile.x - otherTile.x) + Math.abs(tile.y - otherTile.y);
-        if (distance < 5) {
-          return false; // Too close to another player.
-        }
-      }
-      
-      return true; // Far enough from all other players.
-    }
-    
-    // Check for adjacency with any tile from the same country
-    return isAdjacent(tile.x, tile.y, userCountryTiles);
+    return canConquerLogic(tile, currentUser, allUsers, userCountryTiles, landTiles);
   };
   
   const canBuildWall = (tile: Tile) => {

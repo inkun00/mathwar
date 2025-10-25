@@ -586,3 +586,45 @@ export const isAdjacent = (tileX: number, tileY: number, userTiles: Tile[]) => {
       (Math.abs(userTile.y - tileY) === 1 && userTile.x === tileX)
   );
 };
+
+
+export const canConquer = (tile: Tile, currentUser: User, allUsers: User[], userCountryTiles: Tile[], landTiles: Tile[]) => {
+    if (!currentUser || (currentUser.tokens ?? 0) <= 0) {
+      return false;
+    }
+    
+    // 타일 소유자가 같은 국가 소속인지 확인
+    const owner = tile.ownerId ? allUsers.find(u => u.id === tile.ownerId) : null;
+    if (owner && owner.countryId === currentUser.countryId) {
+      return false; // Cannot conquer a tile owned by a countryman
+    }
+    
+    if (!isLand(tile.x, tile.y)) {
+        return false;
+    }
+
+    if (userCountryTiles.length === 0) {
+      // Rule for the very first tile placement.
+      if (tile.ownerId !== null) {
+        return false;
+      }
+      
+      // Check distance from all other players' tiles.
+      const otherPlayersTiles = landTiles.filter(t => t.ownerId !== null && t.ownerId !== currentUser.id);
+      if (otherPlayersTiles.length === 0) {
+        return true; // No other players, can place anywhere.
+      }
+
+      for (const otherTile of otherPlayersTiles) {
+        const distance = Math.abs(tile.x - otherTile.x) + Math.abs(tile.y - otherTile.y);
+        if (distance < 5) {
+          return false; // Too close to another player.
+        }
+      }
+      
+      return true; // Far enough from all other players.
+    }
+    
+    // Check for adjacency with any tile from the same country
+    return isAdjacent(tile.x, tile.y, userCountryTiles);
+  };
