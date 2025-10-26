@@ -25,12 +25,12 @@ export default function Home() {
   const { data: userProfile, isLoading: isProfileLoading } = useDoc<GameUser>(userDocRef);
 
   const landTilesQuery = useMemoFirebase(() => {
-    if (!firestore) return null;
+    if (!firestore || !authUser) return null;
     return collection(firestore, 'land_tiles');
-  }, [firestore]);
+  }, [firestore, authUser]);
   const { data: landTiles, isLoading: areLandTilesLoading } = useCollection<Tile>(landTilesQuery);
   
-  const isLoading = isAuthUserLoading || (authUser && isProfileLoading) || areLandTilesLoading;
+  const isLoading = isAuthUserLoading || (authUser && isProfileLoading) || (authUser && areLandTilesLoading);
 
   useEffect(() => {
     if (userProfile && landTiles && firestore && authUser) {
@@ -168,5 +168,3 @@ useEffect(() => {
   // Fallback, should not be reached
   return <Login />;
 }
-
-    
