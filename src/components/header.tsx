@@ -4,7 +4,7 @@ import { Logo } from "@/components/icons/logo";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import type { User, Tile } from "@/lib/types";
-import { UserCircle, HelpCircle, User as UserIcon, Trophy, Store, Shield } from "lucide-react";
+import { UserCircle, HelpCircle, User as UserIcon, Trophy, Store, Shield, RefreshCcw } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import ProfileSheet from "./profile-sheet";
 import LeaderboardSheet from "./leaderboard-sheet";
@@ -26,6 +26,7 @@ interface HeaderProps {
   wrongAnswers: WrongAnswer[];
   isBuildingWall: boolean;
   onToggleWallBuilding: () => void;
+  onFullRefresh: () => void;
 }
 
 export default function Header({ 
@@ -37,7 +38,8 @@ export default function Header({
   users, 
   wrongAnswers,
   isBuildingWall,
-  onToggleWallBuilding
+  onToggleWallBuilding,
+  onFullRefresh,
 }: HeaderProps) {
   const userCountry = countries.find(c => c.id === currentUser.countryId);
   const { toast } = useToast();
@@ -195,6 +197,10 @@ export default function Header({
           
           <div className="flex flex-col items-end gap-1">
              <div className="flex gap-2">
+                <Button onClick={onFullRefresh} variant="outline">
+                    <RefreshCcw className="mr-2 h-4 w-4" />
+                    영토 새로고침
+                </Button>
                 <Button onClick={handleWallBuildClick} variant={isBuildingWall ? "secondary" : "default"}>
                     <Shield className="mr-2 h-4 w-4" />
                     성벽 건설 ({currentUser.walls ?? 0})

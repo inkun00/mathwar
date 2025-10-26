@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useMemo, useEffect } from "react";
-import type { Tile, MathProblem, Country, User, ProblemAttempt, InvasionTarget, WrongAnswer } from "@/lib/types";
+import { useState, useMemo, useEffect, useCallback } from "react";
+import type { Tile, MathProblem, Country, User, ProblemAttempt, InvasionTarget, WrongAnswer, MapData } from "@/lib/types";
 import { generateMathProblem, isAdjacent, canConquer as canConquerLogic } from "@/lib/game-logic";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -26,6 +26,13 @@ interface GameBoardProps {
   wrongAnswers: WrongAnswer[];
 }
 
+const createEmptyMap = (): MapData => 
+  Array.from({ length: MAP_HEIGHT }, (_, y) =>
+    Array.from({ length: MAP_WIDTH }, (__, x) => ({
+      id: `${x}-${y}`, x, y, ownerId: null,
+    }))
+  );
+
 export default function GameBoard({ users, countries, landTiles, currentUserProfile, problemAttempts, wrongAnswers }: GameBoardProps) {
   const firestore = useFirestore();
   const { user: authUser } = useUser();
@@ -38,6 +45,7 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
   const [isProcessingClick, setIsProcessingClick] = useState(false);
   const [isBuildingWall, setIsBuildingWall] = useState(false);
 
+  const [displayMapData, setDisplayMapData] = useState<MapData>(() => createEmptyMap());
 
   const currentUserCountry = useMemo(() => countries.find(c => c.id === currentUserProfile.countryId), [countries, currentUserProfile.countryId]);
   
@@ -52,33 +60,9 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
     return { ...user, isCountryOwner };
   }, [users, currentUserProfile.id, isCountryOwner]);
   
-  const allUsers = useMemo(() => {
-    return users.map(u => ({...u, isAI: false}));
-  }, [users]);
-  
-  const allCountries = useMemo(() => {
-    return countries.map(c => ({...c}));
-  }, [countries]);
+  const allUsers = useMemo(() => users, [users]);
+  const allCountries = useMemo(() => countries, [countries]);
 
-  const mapData = useMemo(() => {
-    const map: Tile[][] = Array.from({ length: MAP_HEIGHT }, (_, y) =>
-      Array.from({ length: MAP_WIDTH }, (__, x) => ({
-        id: `${x}-${y}`,
-        x,
-        y,
-        ownerId: null,
-      }))
-    );
-
-    landTiles.forEach(tile => {
-        if(map[tile.y] && map[tile.y][tile.x]) {
-            map[tile.y][tile.x] = { ...map[tile.y][tile.x], ...tile };
-        }
-    });
-
-    return map;
-  }, [landTiles]);
-  
   const userCountryTiles = useMemo(() => {
     if (!currentUser) return [];
     const countryMembers = allUsers.filter(u => u.countryId === currentUser.countryId);
@@ -89,9 +73,60 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
   const isDemise = useMemo(() => {
       if (!currentUser) return false;
       const hasLand = landTiles.some(tile => tile.ownerId === currentUser.id);
-      // You are in demise if you have no land AND no tokens to expand.
       return !hasLand && (currentUser.tokens ?? 0) === 0;
   }, [landTiles, currentUser]);
+
+
+  const getMapWithTiles = useCallback((baseMap: MapData, tiles: Tile[]): MapData => {
+    const newMap = baseMap.map(row => row.map(tile => ({...tile})));
+    tiles.forEach(tile => {
+        if(newMap[tile.y] && newMap[tile.y][tile.x]) {
+            newMap[tile.y][tile.x] = { ...newMap[tile.y][tile.x], ...tile };
+        }
+    });
+    return newMap;
+  }, []);
+
+  useEffect(() => {
+    const initialMap = getMapWithTiles(createEmptyMap(), landTiles);
+    setDisplayMapData(initialMap);
+  }, []); // Run only once on initial load
+
+  useEffect(() => {
+    if (!landTiles || !currentUser) return;
+
+    const BORDER_RANGE = 5;
+    const myCountryTiles = userCountryTiles;
+
+    if (myCountryTiles.length === 0) {
+        setDisplayMapData(prevMap => getMapWithTiles(prevMap, landTiles));
+        return;
+    }
+
+    const boundary = {
+        minX: Math.min(...myCountryTiles.map(t => t.x)),
+        maxX: Math.max(...myCountryTiles.map(t => t.x)),
+        minY: Math.min(...myCountryTiles.map(t => t.y)),
+        maxY: Math.max(...myCountryTiles.map(t => t.y)),
+    };
+
+    const tilesToUpdate = landTiles.filter(tile => 
+        tile.x >= boundary.minX - BORDER_RANGE &&
+        tile.x <= boundary.maxX + BORDER_RANGE &&
+        tile.y >= boundary.minY - BORDER_RANGE &&
+        tile.y <= boundary.maxY + BORDER_RANGE
+    );
+    
+    setDisplayMapData(prevMap => getMapWithTiles(prevMap, tilesToUpdate));
+
+  }, [landTiles, currentUser, userCountryTiles, getMapWithTiles]);
+
+  const handleFullRefresh = () => {
+    const fullMap = getMapWithTiles(createEmptyMap(), landTiles);
+    setDisplayMapData(fullMap);
+    setZoomLevel(1); // Reset zoom level
+    toast({ title: "지도 전체 새로고침 완료", description: "모든 영토의 최신 상태를 불러왔습니다." });
+  };
 
 
   const handleSolveProblemForToken = () => {
@@ -254,9 +289,8 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
     if (!currentUser || !firestore || isProcessingClick) return;
 
     setIsProcessingClick(true);
-    const clickedTile = mapData[y][x];
+    const clickedTile = displayMapData[y][x];
 
-    // --- Wall Building Logic ---
     if (isBuildingWall) {
       if (clickedTile.ownerId === currentUser.id && !clickedTile.hasWall) {
         const tileRef = doc(firestore, "land_tiles", clickedTile.id);
@@ -289,8 +323,6 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
       return;
     }
 
-
-    // --- Expansion/Invasion Logic ---
     if ((currentUser.tokens ?? 0) <= 0) {
       toast({
         variant: "destructive",
@@ -304,7 +336,7 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
     const originalOwnerId = clickedTile.ownerId;
     const userRef = doc(firestore, "users", currentUser.id);
 
-    if (originalOwnerId === null) { // Unclaimed land
+    if (originalOwnerId === null) {
         const tileId = `${x}-${y}`;
         const tileRef = doc(firestore, "land_tiles", tileId);
         const tileData = { x, y, ownerId: currentUser.id };
@@ -330,7 +362,7 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
                 setIsProcessingClick(false);
             });
     }
-    else if (originalOwnerId !== currentUser.id) { // Invasion
+    else if (originalOwnerId !== currentUser.id) {
         const owner = allUsers.find(u => u.id === originalOwnerId);
         if (owner && owner.countryId === currentUser.countryId) {
              toast({
@@ -342,7 +374,6 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
             return;
         }
 
-        // Decrement token immediately
         updateDoc(userRef, { tokens: increment(-1) })
             .then(() => {
                 setInvasionTarget({ x, y, originalOwnerId: originalOwnerId!, hasWall: clickedTile.hasWall });
@@ -353,10 +384,10 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
             .catch(error => {
                 console.error("토큰 감소 실패:", error);
                 errorEmitter.emit('permission-error', new FirestorePermissionError({ path: userRef.path, operation: 'update', requestResourceData: { tokens: increment(-1) } }));
-                setIsProcessingClick(false); // Release lock if token decrement fails
+                setIsProcessingClick(false);
             });
     } else {
-        setIsProcessingClick(false); // Clicked on own tile
+        setIsProcessingClick(false);
     }
   };
   
@@ -411,14 +442,12 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
     if (!authUser || !firestore) return;
 
     if (invasionTarget) {
-      // Invasion failed, token was already used. Just show a toast.
       toast({
         variant: 'destructive',
         title: '침략 실패!',
         description: '문제를 틀려 영토 획득에 실패했습니다.',
       });
     } else {
-      // This is for getting a token, record it as wrong
       addWrongAnswer(firestore, authUser.uid, problem);
     }
   };
@@ -444,10 +473,11 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
         wrongAnswers={wrongAnswers}
         isBuildingWall={isBuildingWall}
         onToggleWallBuilding={handleToggleWallBuilding}
+        onFullRefresh={handleFullRefresh}
       />
       <div className="relative h-full w-full max-w-7xl flex-grow">
         <WorldMap 
-            mapData={mapData} 
+            displayMapData={displayMapData} 
             users={allUsers} 
             countries={allCountries} 
             onTileClick={handleTileClick} 

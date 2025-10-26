@@ -9,7 +9,7 @@ import { useMemo } from 'react';
 import FlagDisplay from "./flag-display";
 
 interface WorldMapProps {
-  mapData: MapData;
+  displayMapData: MapData;
   users: User[];
   countries: Country[];
   onTileClick: (x: number, y: number) => void;
@@ -78,7 +78,7 @@ const TileComponent = React.memo(({
 TileComponent.displayName = "TileComponent";
 
 
-export default function WorldMap({ mapData, users, countries, onTileClick, canConquer, canBuildWall, zoomLevel }: WorldMapProps) {
+export default function WorldMap({ displayMapData, users, countries, onTileClick, canConquer, canBuildWall, zoomLevel }: WorldMapProps) {
   const countryColorMap = useMemo(() => new Map(countries.map(c => [c.id, c.color])), [countries]);
   const userCountryMap = useMemo(() => new Map(users.map(u => [u.id, u.countryId])), [users]);
   
@@ -116,12 +116,12 @@ export default function WorldMap({ mapData, users, countries, onTileClick, canCo
       <div 
         className="grid touch-none select-none gap-0 transition-transform duration-300 ease-in-out"
         style={{
-          gridTemplateColumns: `repeat(${mapData[0].length}, minmax(0, 1fr))`,
+          gridTemplateColumns: `repeat(${displayMapData[0].length}, minmax(0, 1fr))`,
           transform: `scale(${zoomLevel})`,
           transformOrigin: 'center center',
         }}
       >
-        {mapData.flat().map((tile) => (
+        {displayMapData.flat().map((tile) => (
           <TileComponent
             key={`${tile.x}-${tile.y}`}
             tile={tile}
