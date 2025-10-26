@@ -93,9 +93,9 @@ export default function WorldMap({ displayMapData, users, countries, onTileClick
 
   const getTooltipContent = (tile: Tile): React.ReactNode => {
     if (!isLand(tile.x, tile.y)) return null;
-    if (!tile.ownerId) return <p>미개척지</p>;
+    if (!tile.ownerId) return <p className="text-lg">미개척지</p>;
     const owner = users.find(u => u.id === tile.ownerId);
-    if (!owner) return <p>알 수 없는 플레이어</p>;
+    if (!owner) return <p className="text-lg">알 수 없는 플레이어</p>;
     const country = countries.find(c => c.id === owner.countryId);
     
     let content = `${country?.name || '소속 없음'} (${owner.nickname})`;
@@ -105,8 +105,8 @@ export default function WorldMap({ displayMapData, users, countries, onTileClick
 
     return (
         <div className="flex items-center gap-2">
-            {country && <FlagDisplay flagData={country.flag} width={32} />}
-            <p>{content}</p>
+            {country && <FlagDisplay flagData={country.flag} width={64} />}
+            <p className="text-lg">{content}</p>
         </div>
     );
   };
