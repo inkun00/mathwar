@@ -6,20 +6,23 @@ import { generateMathProblem, isAdjacent, canConquer as canConquerLogic } from "
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { ZoomIn, ZoomOut } from "lucide-react";
-import { useFirestore, useUser, useCollection, useMemoFirebase } from "@/firebase";
+import { useFirestore, useUser, errorEmitter, FirestorePermissionError, useMemoFirebase } from "@/firebase";
 import { doc, setDoc, updateDoc, writeBatch, increment, collection, getDocs, arrayUnion } from "firebase/firestore";
 import { addWrongAnswer } from "@/firebase/firestore/data";
-import { errorEmitter, FirestorePermissionError } from '@/firebase';
 
 import Header from "./header";
 import WorldMap from "./world-map";
 import ProblemModal from "./problem-modal";
 import DemiseScreen from "./demise-screen";
 import { isLand, MAP_WIDTH, MAP_HEIGHT } from "@/lib/world-map-shape";
-import { Skeleton } from "./ui/skeleton";
 
 interface GameBoardProps {
   currentUserProfile: User;
+  landTiles: Tile[];
+  allUsers: User[];
+  countries: Country[];
+  problemAttempts: ProblemAttempt[];
+  wrongAnswers: WrongAnswer[];
 }
 
 const createEmptyMap = (): MapData => 
@@ -29,33 +32,16 @@ const createEmptyMap = (): MapData =>
     }))
   );
 
-export default function GameBoard({ currentUserProfile: currentUser }: GameBoardProps) {
+export default function GameBoard({ 
+  currentUserProfile: currentUser, 
+  landTiles,
+  allUsers,
+  countries,
+  problemAttempts,
+  wrongAnswers,
+}: GameBoardProps) {
   const firestore = useFirestore();
   const { user: authUser } = useUser();
-  
-  // Firestore data hooks
-  const countriesQuery = useMemoFirebase(() => collection(firestore, 'countries'), [firestore]);
-  const landTilesQuery = useMemoFirebase(() => collection(firestore, 'land_tiles'), [firestore]);
-  const usersQuery = useMemoFirebase(() => collection(firestore, 'users'), [firestore]);
-  
-  const problemAttemptsQuery = useMemoFirebase(() => {
-    if (!authUser) return null;
-    return collection(firestore, 'problem_attempts', authUser.uid, 'attempts');
-  }, [firestore, authUser]);
-
-  const wrongAnswersQuery = useMemoFirebase(() => {
-    if (!authUser) return null;
-    return collection(firestore, 'users', authUser.uid, 'wrong_answers');
-  }, [firestore, authUser]);
-  
-  const { data: countries, isLoading: areCountriesLoading } = useCollection<Country>(countriesQuery);
-  const { data: landTiles, isLoading: areLandTilesLoading } = useCollection<Tile>(landTilesQuery);
-  const { data: allUsers, isLoading: areUsersLoading } = useCollection<User>(usersQuery);
-  const { data: problemAttempts, isLoading: areAttemptsLoading } = useCollection<ProblemAttempt>(problemAttemptsQuery);
-  const { data: wrongAnswers, isLoading: areWrongAnswersLoading } = useCollection<WrongAnswer>(wrongAnswersQuery);
-  
-  const isLoading = areCountriesLoading || areLandTilesLoading || areUsersLoading || areAttemptsLoading || areWrongAnswersLoading;
-
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentProblem, setCurrentProblem] = useState<MathProblem | null>(null);
@@ -95,51 +81,13 @@ export default function GameBoard({ currentUserProfile: currentUser }: GameBoard
   }, []);
 
   useEffect(() => {
-    // This effect initializes the map only once when the component mounts with initial data.
-    if(landTiles && !areLandTilesLoading) {
+    // This effect synchronizes the display map with the incoming landTiles prop.
+    if(landTiles) {
       const initialMap = getMapWithTiles(createEmptyMap(), landTiles);
       setDisplayMapData(initialMap);
     }
-  }, [areLandTilesLoading]); // Only run when loading is finished
+  }, [landTiles, getMapWithTiles]); // Re-run when landTiles prop changes.
 
-
-  useEffect(() => {
-    // This effect is for REACTIVE updates to the map from external changes (other players)
-    if (!landTiles || !currentUser) return;
-
-    // Do not run partial updates if there are no country tiles, to avoid issues on first conquest.
-    if (userCountryTiles.length === 0) {
-        return;
-    }
-
-    const BORDER_RANGE = 5;
-
-    const boundary = {
-        minX: Math.min(...userCountryTiles.map(t => t.x)),
-        maxX: Math.max(...userCountryTiles.map(t => t.x)),
-        minY: Math.min(...userCountryTiles.map(t => t.y)),
-        maxY: Math.max(...userCountryTiles.map(t => t.y)),
-    };
-
-    const tilesToUpdate = landTiles.filter(serverTile => {
-        // Check if the tile is within the interest area (boundary + range)
-        const inBounds = serverTile.x >= boundary.minX - BORDER_RANGE &&
-                         serverTile.x <= boundary.maxX + BORDER_RANGE &&
-                         serverTile.y >= boundary.minY - BORDER_RANGE &&
-                         serverTile.y <= boundary.maxY + BORDER_RANGE;
-        
-        if (!inBounds) return false;
-
-        const clientTile = displayMapData[serverTile.y]?.[serverTile.x];
-        // Only update if the client tile is different from the server tile
-        return !clientTile || clientTile.ownerId !== serverTile.ownerId || clientTile.hasWall !== serverTile.hasWall;
-    });
-    
-    if (tilesToUpdate.length > 0) {
-      setDisplayMapData(prevMap => getMapWithTiles(prevMap, tilesToUpdate));
-    }
-  // displayMapData is a dependency to compare against new server data.
-  }, [landTiles, currentUser, userCountryTiles, getMapWithTiles, displayMapData]);
 
   const handleFullRefresh = () => {
     if (!landTiles) return;
@@ -499,18 +447,6 @@ export default function GameBoard({ currentUserProfile: currentUser }: GameBoard
     }
   };
 
-  if (isLoading || !currentUser || !allUsers || !countries || !landTiles || !problemAttempts || !wrongAnswers) {
-    return (
-      <div className="flex h-screen w-full items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-4">
-          <Skeleton className="h-16 w-64" />
-          <Skeleton className="h-96 w-96" />
-        </div>
-      </div>
-    );
-  }
-
-
   return (
     <div className="flex w-full flex-grow flex-col gap-6">
       <Header 
@@ -559,7 +495,3 @@ export default function GameBoard({ currentUserProfile: currentUser }: GameBoard
     </div>
   );
 }
-
-    
-
-    
