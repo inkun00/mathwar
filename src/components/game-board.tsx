@@ -6,7 +6,7 @@ import { generateMathProblem, isAdjacent, canConquer as canConquerLogic } from "
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { ZoomIn, ZoomOut } from "lucide-react";
-import { useFirestore, useUser } from "@/firebase";
+import { useFirestore, useUser, useCollection, useMemoFirebase } from "@/firebase";
 import { doc, setDoc, updateDoc, writeBatch, increment, collection, getDocs, arrayUnion } from "firebase/firestore";
 import { addWrongAnswer } from "@/firebase/firestore/data";
 import { errorEmitter, FirestorePermissionError } from '@/firebase';
@@ -16,14 +16,10 @@ import WorldMap from "./world-map";
 import ProblemModal from "./problem-modal";
 import DemiseScreen from "./demise-screen";
 import { isLand, MAP_WIDTH, MAP_HEIGHT } from "@/lib/world-map-shape";
+import { Skeleton } from "./ui/skeleton";
 
 interface GameBoardProps {
-  users: User[];
-  countries: Country[];
-  landTiles: Tile[];
   currentUserProfile: User;
-  problemAttempts: ProblemAttempt[];
-  wrongAnswers: WrongAnswer[];
 }
 
 const createEmptyMap = (): MapData => 
@@ -33,9 +29,34 @@ const createEmptyMap = (): MapData =>
     }))
   );
 
-export default function GameBoard({ users, countries, landTiles, currentUserProfile, problemAttempts, wrongAnswers }: GameBoardProps) {
+export default function GameBoard({ currentUserProfile }: GameBoardProps) {
   const firestore = useFirestore();
   const { user: authUser } = useUser();
+  
+  // Firestore data hooks
+  const countriesQuery = useMemoFirebase(() => collection(firestore, 'countries'), [firestore]);
+  const landTilesQuery = useMemoFirebase(() => collection(firestore, 'land_tiles'), [firestore]);
+  const usersQuery = useMemoFirebase(() => collection(firestore, 'users'), [firestore]);
+  
+  const problemAttemptsQuery = useMemoFirebase(() => {
+    if (!authUser) return null;
+    return collection(firestore, 'problem_attempts', authUser.uid, 'attempts');
+  }, [firestore, authUser]);
+
+  const wrongAnswersQuery = useMemoFirebase(() => {
+    if (!authUser) return null;
+    return collection(firestore, 'users', authUser.uid, 'wrong_answers');
+  }, [firestore, authUser]);
+  
+  const { data: countries, isLoading: areCountriesLoading } = useCollection<Country>(countriesQuery);
+  const { data: landTiles, isLoading: areLandTilesLoading } = useCollection<Tile>(landTilesQuery);
+  const { data: users, isLoading: areUsersLoading } = useCollection<User>(usersQuery);
+  const { data: problemAttempts, isLoading: areAttemptsLoading } = useCollection<ProblemAttempt>(problemAttemptsQuery);
+  const { data: wrongAnswers, isLoading: areWrongAnswersLoading } = useCollection<WrongAnswer>(wrongAnswersQuery);
+  
+  const isLoading = areCountriesLoading || areLandTilesLoading || areUsersLoading || areAttemptsLoading || areWrongAnswersLoading;
+
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentProblem, setCurrentProblem] = useState<MathProblem | null>(null);
   const [invasionTarget, setInvasionTarget] = useState<InvasionTarget>(null);
@@ -47,7 +68,7 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
 
   const [displayMapData, setDisplayMapData] = useState<MapData>(() => createEmptyMap());
 
-  const currentUserCountry = useMemo(() => countries.find(c => c.id === currentUserProfile.countryId), [countries, currentUserProfile.countryId]);
+  const currentUserCountry = useMemo(() => countries?.find(c => c.id === currentUserProfile.countryId), [countries, currentUserProfile.countryId]);
   
   const isCountryOwner = useMemo(() => {
     if (!currentUserCountry || !authUser) return false;
@@ -55,43 +76,47 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
   }, [currentUserCountry, authUser]);
 
   const currentUser = useMemo(() => {
+    if(!users) return currentUserProfile;
     const user = users.find(u => u.id === currentUserProfile.id);
-    if (!user) return undefined;
-    return { ...user, isCountryOwner };
-  }, [users, currentUserProfile.id, isCountryOwner]);
+    // Combine profile data with potentially updated user data from collection
+    return user ? { ...currentUserProfile, ...user, isCountryOwner } : { ...currentUserProfile, isCountryOwner };
+  }, [users, currentUserProfile, isCountryOwner]);
   
   const allUsers = useMemo(() => users, [users]);
   const allCountries = useMemo(() => countries, [countries]);
 
   const userCountryTiles = useMemo(() => {
-    if (!currentUser) return [];
+    if (!currentUser || !allUsers || !landTiles) return [];
     const countryMembers = allUsers.filter(u => u.countryId === currentUser.countryId);
     const memberIds = new Set(countryMembers.map(u => u.id));
     return landTiles.filter(tile => tile.ownerId && memberIds.has(tile.ownerId));
   }, [landTiles, allUsers, currentUser]);
   
   const isDemise = useMemo(() => {
-      if (!currentUser) return false;
+      if (!currentUser || !landTiles) return false;
       const hasLand = landTiles.some(tile => tile.ownerId === currentUser.id);
-      return !hasLand && (currentUser.tokens ?? 0) === 0;
+      return !hasLand && (currentUser.tokens ?? 0) <= 0;
   }, [landTiles, currentUser]);
 
 
   const getMapWithTiles = useCallback((baseMap: MapData, tilesToUpdate: Tile[]): MapData => {
-    const newMap = [...baseMap];
+    const newMap = [...baseMap]; // Shallow copy rows
     tilesToUpdate.forEach(tile => {
-        if(newMap[tile.y] && newMap[tile.y][tile.x]) {
-            newMap[tile.y][tile.x] = { ...newMap[tile.y][tile.x], ...tile };
-        }
+      if (newMap[tile.y]) {
+        newMap[tile.y] = [...newMap[tile.y]]; // Shallow copy the specific row to be changed
+        newMap[tile.y][tile.x] = { ...newMap[tile.y][tile.x], ...tile };
+      }
     });
     return newMap;
   }, []);
 
   useEffect(() => {
     // This effect initializes the map only once when the component mounts with initial data.
-    const initialMap = getMapWithTiles(createEmptyMap(), landTiles);
-    setDisplayMapData(initialMap);
-  }, []); // Empty dependency array ensures this runs only once.
+    if(landTiles) {
+      const initialMap = getMapWithTiles(createEmptyMap(), landTiles);
+      setDisplayMapData(initialMap);
+    }
+  }, [landTiles, getMapWithTiles]); // Runs only when landTiles first loads
 
 
   useEffect(() => {
@@ -134,6 +159,7 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
   }, [landTiles, currentUser, userCountryTiles, getMapWithTiles, displayMapData]);
 
   const handleFullRefresh = () => {
+    if (!landTiles) return;
     const fullMap = getMapWithTiles(createEmptyMap(), landTiles);
     setDisplayMapData(fullMap);
     setZoomLevel(1); // Reset zoom level
@@ -164,7 +190,7 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
   };
 
   const handleTerritoryCut = async (originalOwnerId: string, conquerorId: string | null) => {
-    if (!firestore || !currentUser) return;
+    if (!firestore || !currentUser || !allUsers) return;
 
     try {
         const tilesCollectionRef = collection(firestore, "land_tiles");
@@ -257,7 +283,7 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
 
 
   const handleInvasionSuccess = () => {
-    if (!currentUser || !firestore || !invasionTarget) return;
+    if (!currentUser || !firestore || !invasionTarget || !landTiles) return;
 
     if (invasionTarget.hasWall && invasionWallBreaks < 1) {
       setInvasionWallBreaks(1);
@@ -279,7 +305,7 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
 
     // --- Client-side optimistic update ---
     setDisplayMapData(prevMap => {
-        const newMap = [...prevMap];
+        const newMap = [...prevMap.map(row => [...row])];
         newMap[invasionTarget.y][invasionTarget.x] = { ...newMap[invasionTarget.y][invasionTarget.x], ...tileData };
         return newMap;
     });
@@ -294,7 +320,7 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
             console.error("침략 실패:", error);
              // Revert client-side state on failure
             setDisplayMapData(prevMap => {
-                const newMap = [...prevMap];
+                const newMap = [...prevMap.map(row => [...row])];
                 const originalTileState = landTiles.find(t => t.id === tileId);
                 if (originalTileState) {
                    newMap[invasionTarget.y][invasionTarget.x] = originalTileState;
@@ -314,7 +340,7 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
   };
 
   const handleTileClick = (x: number, y: number) => {
-    if (!currentUser || !firestore || isProcessingClick) return;
+    if (!currentUser || !firestore || isProcessingClick || !allUsers || !landTiles) return;
 
     setIsProcessingClick(true);
     const clickedTile = displayMapData[y][x];
@@ -330,7 +356,7 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
 
         // Optimistic UI update
         setDisplayMapData(prevMap => {
-            const newMap = [...prevMap];
+            const newMap = [...prevMap.map(row => [...row])];
             newMap[y][x].hasWall = true;
             return newMap;
         });
@@ -345,7 +371,7 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
             console.error("성벽 건설 실패:", error);
             // Revert UI on failure
             setDisplayMapData(prevMap => {
-                const newMap = [...prevMap];
+                const newMap = [...prevMap.map(row => [...row])];
                 newMap[y][x].hasWall = false;
                 return newMap;
             });
@@ -381,12 +407,13 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
     if (originalOwnerId === null) {
         const tileId = `${x}-${y}`;
         const tileRef = doc(firestore, "land_tiles", tileId);
-        const tileData = { x, y, ownerId: currentUser.id };
+        const tileData = { x, y, ownerId: currentUser.id, hasWall: false };
         
         // --- Client-side optimistic update ---
         setDisplayMapData(prevMap => {
-            const newMap = [...prevMap];
+            const newMap = [...prevMap.map(row => [...row])];
             newMap[y][x].ownerId = currentUser.id;
+            newMap[y][x].hasWall = false;
             return newMap;
         });
 
@@ -402,7 +429,7 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
                 console.error("타일 클릭 작업 실패:", error);
                  // Revert client-side state on failure
                 setDisplayMapData(prevMap => {
-                    const newMap = [...prevMap];
+                    const newMap = [...prevMap.map(row => [...row])];
                     newMap[y][x].ownerId = null; // Revert to original owner
                     return newMap;
                 });
@@ -473,7 +500,7 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
   }
 
   const canConquer = (tile: Tile) => {
-    if (!currentUser || (currentUser.tokens ?? 0) <= 0 || isProcessingClick || isBuildingWall) {
+    if (!currentUser || !allUsers || !landTiles || (currentUser.tokens ?? 0) <= 0 || isProcessingClick || isBuildingWall) {
       return false;
     }
     return canConquerLogic(tile, currentUser, allUsers, userCountryTiles, landTiles);
@@ -507,12 +534,15 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
     }
   };
 
-  if (!currentUser) {
+  if (isLoading || !currentUser || !allUsers || !allCountries || !landTiles || !problemAttempts || !wrongAnswers) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
-        <p>사용자를 불러오는 중...</p>
+        <div className="flex flex-col items-center gap-4">
+          <Skeleton className="h-16 w-64" />
+          <Skeleton className="h-96 w-96" />
+        </div>
       </div>
-    )
+    );
   }
 
 
@@ -564,5 +594,3 @@ export default function GameBoard({ users, countries, landTiles, currentUserProf
     </div>
   );
 }
-
-    
