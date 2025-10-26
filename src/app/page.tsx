@@ -8,7 +8,7 @@ import { useUser } from "@/firebase/auth/use-user";
 import { useDoc, useFirestore, useMemoFirebase, useCollection } from "@/firebase";
 import { doc, collection, updateDoc, increment, writeBatch } from "firebase/firestore";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { User as GameUser } from "@/lib/types";
+import type { User as GameUser, Tile } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 import { isLand } from "@/lib/world-map-shape";
 
@@ -28,9 +28,9 @@ export default function Home() {
     if (!firestore) return null;
     return collection(firestore, 'land_tiles');
   }, [firestore]);
-  const { data: landTiles } = useCollection<GameUser>(landTilesQuery);
+  const { data: landTiles, isLoading: areLandTilesLoading } = useCollection<Tile>(landTilesQuery);
   
-  const isLoading = isAuthUserLoading || (authUser && isProfileLoading);
+  const isLoading = isAuthUserLoading || (authUser && isProfileLoading) || areLandTilesLoading;
 
   useEffect(() => {
     if (userProfile && landTiles && firestore && authUser) {
@@ -168,3 +168,5 @@ useEffect(() => {
   // Fallback, should not be reached
   return <Login />;
 }
+
+    

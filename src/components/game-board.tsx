@@ -29,7 +29,7 @@ const createEmptyMap = (): MapData =>
     }))
   );
 
-export default function GameBoard({ currentUserProfile }: GameBoardProps) {
+export default function GameBoard({ currentUserProfile: currentUser }: GameBoardProps) {
   const firestore = useFirestore();
   const { user: authUser } = useUser();
   
@@ -50,7 +50,7 @@ export default function GameBoard({ currentUserProfile }: GameBoardProps) {
   
   const { data: countries, isLoading: areCountriesLoading } = useCollection<Country>(countriesQuery);
   const { data: landTiles, isLoading: areLandTilesLoading } = useCollection<Tile>(landTilesQuery);
-  const { data: users, isLoading: areUsersLoading } = useCollection<User>(usersQuery);
+  const { data: allUsers, isLoading: areUsersLoading } = useCollection<User>(usersQuery);
   const { data: problemAttempts, isLoading: areAttemptsLoading } = useCollection<ProblemAttempt>(problemAttemptsQuery);
   const { data: wrongAnswers, isLoading: areWrongAnswersLoading } = useCollection<WrongAnswer>(wrongAnswersQuery);
   
@@ -68,23 +68,8 @@ export default function GameBoard({ currentUserProfile }: GameBoardProps) {
 
   const [displayMapData, setDisplayMapData] = useState<MapData>(() => createEmptyMap());
 
-  const currentUserCountry = useMemo(() => countries?.find(c => c.id === currentUserProfile.countryId), [countries, currentUserProfile.countryId]);
+  const currentUserCountry = useMemo(() => countries?.find(c => c.id === currentUser.countryId), [countries, currentUser.countryId]);
   
-  const isCountryOwner = useMemo(() => {
-    if (!currentUserCountry || !authUser) return false;
-    return currentUserCountry.createdBy === authUser.uid;
-  }, [currentUserCountry, authUser]);
-
-  const currentUser = useMemo(() => {
-    if(!users) return currentUserProfile;
-    const user = users.find(u => u.id === currentUserProfile.id);
-    // Combine profile data with potentially updated user data from collection
-    return user ? { ...currentUserProfile, ...user, isCountryOwner } : { ...currentUserProfile, isCountryOwner };
-  }, [users, currentUserProfile, isCountryOwner]);
-  
-  const allUsers = useMemo(() => users, [users]);
-  const allCountries = useMemo(() => countries, [countries]);
-
   const userCountryTiles = useMemo(() => {
     if (!currentUser || !allUsers || !landTiles) return [];
     const countryMembers = allUsers.filter(u => u.countryId === currentUser.countryId);
@@ -100,10 +85,10 @@ export default function GameBoard({ currentUserProfile }: GameBoardProps) {
 
 
   const getMapWithTiles = useCallback((baseMap: MapData, tilesToUpdate: Tile[]): MapData => {
-    const newMap = [...baseMap]; // Shallow copy rows
+    if (tilesToUpdate.length === 0) return baseMap;
+    const newMap = [...baseMap.map(row => [...row])];
     tilesToUpdate.forEach(tile => {
-      if (newMap[tile.y]) {
-        newMap[tile.y] = [...newMap[tile.y]]; // Shallow copy the specific row to be changed
+      if (newMap[tile.y]?.[tile.x]) {
         newMap[tile.y][tile.x] = { ...newMap[tile.y][tile.x], ...tile };
       }
     });
@@ -116,7 +101,7 @@ export default function GameBoard({ currentUserProfile }: GameBoardProps) {
       const initialMap = getMapWithTiles(createEmptyMap(), landTiles);
       setDisplayMapData(initialMap);
     }
-  }, [landTiles, getMapWithTiles]); // Runs only when landTiles first loads
+  }, [landTiles, getMapWithTiles]);
 
 
   useEffect(() => {
@@ -126,7 +111,6 @@ export default function GameBoard({ currentUserProfile }: GameBoardProps) {
     const BORDER_RANGE = 5;
     const myCountryTiles = userCountryTiles;
 
-    // If I have no tiles, I don't need reactive updates for my surroundings
     if (myCountryTiles.length === 0) {
         return;
     }
@@ -138,7 +122,6 @@ export default function GameBoard({ currentUserProfile }: GameBoardProps) {
         maxY: Math.max(...myCountryTiles.map(t => t.y)),
     };
 
-    // Filter for tiles that have changed within the user's viewable area
     const tilesToUpdate = landTiles.filter(serverTile => {
         const inBounds = serverTile.x >= boundary.minX - BORDER_RANGE &&
                          serverTile.x <= boundary.maxX + BORDER_RANGE &&
@@ -147,7 +130,6 @@ export default function GameBoard({ currentUserProfile }: GameBoardProps) {
         
         if (!inBounds) return false;
 
-        // Check if the server state is different from the current display state
         const clientTile = displayMapData[serverTile.y]?.[serverTile.x];
         return !clientTile || clientTile.ownerId !== serverTile.ownerId || clientTile.hasWall !== serverTile.hasWall;
     });
@@ -534,7 +516,7 @@ export default function GameBoard({ currentUserProfile }: GameBoardProps) {
     }
   };
 
-  if (isLoading || !currentUser || !allUsers || !allCountries || !landTiles || !problemAttempts || !wrongAnswers) {
+  if (isLoading || !currentUser || !allUsers || !countries || !landTiles || !problemAttempts || !wrongAnswers) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
@@ -551,7 +533,7 @@ export default function GameBoard({ currentUserProfile }: GameBoardProps) {
       <Header 
         currentUser={currentUser} 
         onSolveProblemClick={handleSolveProblemForToken} 
-        countries={allCountries}
+        countries={countries}
         problemAttempts={problemAttempts}
         landTiles={landTiles}
         users={allUsers}
@@ -564,7 +546,7 @@ export default function GameBoard({ currentUserProfile }: GameBoardProps) {
         <WorldMap 
             displayMapData={displayMapData} 
             users={allUsers} 
-            countries={allCountries} 
+            countries={countries} 
             onTileClick={handleTileClick} 
             canConquer={canConquer}
             canBuildWall={canBuildWall}
@@ -594,3 +576,5 @@ export default function GameBoard({ currentUserProfile }: GameBoardProps) {
     </div>
   );
 }
+
+    
