@@ -85,7 +85,6 @@ export default function GameBoard({ currentUserProfile: currentUser }: GameBoard
 
 
   const getMapWithTiles = useCallback((baseMap: MapData, tilesToUpdate: Tile[]): MapData => {
-    if (tilesToUpdate.length === 0) return baseMap;
     const newMap = [...baseMap.map(row => [...row])];
     tilesToUpdate.forEach(tile => {
       if (newMap[tile.y]?.[tile.x]) {
@@ -97,32 +96,33 @@ export default function GameBoard({ currentUserProfile: currentUser }: GameBoard
 
   useEffect(() => {
     // This effect initializes the map only once when the component mounts with initial data.
-    if(landTiles) {
+    if(landTiles && !areLandTilesLoading) {
       const initialMap = getMapWithTiles(createEmptyMap(), landTiles);
       setDisplayMapData(initialMap);
     }
-  }, [landTiles, getMapWithTiles]);
+  }, [areLandTilesLoading]); // Only run when loading is finished
 
 
   useEffect(() => {
     // This effect is for REACTIVE updates to the map from external changes (other players)
     if (!landTiles || !currentUser) return;
 
-    const BORDER_RANGE = 5;
-    const myCountryTiles = userCountryTiles;
-
-    if (myCountryTiles.length === 0) {
+    // Do not run partial updates if there are no country tiles, to avoid issues on first conquest.
+    if (userCountryTiles.length === 0) {
         return;
     }
 
+    const BORDER_RANGE = 5;
+
     const boundary = {
-        minX: Math.min(...myCountryTiles.map(t => t.x)),
-        maxX: Math.max(...myCountryTiles.map(t => t.x)),
-        minY: Math.min(...myCountryTiles.map(t => t.y)),
-        maxY: Math.max(...myCountryTiles.map(t => t.y)),
+        minX: Math.min(...userCountryTiles.map(t => t.x)),
+        maxX: Math.max(...userCountryTiles.map(t => t.x)),
+        minY: Math.min(...userCountryTiles.map(t => t.y)),
+        maxY: Math.max(...userCountryTiles.map(t => t.y)),
     };
 
     const tilesToUpdate = landTiles.filter(serverTile => {
+        // Check if the tile is within the interest area (boundary + range)
         const inBounds = serverTile.x >= boundary.minX - BORDER_RANGE &&
                          serverTile.x <= boundary.maxX + BORDER_RANGE &&
                          serverTile.y >= boundary.minY - BORDER_RANGE &&
@@ -131,13 +131,14 @@ export default function GameBoard({ currentUserProfile: currentUser }: GameBoard
         if (!inBounds) return false;
 
         const clientTile = displayMapData[serverTile.y]?.[serverTile.x];
+        // Only update if the client tile is different from the server tile
         return !clientTile || clientTile.ownerId !== serverTile.ownerId || clientTile.hasWall !== serverTile.hasWall;
     });
     
     if (tilesToUpdate.length > 0) {
       setDisplayMapData(prevMap => getMapWithTiles(prevMap, tilesToUpdate));
     }
-
+  // displayMapData is a dependency to compare against new server data.
   }, [landTiles, currentUser, userCountryTiles, getMapWithTiles, displayMapData]);
 
   const handleFullRefresh = () => {
@@ -286,11 +287,7 @@ export default function GameBoard({ currentUserProfile: currentUser }: GameBoard
     const tileData = { x: invasionTarget.x, y: invasionTarget.y, ownerId: currentUser.id, hasWall: false };
 
     // --- Client-side optimistic update ---
-    setDisplayMapData(prevMap => {
-        const newMap = [...prevMap.map(row => [...row])];
-        newMap[invasionTarget.y][invasionTarget.x] = { ...newMap[invasionTarget.y][invasionTarget.x], ...tileData };
-        return newMap;
-    });
+    setDisplayMapData(prevMap => getMapWithTiles(prevMap, [{ ...tileData, id: tileId }]));
 
     setDoc(tileRef, tileData, { merge: true })
         .then(() => {
@@ -301,14 +298,10 @@ export default function GameBoard({ currentUserProfile: currentUser }: GameBoard
         .catch(error => {
             console.error("침략 실패:", error);
              // Revert client-side state on failure
-            setDisplayMapData(prevMap => {
-                const newMap = [...prevMap.map(row => [...row])];
-                const originalTileState = landTiles.find(t => t.id === tileId);
-                if (originalTileState) {
-                   newMap[invasionTarget.y][invasionTarget.x] = originalTileState;
-                }
-                return newMap;
-            });
+            const originalTileState = landTiles.find(t => t.id === tileId);
+            if (originalTileState) {
+              setDisplayMapData(prevMap => getMapWithTiles(prevMap, [originalTileState]));
+            }
             const permissionError = new FirestorePermissionError({
                 path: tileRef.path,
                 operation: 'write',
@@ -338,8 +331,7 @@ export default function GameBoard({ currentUserProfile: currentUser }: GameBoard
 
         // Optimistic UI update
         setDisplayMapData(prevMap => {
-            const newMap = [...prevMap.map(row => [...row])];
-            newMap[y][x].hasWall = true;
+            const newMap = getMapWithTiles(prevMap, [{ ...clickedTile, hasWall: true }]);
             return newMap;
         });
 
@@ -353,9 +345,8 @@ export default function GameBoard({ currentUserProfile: currentUser }: GameBoard
             console.error("성벽 건설 실패:", error);
             // Revert UI on failure
             setDisplayMapData(prevMap => {
-                const newMap = [...prevMap.map(row => [...row])];
-                newMap[y][x].hasWall = false;
-                return newMap;
+              const newMap = getMapWithTiles(prevMap, [{ ...clickedTile, hasWall: false }]);
+              return newMap;
             });
             errorEmitter.emit('permission-error', new FirestorePermissionError({ path: tileRef.path, operation: 'update', requestResourceData: { hasWall: true } }));
           })
@@ -392,12 +383,7 @@ export default function GameBoard({ currentUserProfile: currentUser }: GameBoard
         const tileData = { x, y, ownerId: currentUser.id, hasWall: false };
         
         // --- Client-side optimistic update ---
-        setDisplayMapData(prevMap => {
-            const newMap = [...prevMap.map(row => [...row])];
-            newMap[y][x].ownerId = currentUser.id;
-            newMap[y][x].hasWall = false;
-            return newMap;
-        });
+        setDisplayMapData(prevMap => getMapWithTiles(prevMap, [{...tileData, id: tileId}]));
 
         const batch = writeBatch(firestore);
         batch.set(tileRef, tileData, { merge: true });
@@ -410,11 +396,8 @@ export default function GameBoard({ currentUserProfile: currentUser }: GameBoard
             .catch(error => {
                 console.error("타일 클릭 작업 실패:", error);
                  // Revert client-side state on failure
-                setDisplayMapData(prevMap => {
-                    const newMap = [...prevMap.map(row => [...row])];
-                    newMap[y][x].ownerId = null; // Revert to original owner
-                    return newMap;
-                });
+                const originalTileState = { ...clickedTile, ownerId: null };
+                setDisplayMapData(prevMap => getMapWithTiles(prevMap, [originalTileState]));
                 const permissionError = new FirestorePermissionError({
                     path: tileRef.path,
                     operation: 'write',
@@ -576,5 +559,7 @@ export default function GameBoard({ currentUserProfile: currentUser }: GameBoard
     </div>
   );
 }
+
+    
 
     
