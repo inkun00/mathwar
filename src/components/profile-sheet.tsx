@@ -403,12 +403,12 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
                 <div className="flex justify-between items-center">
                    <span className="font-medium text-muted-foreground">국가</span>
                    <div className="flex items-center gap-2">
-                     {currentUser.isCountryOwner ? (
+                     {currentUser.isCountryOwner && userCountry ? (
                        <button
                          onClick={() => setFlagEditorOpen(true)}
                          className="relative group cursor-pointer hover:opacity-80 transition-opacity"
                        >
-                         {userCountry && <FlagDisplay flagData={userCountry.flag} width={40} />}
+                         <FlagDisplay flagData={userCountry.flag} width={40} />
                          <div className="absolute inset-0 bg-black/50 flex items-center justify-center rounded-sm opacity-0 group-hover:opacity-100 transition-opacity">
                             <Pencil className="w-4 h-4 text-white" />
                          </div>
@@ -578,7 +578,7 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
                                   <span className="font-medium">{stat.correct}/{stat.total} ({Math.round(stat.accuracy)}%)</span>
                                 </div>
                             </TooltipTrigger>
-                            <TooltipContent side="top" align="center">
+                            <TooltipContent side="top" align="center" className="z-50">
                               <p className="font-semibold mb-2">대표 문제</p>
                               {renderProblemForTooltip(stat.subType)}
                             </TooltipContent>
