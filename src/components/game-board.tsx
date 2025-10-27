@@ -74,7 +74,7 @@ const usePartialMapUpdates = (
       });
       
       const minX_watch = Math.max(0, minX - BORDER_RADIUS);
-      const maxX_watch = Math.min(MAP_WIDTH - 1, maxX + BORDER-RADIUS);
+      const maxX_watch = Math.min(MAP_WIDTH - 1, maxX + BORDER_RADIUS);
       const minY_watch = Math.max(0, minY - BORDER_RADIUS);
       const maxY_watch = Math.min(MAP_HEIGHT - 1, maxY + BORDER_RADIUS);
 
