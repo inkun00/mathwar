@@ -55,6 +55,8 @@ export default function ProblemModal({
   const [answers, setAnswers] = useState<string[]>([]);
   const { toast } = useToast();
   const firestore = useFirestore();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
 
   const problem = useMemo(() => {
     if (reviewProblem && reviewProblem.operands) {
@@ -91,6 +93,7 @@ export default function ProblemModal({
   useEffect(() => {
     if (isOpen) {
       setAnswers(Array(numInputs).fill(''));
+      setIsSubmitting(false);
     }
   }, [isOpen, numInputs]);
 
@@ -120,6 +123,7 @@ export default function ProblemModal({
               aria-label={`정답 입력 ${currentIndex + 1}`}
               required
               autoFocus={currentIndex === 0}
+              disabled={isSubmitting}
             />
           );
         }
@@ -141,54 +145,69 @@ export default function ProblemModal({
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!problem) return;
+    if (!problem || isSubmitting) return;
 
-    const correct = isAnswerCorrect(answers, problem.answer);
+    setIsSubmitting(true);
 
-    if (!isReview) {
-      await recordAttempt(correct);
-    }
+    try {
+        const correct = isAnswerCorrect(answers, problem.answer);
 
-    if (correct) {
-       let toastTitle = '정답입니다!';
-       let toastDescription = '확장 토큰을 획득했습니다.';
-       if (isInvasion) {
-         if (hasWall && invasionWallBreaks < 1) {
-           toastTitle = '성벽 돌파!';
-           toastDescription = '첫 번째 방어를 뚫었습니다! 한 문제 더 남았습니다.';
-         } else {
-           toastTitle = '침략 성공!';
-           toastDescription = '적의 영토를 획득했습니다.';
-         }
+        if (!isReview) {
+            await recordAttempt(correct);
+        }
+
+        if (correct) {
+            let toastTitle = '정답입니다!';
+            let toastDescription = '확장 토큰을 획득했습니다.';
+            if (isInvasion) {
+                if (hasWall && invasionWallBreaks < 1) {
+                toastTitle = '성벽 돌파!';
+                toastDescription = '첫 번째 방어를 뚫었습니다! 한 문제 더 남았습니다.';
+                } else {
+                toastTitle = '침략 성공!';
+                toastDescription = '적의 영토를 획득했습니다.';
+                }
+            }
+
+            toast({
+                title: toastTitle,
+                description: toastDescription,
+                className:
+                'border-green-500 bg-green-50 text-green-700 dark:bg-green-900/50 dark:text-green-300 dark:border-green-700',
+                action: <CheckCircle className="text-green-500" />,
+            });
+            await onCorrectAnswer(problem);
+        } else {
+            toast({
+                variant: 'destructive',
+                title: '오답입니다',
+                description: (
+                <div>
+                    <p>입력: [{answers.join(', ')}]</p>
+                    <p>정답: [{problem.answer.join(', ')}]</p>
+                </div>
+                ),
+                action: <XCircle className="text-white" />,
+            });
+            if (onWrongAnswer) {
+                await onWrongAnswer(problem);
+            }
+        }
+
+        if (!(isInvasion && hasWall && correct)) {
+            onOpenChange(false);
+        }
+    } catch(error) {
+        console.error("Error submitting answer:", error);
+        toast({
+            variant: "destructive",
+            title: "오류",
+            description: "답변을 제출하는 중 오류가 발생했습니다.",
+        });
+    } finally {
+       if (!(isInvasion && hasWall && isAnswerCorrect(answers, problem.answer))) {
+         setIsSubmitting(false);
        }
-
-      toast({
-        title: toastTitle,
-        description: toastDescription,
-        className:
-          'border-green-500 bg-green-50 text-green-700 dark:bg-green-900/50 dark:text-green-300 dark:border-green-700',
-        action: <CheckCircle className="text-green-500" />,
-      });
-      await onCorrectAnswer(problem);
-    } else {
-      toast({
-        variant: 'destructive',
-        title: '오답입니다',
-        description: (
-          <div>
-            <p>입력: [{answers.join(', ')}]</p>
-            <p>정답: [{problem.answer.join(', ')}]</p>
-          </div>
-        ),
-        action: <XCircle className="text-white" />,
-      });
-      if (onWrongAnswer) {
-        await onWrongAnswer(problem);
-      }
-    }
-
-    if (!(isInvasion && hasWall && correct)) {
-       onOpenChange(false);
     }
   };
 
@@ -228,7 +247,9 @@ export default function ProblemModal({
               : '문제를 불러오는 중...'}
           </div>
           <DialogFooter>
-            <Button type="submit">정답 제출</Button>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? '제출 중...' : '정답 제출'}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>
