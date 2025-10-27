@@ -82,7 +82,7 @@ export default function Header({
   const continents = ["대륙 1", "대륙 2", "대륙 3", "대륙 4", "대륙 5"];
 
   return (
-    <header className="w-full max-w-7xl rounded-lg border bg-card/80 p-4 shadow-md backdrop-blur-sm">
+    <header className="w-full max-w-full rounded-lg border bg-card/80 p-4 shadow-md backdrop-blur-sm">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-3">
           <Logo className="h-8 w-8 text-primary" />
