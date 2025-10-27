@@ -21,6 +21,8 @@ import { useToast } from "@/hooks/use-toast";
 import { moderateText } from "@/ai/flows/moderate-text-flow";
 import FlagDisplay from "./flag-display";
 import FlagEditor from "./flag-editor";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
+import { generateProblemFromData } from "@/lib/game-logic";
 
 interface ProfileSheetProps {
   currentUser: User;
@@ -182,7 +184,7 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
         fraction: { total: 0, correct: 0 },
         conversion: { total: 0, correct: 0 },
       },
-      area: {} as Record<ProblemSubType, { total: number, correct: number }>
+      area: {} as Record<string, { total: number, correct: number, subType: ProblemSubType }>
     };
 
     problemAttempts.forEach(attempt => {
@@ -196,10 +198,10 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
       }
 
       // Area stats
-      if (attempt.area && !stats.area[attempt.area]) {
-        stats.area[attempt.area] = { total: 0, correct: 0 };
-      }
-       if (attempt.area) {
+      if (attempt.area) {
+        if (!stats.area[attempt.area]) {
+          stats.area[attempt.area] = { total: 0, correct: 0, subType: attempt.area as ProblemSubType };
+        }
         stats.area[attempt.area].total++;
         if (attempt.correct) {
           stats.area[attempt.area].correct++;
@@ -228,8 +230,9 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
       },
     ];
 
-    const areaStats = Object.entries(stats.area).map(([area, data]) => ({
-      name: areaLabels[area as ProblemSubType] || area,
+    const areaStats = Object.values(stats.area).map((data) => ({
+      name: areaLabels[data.subType] || data.subType,
+      subType: data.subType,
       total: data.total,
       correct: data.correct,
       accuracy: data.total > 0 ? (data.correct / data.total) * 100 : 0,
@@ -353,6 +356,33 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
       setIsProcessing(false);
     }
   };
+
+  const renderProblemForTooltip = (subType: ProblemSubType) => {
+    // A simple, non-interactive way to display the problem structure.
+    const problemData: StorableProblem = { subType, type: 'decimal', operands: [], operator: 'calculate' };
+    const problem = generateProblemFromData(problemData);
+
+    const renderNode = (node: React.ReactNode): React.ReactNode => {
+      if (!React.isValidElement(node)) {
+        return node;
+      }
+      if (node.props.children) {
+        // We replace AnswerInput with a simple "[?]" string.
+        if (node.type.name === 'AnswerInput') {
+          return '[?]';
+        }
+        return React.Children.map(node.props.children, child => renderNode(child));
+      }
+      return node;
+    };
+    
+    // We remove the outer form/interactive elements for the tooltip
+    return (
+      <div className="text-base font-semibold font-code tracking-wider bg-muted p-4 rounded-md min-h-[60px] flex items-center justify-center leading-relaxed">
+         {renderNode(problem.problem)}
+      </div>
+    );
+  }
 
 
   return (
@@ -537,16 +567,26 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
                     <CardTitle className="text-base">문제 영역별 정답률</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2 text-sm">
-                   {areaStats.length > 0 ? (
-                      areaStats.map(stat => (
-                        <div key={stat.name} className="flex justify-between">
-                          <span>{stat.name}</span>
-                          <span className="font-medium">{stat.correct}/{stat.total} ({Math.round(stat.accuracy)}%)</span>
-                        </div>
-                      ))
-                   ) : (
-                      <p className="text-muted-foreground">아직 푼 문제가 없습니다.</p>
-                   )}
+                   <TooltipProvider>
+                    {areaStats.length > 0 ? (
+                        areaStats.map(stat => (
+                          <Tooltip key={stat.subType} delayDuration={100}>
+                            <TooltipTrigger asChild>
+                                <div className="flex justify-between cursor-help p-1 rounded-md hover:bg-muted">
+                                  <span>{stat.name}</span>
+                                  <span className="font-medium">{stat.correct}/{stat.total} ({Math.round(stat.accuracy)}%)</span>
+                                </div>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" align="center">
+                              <p className="font-semibold mb-2">대표 문제</p>
+                              {renderProblemForTooltip(stat.subType)}
+                            </TooltipContent>
+                          </Tooltip>
+                        ))
+                    ) : (
+                        <p className="text-muted-foreground">아직 푼 문제가 없습니다.</p>
+                    )}
+                   </TooltipProvider>
                 </CardContent>
              </Card>
           </div>
