@@ -100,6 +100,7 @@ export default function SignUpDetails() {
           createdBy: auth.currentUser.uid,
           color: `hsl(${Math.random() * 360}, 60%, 70%)`, // Assign a random color to new country
           demised: false,
+          flag: Array(32 * 20).fill("#ffffff"), // Add default flag data
         });
         countryId = countryRef.id;
       } else {
