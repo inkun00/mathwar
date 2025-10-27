@@ -350,6 +350,29 @@ const generateDiagramProblem = (): MathProblem => {
 
 // --- HARD PROBLEMS ---
 
+const generateTenthsDecompositionProblem = (): MathProblem => {
+    const num1 = round(randomInt(1, 49) / 10, 1); // 0.1 ~ 4.9
+    const num2 = round(randomInt(1, 49) / 10, 1); // 0.1 ~ 4.9
+    const sum = round(num1 + num2, 1);
+
+    const num1_in_0_1 = Math.round(num1 * 10);
+    const num2_in_0_1 = Math.round(num2 * 10);
+    const sum_in_0_1 = num1_in_0_1 + num2_in_0_1;
+
+    return {
+        problem: (
+            <div className="text-base text-center leading-relaxed">
+                <p>{num1}은 0.1이 <AnswerInput />개이고, {num2}는 0.1이 <AnswerInput />개입니다.</p>
+                <p className="mt-2">{num1} + {num2}는 0.1이 모두 <AnswerInput />개이므로 <AnswerInput />입니다.</p>
+            </div>
+        ),
+        answer: [String(num1_in_0_1), String(num2_in_0_1), String(sum_in_0_1), String(sum)],
+        type: 'decimal',
+        subType: 'tenths-decomposition',
+        storable: { type: 'decimal', subType: 'tenths-decomposition', operands: [num1, num2], operator: 'calculate' }
+    };
+};
+
 const generateListNavigationProblem = (): MathProblem => {
   const isSum = Math.random() > 0.5;
   const op_text = isSum ? '합' : '차';
@@ -440,6 +463,7 @@ export const generateProblemFromData = (data: StorableProblem): MathProblem => {
     'unit-conversion-concept': generatePlaceValueRelationshipProblem,
     'vertical-calculation': generateVerticalCalculationProblem,
     'process-decomposition': generateDecompositionProblem,
+    'tenths-decomposition': generateTenthsDecompositionProblem,
     'conditional-operation': generatePlaceValueProblem,
     'diagram': generateDiagramProblem
   };
@@ -477,7 +501,7 @@ export const problemNodeToString = (node: React.ReactNode): string => {
 
 const easyProblems = [generateDirectCalculationProblem, generateUnitConversionConceptProblem, generatePlaceValueProblem, generateFinerUnitConversionConceptProblem];
 const mediumProblems = [generateComparisonProblem, generateWordProblem, generateConditionalProblem, generateVerticalCalculationProblem, generateDiagramProblem, generatePlaceValueRelationshipProblem];
-const hardProblems = [generateListNavigationProblem, generateMultiStepWordProblem, generateDecompositionProblem];
+const hardProblems = [generateListNavigationProblem, generateMultiStepWordProblem, generateDecompositionProblem, generateTenthsDecompositionProblem];
 
 export const generateMathProblem = (): MathProblem => {
   const chance = Math.random() * 10; // 0 to 10

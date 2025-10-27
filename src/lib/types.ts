@@ -39,6 +39,7 @@ export type ProblemType = 'decimal' | 'fraction' | 'conversion' | 'mixed';
 export type ProblemSubType = 
   | 'direct-calculation'
   | 'process-decomposition'
+  | 'tenths-decomposition'
   | 'vertical-calculation'
   | 'multi-step-word-problem'
   | 'unit-conversion-concept'
