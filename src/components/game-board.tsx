@@ -50,7 +50,11 @@ const usePartialMapUpdates = (
   const firestore = useFirestore();
 
   useEffect(() => {
-    if (!firestore || !currentUser) return;
+    if (!firestore || !currentUser) {
+      return; 
+    }
+
+    let unsubscribePartial: (() => void) | null = null;
 
     // 1. Get current user's tiles to determine the boundaries
     const userTilesQuery = query(
@@ -59,6 +63,12 @@ const usePartialMapUpdates = (
     );
 
     const unsubscribeUserTiles = onSnapshot(userTilesQuery, (snapshot) => {
+      // If a listener for a partial area is already active, unsubscribe first
+      if (unsubscribePartial) {
+        unsubscribePartial();
+        unsubscribePartial = null;
+      }
+      
       const userTiles = snapshot.docs.map(doc => doc.data() as Tile);
 
       if (userTiles.length === 0) return;
@@ -85,7 +95,7 @@ const usePartialMapUpdates = (
         where("x", "<=", maxX_watch)
       );
 
-      const unsubscribePartial = onSnapshot(partialQuery, (snapshot) => {
+      unsubscribePartial = onSnapshot(partialQuery, (snapshot) => {
         const updatedTiles: Tile[] = [];
         snapshot.docChanges().forEach((change) => {
            const tileData = change.doc.data() as Tile;
@@ -100,10 +110,17 @@ const usePartialMapUpdates = (
         console.error("Partial map update listener error:", error);
       });
 
-      return () => unsubscribePartial();
+    }, (error) => {
+        console.error("User tiles listener error:", error);
     });
 
-    return () => unsubscribeUserTiles();
+    // Main cleanup function for the useEffect hook
+    return () => {
+      unsubscribeUserTiles();
+      if (unsubscribePartial) {
+        unsubscribePartial();
+      }
+    };
 
   }, [firestore, currentUser, onUpdate]);
 };
@@ -553,3 +570,5 @@ export default function GameBoard({
     </div>
   );
 }
+
+    
