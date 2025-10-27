@@ -286,7 +286,7 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
     setIsProcessing(true);
     const userRef = doc(firestore, 'users', currentUser.id);
     try {
-      await updateDoc(userRef, { countryId: countryId });
+      await updateDoc(userRef, { countryId: countryId, isCountryOwner: false });
       toast({
         title: "동맹 체결!",
         description: `새로운 국가에 가입했습니다.`,
@@ -338,7 +338,7 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
       });
 
       const userRef = doc(firestore, 'users', currentUser.id);
-      await updateDoc(userRef, { countryId: countryRef.id });
+      await updateDoc(userRef, { countryId: countryRef.id, isCountryOwner: true });
 
       toast({
         title: "독립 선언!",
