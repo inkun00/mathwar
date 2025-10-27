@@ -1,12 +1,12 @@
 'use client';
 
-import type { User, Country, ProblemAttempt, ProblemSubType, WrongAnswer, StorableProblem, Tile } from "@/lib/types";
+import type { User, Country, ProblemAttempt, ProblemSubType, WrongAnswer, StorableProblem, Tile, RankedUser, RankedCountry } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { LogOut, BookOpen, ChevronsUpDown, Check, Crown, Handshake, Flag, Swords, Pencil } from "lucide-react";
-import { useAuth, useFirestore, useCollection, useMemoFirebase } from "@/firebase";
+import { useAuth, useFirestore } from "@/firebase";
 import { signOut } from "firebase/auth";
 import ProblemModal from "./problem-modal";
 import { deleteWrongAnswer } from "@/firebase/firestore/data";
@@ -29,6 +29,7 @@ interface ProfileSheetProps {
   wrongAnswers: WrongAnswer[];
   landTiles: Tile[];
   users: User[];
+  countries: Country[];
 }
 
 const areaLabels: Record<ProblemSubType, string> = {
@@ -45,10 +46,12 @@ const areaLabels: Record<ProblemSubType, string> = {
   'decimal-to-fraction': '소수->분수 변환',
   'direct-calculation': '직접 계산',
   'process-decomposition': '과정 분해',
+  'tenths-decomposition': '소수 자릿수 분해',
   'vertical-calculation': '세로셈',
   'error-correction': '오류 수정',
   'multi-step-word-problem': '복합 문장제',
   'unit-conversion-concept': '단위 변환',
+  'finer-unit-conversion-concept': '미세 단위 변환',
   'conditional-operation': '조건부 연산',
   'find-and-operate': '찾아서 연산',
   'fill-in-the-blanks-process': '과정 빈칸 채우기',
@@ -62,7 +65,7 @@ const areaLabels: Record<ProblemSubType, string> = {
   'diagram': '도형 문제',
 };
 
-export default function ProfileSheet({ currentUser, userCountry, problemAttempts, wrongAnswers, landTiles, users }: ProfileSheetProps) {
+export default function ProfileSheet({ currentUser, userCountry, problemAttempts, wrongAnswers, landTiles, users, countries }: ProfileSheetProps) {
   const auth = useAuth();
   const firestore = useFirestore();
   const { toast } = useToast();
@@ -75,10 +78,6 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
   const [newCountryName, setNewCountryName] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [isFlagEditorOpen, setFlagEditorOpen] = useState(false);
-
-
-  const countriesQuery = useMemoFirebase(() => collection(firestore, 'countries'), [firestore]);
-  const { data: countries } = useCollection<Country>(countriesQuery);
 
   
   const handleLogout = () => {
@@ -109,6 +108,71 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
     await deleteWrongAnswer(firestore, currentUser.id, selectedReviewProblem.id);
     setSelectedReviewProblem(null);
   };
+
+  const { userRankings, countryRankings } = useMemo(() => {
+    // User Rankings
+    const userTileCount = users.reduce((acc, user) => {
+      acc[user.id] = 0;
+      return acc;
+    }, {} as Record<string, number>);
+
+    landTiles.forEach(tile => {
+      if (tile.ownerId) {
+        if (userTileCount[tile.ownerId] !== undefined) {
+          userTileCount[tile.ownerId]++;
+        }
+      }
+    });
+
+    const sortedUsers: RankedUser[] = Object.entries(userTileCount)
+      .map(([id, count]) => ({ id, count }))
+      .sort((a, b) => b.count - a.count)
+      .map((p, index) => {
+        const user = users.find(u => u.id === p.id);
+        return {
+          rank: index + 1,
+          id: p.id,
+          nickname: user?.nickname || '알 수 없는 플레이어',
+          tileCount: p.count,
+        }
+      });
+
+    // Country Rankings
+    const countryTileCount = countries.reduce((acc, country) => {
+      acc[country.id] = 0;
+      return acc;
+    }, {} as Record<string, number>);
+
+    const userToCountryMap = new Map(users.map(u => [u.id, u.countryId]));
+
+    landTiles.forEach(tile => {
+      if (tile.ownerId) {
+        const countryId = userToCountryMap.get(tile.ownerId);
+        if (countryId && countryTileCount[countryId] !== undefined) {
+          countryTileCount[countryId]++;
+        }
+      }
+    });
+
+    const sortedCountries: RankedCountry[] = Object.entries(countryTileCount)
+      .map(([id, count]) => ({ id, count }))
+      .sort((a, b) => b.count - a.count)
+      .map((c, index) => {
+        const country = countries.find(co => co.id === c.id);
+        return {
+          rank: index + 1,
+          id: c.id,
+          name: country?.name || '알 수 없는 국가',
+          color: country?.color || '#888',
+          tileCount: c.count,
+        };
+      });
+
+    return { userRankings: sortedUsers, countryRankings: sortedCountries };
+  }, [users, countries, landTiles]);
+  
+  const myRank = userRankings.find(u => u.id === currentUser.id);
+  const myCountryRank = countryRankings.find(c => c.id === currentUser.countryId);
 
 
   const { unitStats, areaStats } = useMemo(() => {
@@ -266,6 +330,7 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
         createdBy: currentUser.id,
         color: `hsl(${Math.random() * 360}, 60%, 70%)`,
         demised: false,
+        flag: Array(32 * 20).fill("#ffffff"),
       });
 
       const userRef = doc(firestore, 'users', currentUser.id);
@@ -336,6 +401,18 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
                  <div className="flex justify-between">
                   <span className="font-medium text-muted-foreground">게임 포인트</span>
                   <span className="font-semibold">{currentUser.gamePoints ?? 0} 포인트</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-medium text-muted-foreground">개인 순위</span>
+                  <span className="font-semibold">
+                    {myRank ? `전체 ${userRankings.length}명 중 ${myRank.rank}위` : '순위 없음'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="font-medium text-muted-foreground">국가 순위</span>
+                  <span className="font-semibold">
+                    {myCountryRank ? `전체 ${countryRankings.length}개국 중 ${myCountryRank.rank}위` : '순위 없음'}
+                  </span>
                 </div>
               </CardContent>
             </Card>

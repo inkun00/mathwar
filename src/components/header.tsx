@@ -155,6 +155,7 @@ export default function Header({
                 wrongAnswers={wrongAnswers}
                 landTiles={landTiles}
                 users={users}
+                countries={countries}
               />
             </SheetContent>
           </Sheet>
