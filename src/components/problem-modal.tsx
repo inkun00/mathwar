@@ -159,13 +159,16 @@ export default function ProblemModal({
         if (correct) {
             let toastTitle = '정답입니다!';
             let toastDescription = '확장 토큰을 획득했습니다.';
+            let shouldCloseModal = true;
+
             if (isInvasion) {
                 if (hasWall && invasionWallBreaks < 1) {
-                toastTitle = '성벽 돌파!';
-                toastDescription = '첫 번째 방어를 뚫었습니다! 한 문제 더 남았습니다.';
+                    toastTitle = '성벽 돌파!';
+                    toastDescription = '첫 번째 방어를 뚫었습니다! 한 문제 더 남았습니다.';
+                    shouldCloseModal = false; // Don't close, wait for the next problem
                 } else {
-                toastTitle = '침략 성공!';
-                toastDescription = '적의 영토를 획득했습니다.';
+                    toastTitle = '침략 성공!';
+                    toastDescription = '적의 영토를 획득했습니다.';
                 }
             }
 
@@ -176,7 +179,13 @@ export default function ProblemModal({
                 'border-green-500 bg-green-50 text-green-700 dark:bg-green-900/50 dark:text-green-300 dark:border-green-700',
                 action: <CheckCircle className="text-green-500" />,
             });
+            
             await onCorrectAnswer(problem);
+
+            if (shouldCloseModal) {
+                onOpenChange(false);
+            }
+
         } else {
             toast({
                 variant: 'destructive',
@@ -192,11 +201,9 @@ export default function ProblemModal({
             if (onWrongAnswer) {
                 await onWrongAnswer(problem);
             }
-        }
-
-        if (!(isInvasion && hasWall && correct)) {
             onOpenChange(false);
         }
+
     } catch(error) {
         console.error("Error submitting answer:", error);
         toast({
@@ -204,7 +211,9 @@ export default function ProblemModal({
             title: "오류",
             description: "답변을 제출하는 중 오류가 발생했습니다.",
         });
+        onOpenChange(false); // Close modal on error as well
     } finally {
+       // For wall break scenario, we keep submitting state until the next problem is ready
        if (!(isInvasion && hasWall && isAnswerCorrect(answers, problem.answer))) {
          setIsSubmitting(false);
        }
