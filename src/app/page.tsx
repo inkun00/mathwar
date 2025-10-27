@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import GameBoard from "@/components/game-board";
 import Login from "@/components/login";
 import SignUpDetails from "@/components/signup-details";
 import { useUser } from "@/firebase/auth/use-user";
 import { useDoc, useFirestore, useMemoFirebase, useCollection } from "@/firebase";
-import { doc, collection, updateDoc, increment, writeBatch } from "firebase/firestore";
+import { doc, collection, updateDoc, increment, writeBatch, getDocs } from "firebase/firestore";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { User as GameUser, Tile, Country, ProblemAttempt, WrongAnswer } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
@@ -24,7 +24,6 @@ export default function Home() {
   
   const { data: userProfile, isLoading: isProfileLoading } = useDoc<GameUser>(userDocRef);
 
-  // Load all game data here, to be passed down to GameBoard
   const landTilesQuery = useMemoFirebase(() => {
     if (!firestore || !authUser) return null;
     return collection(firestore, 'land_tiles');
@@ -50,8 +49,7 @@ export default function Home() {
     return collection(firestore, 'users', authUser.uid, 'wrong_answers');
   }, [firestore, authUser]);
 
-
-  const { data: landTiles, isLoading: areLandTilesLoading } = useCollection<Tile>(landTilesQuery);
+  const { data: initialLandTiles, isLoading: areLandTilesLoading } = useCollection<Tile>(landTilesQuery);
   const { data: allUsers, isLoading: areUsersLoading } = useCollection<GameUser>(usersQuery);
   const { data: countries, isLoading: areCountriesLoading } = useCollection<Country>(countriesQuery);
   const { data: problemAttempts, isLoading: areAttemptsLoading } = useCollection<ProblemAttempt>(problemAttemptsQuery);
@@ -67,12 +65,12 @@ export default function Home() {
 
 
   useEffect(() => {
-    if (userProfile && landTiles && firestore && authUser) {
+    if (userProfile && initialLandTiles && firestore && authUser) {
       const today = new Date().toISOString().slice(0, 10);
       const lastDistribution = userProfile.lastPointDistribution;
 
       if (lastDistribution !== today) {
-        const userTilesCount = landTiles.filter(tile => tile.ownerId === authUser.uid).length;
+        const userTilesCount = initialLandTiles.filter(tile => tile.ownerId === authUser.uid).length;
         const userRef = doc(firestore, "users", authUser.uid);
         
         if (userTilesCount > 0) {
@@ -81,25 +79,24 @@ export default function Home() {
             lastPointDistribution: today,
           }).catch(console.error);
         } else if (lastDistribution) {
-            // if user has no land, just update the date to prevent checks until tomorrow
             updateDoc(userRef, {
               lastPointDistribution: today,
             }).catch(console.error);
         }
       }
     }
-  }, [userProfile, landTiles, firestore, authUser]);
+  }, [userProfile, initialLandTiles, firestore, authUser]);
 
   useEffect(() => {
       if (
           firestore && 
           authUser && 
-          landTiles && 
+          initialLandTiles && 
           userProfile && 
           userProfile.nickname === '지냥김밥' &&
           !sessionStorage.getItem(`territory_check_special_${authUser.uid}`)
       ) {
-          const userTiles = landTiles.filter(tile => tile.ownerId === authUser.uid);
+          const userTiles = initialLandTiles.filter(tile => tile.ownerId === authUser.uid);
           const EXCESS_THRESHOLD = 30;
           const TILES_TO_REMOVE = 10;
 
@@ -129,17 +126,17 @@ export default function Home() {
             sessionStorage.setItem(`territory_check_special_${authUser.uid}`, 'true');
           }
       }
-  }, [firestore, authUser, landTiles, userProfile, toast]);
+  }, [firestore, authUser, initialLandTiles, userProfile, toast]);
 
 
   useEffect(() => {
       if (
           firestore &&
           authUser &&
-          landTiles &&
+          initialLandTiles &&
           !sessionStorage.getItem(`water_tile_check_${authUser.uid}`)
       ) {
-          const userTiles = landTiles.filter(t => t.ownerId === authUser.uid);
+          const userTiles = initialLandTiles.filter(t => t.ownerId === authUser.uid);
           const waterTiles = userTiles.filter(t => !isLand(t.x, t.y));
 
           if (waterTiles.length > 0) {
@@ -167,7 +164,7 @@ export default function Home() {
           
           sessionStorage.setItem(`water_tile_check_${authUser.uid}`, 'true');
       }
-  }, [firestore, authUser, landTiles, toast]);
+  }, [firestore, authUser, initialLandTiles, toast]);
 
   if (isLoading) {
     return (
@@ -188,12 +185,12 @@ export default function Home() {
     return <SignUpDetails />;
   }
 
-  if (authUser && userProfile && landTiles && allUsers && countries && problemAttempts && wrongAnswers) {
+  if (authUser && userProfile && initialLandTiles && allUsers && countries && problemAttempts && wrongAnswers) {
     return (
       <div className="relative flex h-screen w-full flex-col items-center bg-background p-4 sm:p-6 md:p-8">
         <GameBoard
             currentUserProfile={userProfile}
-            landTiles={landTiles}
+            initialLandTiles={initialLandTiles}
             allUsers={allUsers}
             countries={countries}
             problemAttempts={problemAttempts}
@@ -203,6 +200,5 @@ export default function Home() {
     );
   }
 
-  // Fallback, should not be reached
   return <Login />;
 }
