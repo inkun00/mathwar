@@ -134,7 +134,6 @@ export default function GameBoard({
   countries,
   problemAttempts,
   wrongAnswers,
-  onFullRefresh,
 }: GameBoardProps) {
   const firestore = useFirestore();
   const { user: authUser } = useUser();
@@ -180,13 +179,6 @@ export default function GameBoard({
       const hasLand = displayMapData.flat().some(tile => tile.ownerId === currentUser.id);
       return !hasLand && (currentUser.tokens ?? 0) <= 0;
   }, [displayMapData, currentUser]);
-
-
-  const handleFullRefresh = async () => {
-    await onFullRefresh();
-    toast({ title: "지도 전체 새로고침 완료", description: "모든 영토의 최신 상태를 불러왔습니다." });
-  };
-
 
   const handleSolveProblemForToken = () => {
     setIsBuildingWall(false);
@@ -532,7 +524,6 @@ export default function GameBoard({
         wrongAnswers={wrongAnswers}
         isBuildingWall={isBuildingWall}
         onToggleWallBuilding={handleToggleWallBuilding}
-        onFullRefresh={handleFullRefresh}
       />
       <div className="relative h-full w-full max-w-7xl flex-grow">
         <WorldMap 

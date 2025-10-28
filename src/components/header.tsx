@@ -4,14 +4,14 @@ import { Logo } from "@/components/icons/logo";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import type { User, Tile } from "@/lib/types";
-import { UserCircle, HelpCircle, User as UserIcon, Trophy, Store, Shield, RefreshCcw } from "lucide-react";
+import { UserCircle, HelpCircle, User as UserIcon, Trophy, Store, Shield } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import ProfileSheet from "./profile-sheet";
 import LeaderboardSheet from "./leaderboard-sheet";
 import MarketSheet from "./market-sheet";
 import type { Country, ProblemAttempt, WrongAnswer } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
-import { useMemo, useState, useEffect } from "react";
+import { useMemo } from "react";
 import { Badge } from "./ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 import { cn } from "@/lib/utils";
@@ -26,11 +26,7 @@ interface HeaderProps {
   wrongAnswers: WrongAnswer[];
   isBuildingWall: boolean;
   onToggleWallBuilding: () => void;
-  onFullRefresh: () => void;
 }
-
-const REFRESH_COOLDOWN = 10 * 60 * 1000; // 10 minutes in ms
-const REFRESH_TIMESTAMP_KEY = 'decimalConquestLastRefresh';
 
 export default function Header({ 
   currentUser, 
@@ -42,36 +38,9 @@ export default function Header({
   wrongAnswers,
   isBuildingWall,
   onToggleWallBuilding,
-  onFullRefresh,
 }: HeaderProps) {
   const userCountry = countries.find(c => c.id === currentUser.countryId);
   const { toast } = useToast();
-  
-  const [isRefreshDisabled, setIsRefreshDisabled] = useState(false);
-  const [remainingTime, setRemainingTime] = useState(0);
-
-  useEffect(() => {
-    const lastRefresh = localStorage.getItem(REFRESH_TIMESTAMP_KEY);
-    if (lastRefresh) {
-      const timePassed = Date.now() - parseInt(lastRefresh, 10);
-      if (timePassed < REFRESH_COOLDOWN) {
-        setIsRefreshDisabled(true);
-        setRemainingTime(REFRESH_COOLDOWN - timePassed);
-      }
-    }
-
-    const interval = setInterval(() => {
-      setRemainingTime(prev => {
-        if (prev <= 1000) {
-          setIsRefreshDisabled(false);
-          return 0;
-        }
-        return prev - 1000;
-      });
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, []);
 
   const remainingProblems = useMemo(() => {
     const twentyFourHoursAgo = Date.now() - 24 * 60 * 60 * 1000;
@@ -107,32 +76,6 @@ export default function Header({
       onToggleWallBuilding();
     }
   }
-
-  const handleFullRefreshClick = () => {
-    const now = Date.now();
-    const lastRefresh = localStorage.getItem(REFRESH_TIMESTAMP_KEY);
-    
-    if (lastRefresh && (now - parseInt(lastRefresh, 10) < REFRESH_COOLDOWN)) {
-      toast({
-        variant: "destructive",
-        title: "재사용 대기 중",
-        description: `새로고침은 ${Math.ceil(REFRESH_COOLDOWN / 60000)}분에 한 번만 가능합니다.`,
-      });
-      return;
-    }
-    
-    onFullRefresh();
-    localStorage.setItem(REFRESH_TIMESTAMP_KEY, now.toString());
-    setIsRefreshDisabled(true);
-    setRemainingTime(REFRESH_COOLDOWN);
-  };
-
-  const formatTime = (ms: number) => {
-    if (ms <= 0) return "";
-    const minutes = Math.floor(ms / 60000);
-    const seconds = Math.floor((ms % 60000) / 1000);
-    return ` (${minutes}:${seconds.toString().padStart(2, '0')})`;
-  };
 
   const continents = ["대륙 1", "대륙 2", "대륙 3", "대륙 4", "대륙 5"];
 
@@ -255,10 +198,6 @@ export default function Header({
           
           <div className="flex flex-col items-end gap-1">
              <div className="flex gap-2">
-                <Button onClick={handleFullRefreshClick} variant="outline" disabled={isRefreshDisabled}>
-                    <RefreshCcw className="mr-2 h-4 w-4" />
-                    영토 새로고침{formatTime(remainingTime)}
-                </Button>
                 <Button onClick={handleWallBuildClick} variant={isBuildingWall ? "secondary" : "default"}>
                     <Shield className="mr-2 h-4 w-4" />
                     성벽 건설 ({currentUser.walls ?? 0})
