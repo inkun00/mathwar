@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useCallback } from "react";
 import GameBoard from "@/components/game-board";
 import Login from "@/components/login";
 import SignUpDetails from "@/components/signup-details";
@@ -24,91 +24,66 @@ export default function Home() {
   const [problemAttempts, setProblemAttempts] = useState<ProblemAttempt[] | null>(null);
   const [wrongAnswers, setWrongAnswers] = useState<WrongAnswer[] | null>(null);
   
-  const [isProfileLoading, setIsProfileLoading] = useState(true);
-  const [areCoreDataLoading, setAreCoreDataLoading] = useState(true);
-  const [areUserSpecificDataLoading, setAreUserSpecificDataLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Effect for fetching the user profile and all users
-  useEffect(() => {
-    if (!authUser || !firestore) {
-      if (!isAuthUserLoading) {
-        setIsProfileLoading(false);
-      }
-      return;
+  const loadInitialData = useCallback(async () => {
+    if (!firestore || !authUser) return;
+
+    setIsLoading(true);
+    try {
+      // Fetch all core data in parallel
+      const [usersSnapshot, countriesSnapshot, tilesSnapshot, attemptsSnapshot, wrongAnswersSnapshot] = await Promise.all([
+        getDocs(collection(firestore, 'users')),
+        getDocs(collection(firestore, 'countries')),
+        getDocs(collection(firestore, 'land_tiles')),
+        getDocs(collection(firestore, 'problem_attempts', authUser.uid, 'attempts')),
+        getDocs(collection(firestore, 'users', authUser.uid, 'wrong_answers'))
+      ]);
+
+      const usersData = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
+      setAllUsers(usersData);
+
+      const currentUserProfile = usersData.find(u => u.id === authUser.uid);
+      setUserProfile(currentUserProfile || null);
+
+      setCountries(countriesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Country)));
+      setInitialLandTiles(tilesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Tile)));
+
+      const attemptsData = attemptsSnapshot.docs.map(doc => {
+          const data = doc.data();
+          return { 
+              id: doc.id, 
+              ...data,
+              timestamp: data.timestamp ? data.timestamp.toDate() : new Date() 
+          } as ProblemAttempt;
+      });
+      setProblemAttempts(attemptsData);
+
+      setWrongAnswers(wrongAnswersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as WrongAnswer)));
+
+    } catch (error) {
+      console.error("Error loading initial game data:", error);
+      toast({
+        variant: "destructive",
+        title: "데이터 로딩 오류",
+        description: "게임 데이터를 불러오는 데 실패했습니다. 페이지를 새로고침해주세요.",
+      });
+    } finally {
+      setIsLoading(false);
     }
-    
-    setIsProfileLoading(true);
-    const usersCollectionRef = collection(firestore, "users");
-    
-    // Fetch all users once
-    getDocs(usersCollectionRef)
-        .then(snapshot => {
-            const usersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
-            setAllUsers(usersData);
-            const currentUserProfile = usersData.find(u => u.id === authUser.uid);
-            setUserProfile(currentUserProfile || null);
-        })
-        .catch(console.error)
-        .finally(() => setIsProfileLoading(false));
+  }, [firestore, authUser, toast]);
 
-  }, [authUser, firestore, isAuthUserLoading]);
-
-  // Effect for fetching core game data (countries, tiles) once
+  // Load initial data only once when the user is authenticated.
   useEffect(() => {
-    if (!firestore) return;
-    
-    setAreCoreDataLoading(true);
-    const fetchCoreData = async () => {
-        try {
-            const countriesSnapshot = await getDocs(collection(firestore, 'countries'));
-            setCountries(countriesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Country)));
-
-            const tilesSnapshot = await getDocs(collection(firestore, 'land_tiles'));
-            setInitialLandTiles(tilesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Tile)));
-        } catch (error) {
-            console.error("Error fetching core game data:", error);
-        } finally {
-            setAreCoreDataLoading(false);
-        }
-    };
-    fetchCoreData();
-  }, [firestore]);
+    if (authUser && firestore) {
+      loadInitialData();
+    } else if (!isAuthUserLoading) {
+      // If auth is not loading and there's no user, stop loading.
+      setIsLoading(false);
+    }
+  }, [authUser, firestore, isAuthUserLoading, loadInitialData]);
   
-  // Effect for fetching user-specific data (attempts, wrong answers)
-  useEffect(() => {
-    if (!authUser || !firestore) return;
-
-    setAreUserSpecificDataLoading(true);
-    const fetchUserData = async () => {
-        try {
-            // Firestore timestamps can be null initially, handle this.
-            const attemptsQuery = collection(firestore, 'problem_attempts', authUser.uid, 'attempts');
-            const attemptsSnapshot = await getDocs(attemptsQuery);
-            const attemptsData = attemptsSnapshot.docs.map(doc => {
-                const data = doc.data();
-                return { 
-                    id: doc.id, 
-                    ...data,
-                    // Convert Firestore Timestamp to JS Date, handling nulls
-                    timestamp: data.timestamp ? data.timestamp.toDate() : new Date() 
-                } as ProblemAttempt;
-            });
-            setProblemAttempts(attemptsData);
-
-            const wrongAnswersSnapshot = await getDocs(collection(firestore, 'users', authUser.uid, 'wrong_answers'));
-            setWrongAnswers(wrongAnswersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as WrongAnswer)));
-
-        } catch (error) {
-            console.error("Error fetching user-specific data:", error);
-        } finally {
-            setAreUserSpecificDataLoading(false);
-        }
-    };
-    fetchUserData();
-  }, [authUser, firestore]);
-
-  const isLoading = isAuthUserLoading || isProfileLoading || areCoreDataLoading || areUserSpecificDataLoading;
-
+  // This effect remains to handle point distribution logic
   useEffect(() => {
     if (userProfile && initialLandTiles && firestore && authUser) {
       const today = new Date().toISOString().slice(0, 10);
@@ -132,6 +107,7 @@ export default function Home() {
     }
   }, [userProfile, initialLandTiles, firestore, authUser]);
 
+  // This effect remains for the special territory check
   useEffect(() => {
       if (
           firestore && 
@@ -173,7 +149,7 @@ export default function Home() {
       }
   }, [firestore, authUser, initialLandTiles, userProfile, toast]);
 
-
+  // This effect remains for the water tile check
   useEffect(() => {
       if (
           firestore &&
@@ -240,9 +216,15 @@ export default function Home() {
             countries={countries}
             problemAttempts={problemAttempts}
             wrongAnswers={wrongAnswers}
+            onFullRefresh={loadInitialData}
         />
       </div>
     );
+  }
+
+  // Fallback for when data is not fully loaded but loading is false
+  if (authUser && !isLoading) {
+      return <SignUpDetails />; // Or a specific error/retry component
   }
 
   return <Login />;

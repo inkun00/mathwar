@@ -23,6 +23,7 @@ interface GameBoardProps {
   countries: Country[];
   problemAttempts: ProblemAttempt[];
   wrongAnswers: WrongAnswer[];
+  onFullRefresh: () => Promise<void>;
 }
 
 const createEmptyMap = (): MapData => 
@@ -133,6 +134,7 @@ export default function GameBoard({
   countries,
   problemAttempts,
   wrongAnswers,
+  onFullRefresh,
 }: GameBoardProps) {
   const firestore = useFirestore();
   const { user: authUser } = useUser();
@@ -150,6 +152,12 @@ export default function GameBoard({
   const [displayMapData, setDisplayMapData] = useState<MapData>(() => 
     getMapWithTiles(createEmptyMap(), initialLandTiles)
   );
+  
+  // When initialLandTiles prop changes (e.g., after a full refresh), update the map state
+  useEffect(() => {
+    setDisplayMapData(getMapWithTiles(createEmptyMap(), initialLandTiles));
+  }, [initialLandTiles]);
+
 
   const handlePartialUpdate = useCallback((updatedTiles: Tile[]) => {
     setDisplayMapData(prevMap => getMapWithTiles(prevMap, updatedTiles));
@@ -175,18 +183,8 @@ export default function GameBoard({
 
 
   const handleFullRefresh = async () => {
-    if (!firestore) return;
-    try {
-        const snapshot = await getDocs(collection(firestore, 'land_tiles'));
-        const tiles = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Tile));
-        const fullMap = getMapWithTiles(createEmptyMap(), tiles);
-        setDisplayMapData(fullMap);
-        setZoomLevel(1);
-        toast({ title: "지도 전체 새로고침 완료", description: "모든 영토의 최신 상태를 불러왔습니다." });
-    } catch(error) {
-        console.error("Full map refresh failed:", error);
-        toast({ variant: "destructive", title: "새로고침 실패", description: "지도를 불러오는 데 실패했습니다."});
-    }
+    await onFullRefresh();
+    toast({ title: "지도 전체 새로고침 완료", description: "모든 영토의 최신 상태를 불러왔습니다." });
   };
 
 
