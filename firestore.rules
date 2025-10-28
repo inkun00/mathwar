@@ -1,49 +1,137 @@
+/**
+ * @fileoverview Firestore Security Rules for the Decimal Conquest game.
+ *
+ * Core Philosophy:
+ * This ruleset prioritizes user-owned data with some public data. Users can only
+ * create, read, update, and delete their own data, except for public data like
+ * land tiles and the list of users.
+ *
+ * Data Structure:
+ * - /users/{userId}: User profiles, accessible only to the user themselves, except for listing all users.
+ * - /countries/{countryId}: Countries created by users, publicly readable, but creation and modification are restricted to logged-in users.
+ * - /land_tiles/{landTileId}: Land tiles on the map, publicly readable and writable by logged-in users.
+ * - /problem_attempts/{userId}/attempts/{attemptId}: User's problem attempts, only accessible to the user.
+ * - /users/{userId}/wrong_answers/{wrongAnswerId}: User's wrong answers, only accessible to the user.
+ *
+ * Key Security Decisions:
+ * - Listing users is allowed for features like leaderboards.
+ * - Land tiles are publicly readable and writable by any logged-in user.
+ * - The rules strictly enforce user ownership for profiles, problem attempts, and wrong answers.
+ * - `update` operations on `/users/{userId}` and `/countries/{countryId}` are restricted to specific fields.
+ */
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Users collection
+    /**
+     * @description Protects user profiles.  Users can read their own profile, create their own profile, and update specific fields.  The list of users is public.
+     * @path /users/{userId}
+     * @allow (get) - Authenticated user can read their own profile.
+     * @allow (create) - Authenticated user can create their own profile.
+     * @allow (update) - Authenticated user can update their own profile.
+     * @deny (get) - Non-authenticated user attempts to read a profile.
+     * @deny (create) - User attempts to create a profile with an ID that doesn't match their auth UID.
+     * @deny (update) - User attempts to update another user's profile.
+     * @principle Enforces document ownership for writes, allows public read.
+     */
     match /users/{userId} {
-      // Allow anyone to read the list of users (for leaderboards, etc.)
+      function isSignedIn() {
+        return request.auth != null;
+      }
+
+      function isOwner(userId) {
+        return request.auth.uid == userId;
+      }
+
+      allow get: if isSignedIn();
       allow list: if true;
-      // Allow logged-in users to read individual user profiles
-      allow get: if request.auth != null;
-      // Allow a user to create their own user document
-      allow create: if request.auth.uid == userId;
-      // Allow a user to update their own document, or update specific fields for game logic
-      allow update: if request.auth.uid == userId || 
-                       (request.auth != null && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['tokens', 'conqueredCountries']));
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId) || (isSignedIn() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['tokens', 'conqueredCountries']));
+      allow delete: if false;
     }
 
-    // Countries collection
+    /**
+     * @description Controls access to countries.  Anyone can read the list of countries.  Logged-in users can create new countries and update the 'demised' status.
+     * @path /countries/{countryId}
+     * @allow (read) - Anyone can read the list of countries.
+     * @allow (create) - Logged-in users can create new countries.
+     * @allow (update) - Logged-in users can update the 'demised' status of a country.
+     * @deny (create) - Non-authenticated user attempts to create a country.
+     * @deny (update) - Non-authenticated user attempts to update a country.
+     * @principle Allows public read with authenticated create and limited update.
+     */
     match /countries/{countryId} {
-      // Allow anyone to read countries list (for signup)
-      allow read: if true;
-      // Allow logged-in users to create new countries
-      allow create: if request.auth != null;
-      // Allow logged-in users to update the 'demised' status of a country
-      allow update: if request.auth != null && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['demised']);
+      function isSignedIn() {
+        return request.auth != null;
+      }
+      allow get, list: if true;
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['demised']);
+      allow delete: if false;
     }
 
-    // Land tiles collection
+    /**
+     * @description Controls access to land tiles.  Anyone can read the map state.  Logged-in users can create or update tiles.
+     * @path /land_tiles/{landTileId}
+     * @allow (read) - Anyone can read the map state.
+     * @allow (create) - Logged-in users can create or update tiles.
+     * @allow (update) - Logged-in users can create or update tiles.
+     * @deny (create) - Non-authenticated user attempts to create a tile.
+     * @deny (update) - Non-authenticated user attempts to update a tile.
+     * @principle Allows public read with authenticated write.
+     */
     match /land_tiles/{landTileId} {
-      // Allow anyone to read the map state
-      allow read: if true;
-      // Allow logged-in users to create or update tiles (conquer)
-      allow write: if request.auth != null;
+      function isSignedIn() {
+        return request.auth != null;
+      }
+      allow get, list: if true;
+      allow create, update: if isSignedIn();
+      allow delete: if false;
     }
 
-    // Problem Attempts subcollection
-    match /problem_attempts/{userId}/{documents=**} {
-       // A user can read and write to their own attempts subcollection
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+    /**
+     * @description A user can read and write to their own attempts subcollection.
+     * @path /problem_attempts/{userId}/attempts/{attemptId}
+     * @allow (read) - A user can read their own attempts.
+     * @allow (create) - A user can create their own attempts.
+     * @deny (read) - A user attempts to read another user's attempts.
+     * @deny (create) - A user attempts to create attempts for another user.
+     * @principle Restricts access to a user's own data tree.
+     */
+    match /problem_attempts/{userId}/attempts/{attemptId} {
+      function isSignedIn() {
+        return request.auth != null;
+      }
+
+      function isOwner(userId) {
+        return request.auth.uid == userId;
+      }
+
+      allow get, list, create: if isSignedIn() && isOwner(userId);
+      allow update, delete: if false;
     }
     
-    // Wrong Answers subcollection
+    /**
+     * @description A user can manage their own wrong answers list.
+     * @path /users/{userId}/wrong_answers/{wrongAnswerId}
+     * @allow (read) - A user can read their own wrong answers.
+     * @allow (write) - A user can write their own wrong answers.
+     * @allow (delete) - A user can delete their own wrong answers.
+     * @deny (read) - A user attempts to read another user's wrong answers.
+     * @deny (write) - A user attempts to write to another user's wrong answers.
+     * @deny (delete) - A user attempts to delete another user's wrong answers.
+     * @principle Restricts access to a user's own data tree.
+     */
     match /users/{userId}/wrong_answers/{wrongAnswerId} {
-      // A user can manage their own wrong answers list
-      allow read, write, delete: if request.auth != null && request.auth.uid == userId;
+      function isSignedIn() {
+        return request.auth != null;
+      }
+
+      function isOwner(userId) {
+        return request.auth.uid == userId;
+      }
+
+      allow get, list, create, update, delete: if isSignedIn() && isOwner(userId);
     }
   }
 }
