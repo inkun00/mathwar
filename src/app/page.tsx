@@ -5,7 +5,7 @@ import GameBoard from "@/components/game-board";
 import Login from "@/components/login";
 import SignUpDetails from "@/components/signup-details";
 import { useUser } from "@/firebase/auth/use-user";
-import { useFirestore, useMemoFirebase } from "@/firebase";
+import { useFirestore } from "@/firebase";
 import { doc, collection, updateDoc, increment, writeBatch, getDocs } from "firebase/firestore";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { User, Tile, Country, ProblemAttempt, WrongAnswer } from "@/lib/types";
@@ -28,7 +28,7 @@ export default function Home() {
   const [areCoreDataLoading, setAreCoreDataLoading] = useState(true);
   const [areUserSpecificDataLoading, setAreUserSpecificDataLoading] = useState(true);
 
-  // Effect for fetching the user profile specifically
+  // Effect for fetching the user profile and all users
   useEffect(() => {
     if (!authUser || !firestore) {
       if (!isAuthUserLoading) {
@@ -38,8 +38,10 @@ export default function Home() {
     }
     
     setIsProfileLoading(true);
-    const userDocRef = doc(firestore, "users", authUser.uid);
-    getDocs(collection(firestore, "users"))
+    const usersCollectionRef = collection(firestore, "users");
+    
+    // Fetch all users once
+    getDocs(usersCollectionRef)
         .then(snapshot => {
             const usersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
             setAllUsers(usersData);
@@ -79,8 +81,19 @@ export default function Home() {
     setAreUserSpecificDataLoading(true);
     const fetchUserData = async () => {
         try {
-            const attemptsSnapshot = await getDocs(collection(firestore, 'problem_attempts', authUser.uid, 'attempts'));
-            setProblemAttempts(attemptsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ProblemAttempt)));
+            // Firestore timestamps can be null initially, handle this.
+            const attemptsQuery = collection(firestore, 'problem_attempts', authUser.uid, 'attempts');
+            const attemptsSnapshot = await getDocs(attemptsQuery);
+            const attemptsData = attemptsSnapshot.docs.map(doc => {
+                const data = doc.data();
+                return { 
+                    id: doc.id, 
+                    ...data,
+                    // Convert Firestore Timestamp to JS Date, handling nulls
+                    timestamp: data.timestamp ? data.timestamp.toDate() : new Date() 
+                } as ProblemAttempt;
+            });
+            setProblemAttempts(attemptsData);
 
             const wrongAnswersSnapshot = await getDocs(collection(firestore, 'users', authUser.uid, 'wrong_answers'));
             setWrongAnswers(wrongAnswersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as WrongAnswer)));
@@ -110,7 +123,7 @@ export default function Home() {
             gamePoints: increment(userTilesCount),
             lastPointDistribution: today,
           }).catch(console.error);
-        } else if (lastDistribution) {
+        } else if (!lastDistribution || lastDistribution !== today) {
             updateDoc(userRef, {
               lastPointDistribution: today,
             }).catch(console.error);
