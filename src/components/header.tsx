@@ -148,15 +148,17 @@ export default function Header({
               <SheetHeader>
                 <SheetTitle>내 프로필</SheetTitle>
               </SheetHeader>
-              <ProfileSheet 
-                currentUser={currentUser} 
-                userCountry={userCountry}
-                problemAttempts={problemAttempts}
-                wrongAnswers={wrongAnswers}
-                landTiles={landTiles}
-                users={users}
-                countries={countries}
-              />
+              {currentUser && (
+                <ProfileSheet 
+                  currentUser={currentUser} 
+                  userCountry={userCountry}
+                  problemAttempts={problemAttempts}
+                  wrongAnswers={wrongAnswers}
+                  landTiles={landTiles}
+                  users={users}
+                  countries={countries}
+                />
+              )}
             </SheetContent>
           </Sheet>
 
