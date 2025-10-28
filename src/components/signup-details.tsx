@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useAuth, useCollection, useFirestore, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
-import { collection, addDoc, doc, setDoc } from 'firebase/firestore';
+import { collection, addDoc, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
@@ -37,7 +37,8 @@ export default function SignUpDetails() {
     e.preventDefault();
     setIsLoading(true);
 
-    if (!auth.currentUser) {
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
       toast({ variant: 'destructive', title: '오류', description: '사용자 인증 정보를 찾을 수 없습니다. 다시 로그인해 주세요.' });
       setIsLoading(false);
       return;
@@ -56,7 +57,6 @@ export default function SignUpDetails() {
     }
 
     try {
-      // Moderate nickname
       const nicknameModeration = await moderateText(nickname);
       if (!nicknameModeration.isAppropriate) {
         toast({
@@ -68,7 +68,8 @@ export default function SignUpDetails() {
         return;
       }
 
-      let countryId = selectedCountryId;
+      let finalCountryId = '';
+      let isCountryOwner = false;
 
       if (countryOption === 'new') {
         if (!newCountryName) {
@@ -82,7 +83,6 @@ export default function SignUpDetails() {
             return;
         }
         
-        // Moderate country name
         const countryNameModeration = await moderateText(newCountryName);
         if (!countryNameModeration.isAppropriate) {
             toast({
@@ -94,60 +94,63 @@ export default function SignUpDetails() {
             return;
         }
 
-        // Create new country
         const countryRef = await addDoc(collection(firestore, 'countries'), {
           name: newCountryName,
-          createdBy: auth.currentUser.uid,
-          color: `hsl(${Math.random() * 360}, 60%, 70%)`, // Assign a random color to new country
+          createdBy: currentUser.uid,
+          color: `hsl(${Math.random() * 360}, 60%, 70%)`,
           demised: false,
-          flag: Array(32 * 20).fill("#ffffff"), // Add default flag data
+          flag: Array(32 * 20).fill("#ffffff"),
         });
-        countryId = countryRef.id;
-      } else {
+        finalCountryId = countryRef.id;
+        isCountryOwner = true;
+      } else { // 'existing'
          if (!selectedCountryId) {
             toast({ variant: 'destructive', title: '선택 오류', description: '기존 국가 중 하나를 선택해주세요.' });
             setIsLoading(false);
             return;
         }
-      }
-
-      const userDocRef = doc(firestore, 'users', auth.currentUser.uid);
-      const userData = {
-        id: auth.currentUser.uid,
-        uid: auth.currentUser.uid,
-        nickname,
-        email: auth.currentUser.email,
-        countryId,
-        tokens: 1, // Start with 1 token
-        walls: 0, // Start with 0 walls
-        gamePoints: 0,
-        lastPointDistribution: new Date().toISOString().slice(0, 10), // YYYY-MM-DD
-        conqueredCountries: [],
-        isCountryOwner: countryOption === 'new'
-      };
-
-      // Create user profile
-      setDoc(userDocRef, userData)
-        .then(() => {
-           toast({ title: '프로필 생성 완료!', description: '이제 게임을 시작할 수 있습니다.' });
-           // The page should auto-refresh via the listener in page.tsx
-        })
-        .catch((error) => {
-            const permissionError = new FirestorePermissionError({
-              path: userDocRef.path,
-              operation: 'create',
-              requestResourceData: userData,
-            });
-            errorEmitter.emit('permission-error', permissionError);
-            toast({ variant: 'destructive', title: '프로필 생성 오류', description: '프로필을 만드는 중 오류가 발생했습니다. 권한을 확인해주세요.' });
-        })
-        .finally(() => {
-            setIsLoading(false);
+        // Send a join request instead of joining directly
+        await addDoc(collection(firestore, 'join_requests'), {
+          requesterId: currentUser.uid,
+          requesterNickname: nickname,
+          targetCountryId: selectedCountryId,
+          status: 'pending',
+          createdAt: serverTimestamp(),
         });
 
+        // User profile will be created with a temporary countryId or null
+        // And will be updated upon request approval.
+        // For simplicity, we'll let them "wait" without a country for now.
+        finalCountryId = ''; // Or a placeholder ID for 'unaffiliated'
+        isCountryOwner = false;
+      }
+
+      const userDocRef = doc(firestore, 'users', currentUser.uid);
+      const userData = {
+        id: currentUser.uid,
+        uid: currentUser.uid,
+        nickname,
+        email: currentUser.email,
+        countryId: finalCountryId,
+        tokens: 1,
+        walls: 0,
+        gamePoints: 0,
+        lastPointDistribution: new Date().toISOString().slice(0, 10),
+        conqueredCountries: [],
+        isCountryOwner: isCountryOwner,
+      };
+
+      await setDoc(userDocRef, userData);
+      
+      if (countryOption === 'existing') {
+        toast({ title: '가입 요청 완료!', description: '국가 소유주의 수락을 기다려주세요. 수락 전까지는 소속 국가 없이 게임이 진행됩니다.' });
+      } else {
+        toast({ title: '프로필 생성 완료!', description: '이제 게임을 시작할 수 있습니다.' });
+      }
     } catch (error: any) {
       console.error('프로필 생성 오류:', error);
       toast({ variant: 'destructive', title: '프로필 생성 오류', description: error.message || '프로필을 만드는 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.' });
+    } finally {
        setIsLoading(false);
     }
   };
@@ -177,7 +180,7 @@ export default function SignUpDetails() {
             <RadioGroup value={countryOption} onValueChange={setCountryOption}>
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="existing" id="existing" />
-                <Label htmlFor="existing">기존 국가 선택</Label>
+                <Label htmlFor="existing">기존 국가에 가입 요청</Label>
               </div>
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="new" id="new" />

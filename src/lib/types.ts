@@ -25,6 +25,24 @@ export interface Country {
   flag?: string[]; // 10x10 grid of colors
 }
 
+export interface JoinRequest {
+  id: string;
+  requesterId: string;
+  requesterNickname: string;
+  targetCountryId: string;
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: any; // Firestore ServerTimestamp
+}
+
+export interface AllianceRequest {
+  id: string;
+  requestingCountryId: string;
+  requestingCountryName: string;
+  targetCountryId: string;
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: any; // Firestore ServerTimestamp
+}
+
 export interface Tile {
   id: string;
   x: number;

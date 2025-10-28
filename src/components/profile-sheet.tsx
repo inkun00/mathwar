@@ -1,17 +1,17 @@
 'use client';
 
 import React from "react";
-import type { User, Country, ProblemAttempt, ProblemSubType, WrongAnswer, StorableProblem, Tile, RankedUser, RankedCountry } from "@/lib/types";
+import type { User, Country, ProblemAttempt, ProblemSubType, WrongAnswer, StorableProblem, Tile, RankedUser, RankedCountry, JoinRequest, AllianceRequest } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { LogOut, BookOpen, ChevronsUpDown, Check, Crown, Handshake, Flag, Swords, Pencil } from "lucide-react";
-import { useAuth, useFirestore } from "@/firebase";
+import { LogOut, BookOpen, ChevronsUpDown, Check, Crown, Handshake, Flag, Swords, Pencil, UserPlus, ShieldCheck, X } from "lucide-react";
+import { useAuth, useFirestore, useCollection, useMemoFirebase } from "@/firebase";
 import { signOut } from "firebase/auth";
 import ProblemModal from "./problem-modal";
 import { deleteWrongAnswer } from "@/firebase/firestore/data";
-import { doc, updateDoc, increment, collection, addDoc } from "firebase/firestore";
+import { doc, updateDoc, increment, collection, addDoc, writeBatch, serverTimestamp, deleteDoc, query, where, getDocs } from "firebase/firestore";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "./ui/command";
 import { cn } from "@/lib/utils";
@@ -81,8 +81,20 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
   const [newCountryName, setNewCountryName] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [isFlagEditorOpen, setFlagEditorOpen] = useState(false);
-
   
+  const joinRequestsQuery = useMemoFirebase(() => {
+    if (!firestore || !currentUser?.isCountryOwner || !currentUser.countryId) return null;
+    return query(collection(firestore, "join_requests"), where("targetCountryId", "==", currentUser.countryId), where("status", "==", "pending"));
+  }, [firestore, currentUser]);
+  const { data: joinRequests } = useCollection<JoinRequest>(joinRequestsQuery);
+
+  const allianceRequestsQuery = useMemoFirebase(() => {
+    if (!firestore || !currentUser?.isCountryOwner || !currentUser.countryId) return null;
+    return query(collection(firestore, "alliance_requests"), where("targetCountryId", "==", currentUser.countryId), where("status", "==", "pending"));
+  }, [firestore, currentUser]);
+  const { data: allianceRequests } = useCollection<AllianceRequest>(allianceRequestsQuery);
+
+
   const handleLogout = () => {
     signOut(auth);
   };
@@ -113,63 +125,42 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
   };
 
   const { userRankings, countryRankings } = useMemo(() => {
-    // User Rankings
     const userTileCount = users.reduce((acc, user) => {
-      acc[user.id] = 0;
+      acc[user.id] = landTiles.filter(tile => tile.ownerId === user.id).length;
       return acc;
     }, {} as Record<string, number>);
-
-    landTiles.forEach(tile => {
-      if (tile.ownerId) {
-        if (userTileCount[tile.ownerId] !== undefined) {
-          userTileCount[tile.ownerId]++;
-        }
-      }
-    });
 
     const sortedUsers: RankedUser[] = Object.entries(userTileCount)
-      .map(([id, count]) => ({ id, count }))
-      .sort((a, b) => b.count - a.count)
-      .map((p, index) => {
-        const user = users.find(u => u.id === p.id);
+      .map(([id, count]) => {
+        const user = users.find(u => u.id === id);
         return {
-          rank: index + 1,
-          id: p.id,
+          id,
           nickname: user?.nickname || '알 수 없는 플레이어',
-          tileCount: p.count,
-        }
-      });
+          tileCount: count,
+        };
+      })
+      .sort((a, b) => b.tileCount - a.tileCount)
+      .map((p, index) => ({ ...p, rank: index + 1 }));
 
-    // Country Rankings
     const countryTileCount = countries.reduce((acc, country) => {
-      acc[country.id] = 0;
+      const members = users.filter(u => u.countryId === country.id);
+      const count = members.reduce((sum, member) => sum + (userTileCount[member.id] || 0), 0);
+      acc[country.id] = count;
       return acc;
     }, {} as Record<string, number>);
-
-    const userToCountryMap = new Map(users.map(u => [u.id, u.countryId]));
-
-    landTiles.forEach(tile => {
-      if (tile.ownerId) {
-        const countryId = userToCountryMap.get(tile.ownerId);
-        if (countryId && countryTileCount[countryId] !== undefined) {
-          countryTileCount[countryId]++;
-        }
-      }
-    });
-
+    
     const sortedCountries: RankedCountry[] = Object.entries(countryTileCount)
-      .map(([id, count]) => ({ id, count }))
-      .sort((a, b) => b.count - a.count)
-      .map((c, index) => {
-        const country = countries.find(co => co.id === c.id);
+      .map(([id, count]) => {
+        const country = countries.find(co => co.id === id);
         return {
-          rank: index + 1,
-          id: c.id,
+          id,
           name: country?.name || '알 수 없는 국가',
           color: country?.color || '#888',
-          tileCount: c.count,
+          tileCount: count,
         };
-      });
+      })
+      .sort((a, b) => b.tileCount - a.tileCount)
+      .map((c, index) => ({ ...c, rank: index + 1 }));
 
     return { userRankings: sortedUsers, countryRankings: sortedCountries };
   }, [users, countries, landTiles]);
@@ -189,7 +180,6 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
     };
 
     problemAttempts.forEach(attempt => {
-      // Unit stats
       if (!stats.unit[attempt.unit]) {
          stats.unit[attempt.unit] = { total: 0, correct: 0 };
       }
@@ -198,7 +188,6 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
         stats.unit[attempt.unit].correct++;
       }
 
-      // Area stats
       if (attempt.area) {
         if (!stats.area[attempt.area]) {
           stats.area[attempt.area] = { total: 0, correct: 0, subType: attempt.area as ProblemSubType };
@@ -281,23 +270,46 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
     return countries.filter(c => adjacentCountryIds.has(c.id));
   }, [landTiles, users, countries, currentUser]);
 
-  const handleJoinCountry = async (countryId: string) => {
-    if (!firestore || !currentUser) return;
+  const handleRequestAlliance = async (targetCountryId: string) => {
+    if (!firestore || !currentUser || !userCountry) return;
     setIsProcessing(true);
-    const userRef = doc(firestore, 'users', currentUser.id);
+
     try {
-      await updateDoc(userRef, { countryId: countryId, isCountryOwner: false });
+      const existingRequestQuery = query(
+        collection(firestore, "alliance_requests"),
+        where("requestingCountryId", "==", userCountry.id),
+        where("targetCountryId", "==", targetCountryId),
+        where("status", "==", "pending")
+      );
+      const existingRequests = await getDocs(existingRequestQuery);
+      if (!existingRequests.empty) {
+        toast({
+          variant: "default",
+          title: "요청 중복",
+          description: "이미 해당 국가에 동맹을 요청했습니다.",
+        });
+        return;
+      }
+      
+      await addDoc(collection(firestore, 'alliance_requests'), {
+        requestingCountryId: userCountry.id,
+        requestingCountryName: userCountry.name,
+        targetCountryId,
+        status: 'pending',
+        createdAt: serverTimestamp(),
+      });
+      
       toast({
-        title: "동맹 체결!",
-        description: `새로운 국가에 가입했습니다.`,
+        title: "동맹 요청 완료!",
+        description: `동맹 요청을 보냈습니다. 상대방의 수락을 기다려주세요.`,
       });
       setAllianceComboboxOpen(false);
     } catch (error) {
-      console.error("국가 가입 오류:", error);
+      console.error("동맹 요청 오류:", error);
       toast({
         variant: "destructive",
         title: "오류",
-        description: "동맹 체결 중 오류가 발생했습니다.",
+        description: "동맹 요청 중 오류가 발생했습니다.",
       });
     } finally {
       setIsProcessing(false);
@@ -357,6 +369,66 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
       setIsProcessing(false);
     }
   };
+  
+  const handleJoinRequestResponse = async (request: JoinRequest, action: 'approve' | 'reject') => {
+      if (!firestore) return;
+      setIsProcessing(true);
+      const requestRef = doc(firestore, "join_requests", request.id);
+      try {
+          if (action === 'approve') {
+              const userRef = doc(firestore, "users", request.requesterId);
+              await writeBatch(firestore)
+                  .update(requestRef, { status: "approved" })
+                  .update(userRef, { countryId: request.targetCountryId })
+                  .commit();
+              toast({ title: "가입 수락", description: `${request.requesterNickname}님이 국가에 가입했습니다.` });
+          } else { // reject
+              await updateDoc(requestRef, { status: "rejected" });
+              toast({ title: "가입 거절", description: `${request.requesterNickname}님의 가입 요청을 거절했습니다.` });
+          }
+      } catch (error) {
+          console.error("가입 요청 처리 오류:", error);
+          toast({ variant: "destructive", title: "오류", description: "요청을 처리하는 중 오류가 발생했습니다." });
+      } finally {
+          setIsProcessing(false);
+      }
+  };
+
+  const handleAllianceRequestResponse = async (request: AllianceRequest, action: 'approve' | 'reject') => {
+      if (!firestore || !userCountry) return;
+      setIsProcessing(true);
+      const requestRef = doc(firestore, "alliance_requests", request.id);
+      try {
+          if (action === 'approve') {
+              const ownCountryRef = doc(firestore, "countries", userCountry.id);
+              
+              // Find all members of the requesting country
+              const q = query(collection(firestore, "users"), where("countryId", "==", request.requestingCountryId));
+              const membersSnapshot = await getDocs(q);
+
+              const batch = writeBatch(firestore);
+              batch.update(requestRef, { status: "approved" });
+              // Merge all members into the target country
+              membersSnapshot.forEach(memberDoc => {
+                  batch.update(memberDoc.ref, { countryId: request.targetCountryId });
+              });
+              // Mark the old country as demised
+              batch.update(doc(firestore, "countries", request.requestingCountryId), { demised: true });
+              
+              await batch.commit();
+
+              toast({ title: "동맹 체결", description: `${request.requestingCountryName} 국가와 동맹을 맺었습니다.` });
+          } else { // reject
+              await updateDoc(requestRef, { status: "rejected" });
+              toast({ title: "동맹 거절", description: `${request.requestingCountryName} 국가의 동맹 요청을 거절했습니다.` });
+          }
+      } catch (error) {
+          console.error("동맹 요청 처리 오류:", error);
+          toast({ variant: "destructive", title: "오류", description: "요청을 처리하는 중 오류가 발생했습니다." });
+      } finally {
+          setIsProcessing(false);
+      }
+  };
 
   const renderProblemForTooltip = (subType: ProblemSubType) => {
     // A simple, non-interactive way to display the problem structure.
@@ -403,7 +475,7 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
                 <div className="flex justify-between items-center">
                    <span className="font-medium text-muted-foreground">국가</span>
                    <div className="flex items-center gap-2">
-                     {currentUser.isCountryOwner && userCountry ? (
+                     {userCountry ? (
                        <button
                          onClick={() => setFlagEditorOpen(true)}
                          className="relative group cursor-pointer hover:opacity-80 transition-opacity"
@@ -503,7 +575,7 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
                       </AlertDialogFooter>
                     </AlertDialogContent>
                   </AlertDialog>
-                ) : countryMembers.length === 1 && (
+                ) : (
                   <Popover open={isAllianceComboboxOpen} onOpenChange={setAllianceComboboxOpen}>
                     <PopoverTrigger asChild>
                       <Button
@@ -526,7 +598,8 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
                               <CommandItem
                                 key={country.id}
                                 value={country.name}
-                                onSelect={() => handleJoinCountry(country.id)}
+                                onSelect={() => handleRequestAlliance(country.id)}
+                                disabled={isProcessing}
                               >
                                 {country.name}
                               </CommandItem>
@@ -538,13 +611,63 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
                   </Popover>
                 )}
                 <p className="text-xs text-muted-foreground px-1">
-                  {currentUser.isCountryOwner && countryMembers.length > 1 && "국가의 소유주는 다른 국가에 가입할 수 없습니다. (소속 인원: " + countryMembers.length + "명)"}
-                   {currentUser.isCountryOwner && countryMembers.length === 1 && "국경이 맞닿은 다른 국가에 가입하여 동맹을 맺을 수 있습니다."}
-                   {!currentUser.isCountryOwner && "현재 소속된 국가에서 나와 자신만의 국가를 세울 수 있습니다."}
+                   {currentUser.isCountryOwner ? "국경이 맞닿은 다른 국가에 가입을 요청하여 동맹을 맺을 수 있습니다." : "현재 소속된 국가에서 나와 자신만의 국가를 세울 수 있습니다."}
                 </p>
               </CardContent>
             </Card>
            </div>
+          
+           {currentUser.isCountryOwner && (
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold tracking-tight">국가 관리</h3>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <UserPlus /> 가입 요청
+                    {joinRequests && joinRequests.length > 0 && <Badge>{joinRequests.length}</Badge>}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {joinRequests && joinRequests.length > 0 ? (
+                    joinRequests.map(req => (
+                      <div key={req.id} className="flex items-center justify-between p-2 rounded-md bg-muted/50">
+                        <span>{req.requesterNickname}</span>
+                        <div className="flex gap-2">
+                          <Button size="sm" variant="outline" onClick={() => handleJoinRequestResponse(req, 'approve')} disabled={isProcessing}><Check className="w-4 h-4" /></Button>
+                          <Button size="sm" variant="destructive" onClick={() => handleJoinRequestResponse(req, 'reject')} disabled={isProcessing}><X className="w-4 h-4" /></Button>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-muted-foreground">새로운 가입 요청이 없습니다.</p>
+                  )}
+                </CardContent>
+              </Card>
+              <Card>
+                 <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <ShieldCheck /> 동맹 요청
+                    {allianceRequests && allianceRequests.length > 0 && <Badge>{allianceRequests.length}</Badge>}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                   {allianceRequests && allianceRequests.length > 0 ? (
+                    allianceRequests.map(req => (
+                      <div key={req.id} className="flex items-center justify-between p-2 rounded-md bg-muted/50">
+                        <span>{req.requestingCountryName}</span>
+                        <div className="flex gap-2">
+                          <Button size="sm" variant="outline" onClick={() => handleAllianceRequestResponse(req, 'approve')} disabled={isProcessing}><Check className="w-4 h-4" /></Button>
+                          <Button size="sm" variant="destructive" onClick={() => handleAllianceRequestResponse(req, 'reject')} disabled={isProcessing}><X className="w-4 h-4" /></Button>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-muted-foreground">새로운 동맹 요청이 없습니다.</p>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+           )}
 
 
           <div className="space-y-4">

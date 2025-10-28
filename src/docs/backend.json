@@ -6,53 +6,18 @@
       "type": "object",
       "description": "Represents a user of the Decimal Conquest game.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the User entity."
-        },
-        "email": {
-          "type": "string",
-          "description": "User's email address.",
-          "format": "email"
-        },
-        "nickname": {
-          "type": "string",
-          "description": "The user's display name."
-        },
-        "countryId": {
-          "type": "string",
-          "description": "Reference to the Country this user belongs to."
-        },
-        "tokens": {
-          "type": "number",
-          "description": "The number of expansion tokens the user has."
-        },
-        "conqueredCountries": {
-          "type": "array",
-          "description": "An array of country IDs that this user has conquered.",
-          "items": {
-            "type": "string"
-          }
-        },
-        "gamePoints": {
-          "type": "number",
-          "description": "Points earned by the user for holding territory."
-        },
-        "lastPointDistribution": {
-          "type": "string",
-          "description": "The date (YYYY-MM-DD) when the last points were distributed."
-        },
-        "walls": {
-          "type": "number",
-          "description": "The number of wall items the user possesses."
-        }
+        "id": { "type": "string", "description": "Unique identifier for the User entity." },
+        "email": { "type": "string", "description": "User's email address.", "format": "email" },
+        "nickname": { "type": "string", "description": "The user's display name." },
+        "countryId": { "type": "string", "description": "Reference to the Country this user belongs to." },
+        "tokens": { "type": "number", "description": "The number of expansion tokens the user has." },
+        "conqueredCountries": { "type": "array", "description": "An array of country IDs that this user has conquered.", "items": { "type": "string" } },
+        "gamePoints": { "type": "number", "description": "Points earned by the user for holding territory." },
+        "lastPointDistribution": { "type": "string", "description": "The date (YYYY-MM-DD) when the last points were distributed." },
+        "walls": { "type": "number", "description": "The number of wall items the user possesses." },
+        "isCountryOwner": { "type": "boolean", "description": "Whether the user is the owner of their country." }
       },
-      "required": [
-        "id",
-        "email",
-        "nickname",
-        "countryId"
-      ]
+      "required": ["id", "email", "nickname"]
     },
     "Country": {
       "$schema": "http://json-schema.org/draft-07/schema#",
@@ -60,33 +25,12 @@
       "type": "object",
       "description": "Represents a country created by a user.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the Country entity."
-        },
-        "name": {
-          "type": "string",
-          "description": "The name of the country."
-        },
-        "createdBy": {
-          "type": "string",
-          "description": "The UID of the user who created the country."
-        },
-        "color": {
-            "type": "string",
-            "description": "The HEX or HSL color string for the country."
-        },
-        "demised": {
-          "type": "boolean",
-          "description": "Whether the country has been conquered and can no longer be used."
-        },
-        "flag": {
-            "type": "array",
-            "description": "A 10x10 grid of colors for the country's flag.",
-            "items": {
-                "type": "string"
-            }
-        }
+        "id": { "type": "string", "description": "Unique identifier for the Country entity." },
+        "name": { "type": "string", "description": "The name of the country." },
+        "createdBy": { "type": "string", "description": "The UID of the user who created the country." },
+        "color": { "type": "string", "description": "The HEX or HSL color string for the country." },
+        "demised": { "type": "boolean", "description": "Whether the country has been conquered and can no longer be used." },
+        "flag": { "type": "array", "description": "A 10x10 grid of colors for the country's flag.", "items": { "type": "string" } }
       },
       "required": ["id", "name", "createdBy", "color"]
     },
@@ -96,150 +40,99 @@
       "type": "object",
       "description": "Represents a single land tile on the game map.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the LandTile entity."
-        },
-        "x": {
-          "type": "number",
-          "description": "X-coordinate of the land tile on the map."
-        },
-        "y": {
-          "type": "number",
-          "description": "Y-coordinate of the land tile on the map."
-        },
-        "ownerId": {
-          "type": "string",
-          "description": "Reference to the User who owns this land tile. (Relationship: User 1:N LandTile)"
-        },
-        "hasWall": {
-          "type": "boolean",
-          "description": "Indicates if a defensive wall is built on this tile."
-        }
+        "id": { "type": "string", "description": "Unique identifier for the LandTile entity." },
+        "x": { "type": "number", "description": "X-coordinate of the land tile on the map." },
+        "y": { "type": "number", "description": "Y-coordinate of the land tile on the map." },
+        "ownerId": { "type": "string", "description": "Reference to the User who owns this land tile. (Relationship: User 1:N LandTile)" },
+        "hasWall": { "type": "boolean", "description": "Indicates if a defensive wall is built on this tile." }
       },
-      "required": [
-        "id",
-        "x",
-        "y",
-        "ownerId"
-      ]
+      "required": ["id", "x", "y", "ownerId"]
     },
     "ProblemAttempt": {
-        "$schema": "http://json-schema.org/draft-07/schema#",
-        "title": "ProblemAttempt",
-        "type": "object",
-        "description": "Represents a user's attempt at solving a math problem.",
-        "properties": {
-            "id": { "type": "string" },
-            "userId": { "type": "string" },
-            "unit": { "type": "string", "enum": ["decimal", "fraction"] },
-            "area": { "type": "string" },
-            "correct": { "type": "boolean" },
-            "timestamp": { "type": "string", "format": "date-time" },
-            "isReview": { "type": "boolean" },
-            "problem": { "type": "string" }
-        },
-        "required": ["userId", "unit", "area", "correct", "timestamp", "isReview", "problem"]
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "ProblemAttempt",
+      "type": "object",
+      "description": "Represents a user's attempt at solving a math problem.",
+      "properties": {
+        "id": { "type": "string" }, "userId": { "type": "string" },
+        "unit": { "type": "string", "enum": ["decimal", "fraction"] },
+        "area": { "type": "string" }, "correct": { "type": "boolean" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "isReview": { "type": "boolean" }, "problem": { "type": "string" }
+      },
+      "required": ["userId", "unit", "area", "correct", "timestamp", "isReview", "problem"]
     },
     "WrongAnswer": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "WrongAnswer",
+      "type": "object",
+      "description": "Stores problems that a user answered incorrectly.",
+      "properties": {
+        "id": { "type": "string" }, "userId": { "type": "string" },
+        "problemData": { "type": "object" }, "problemString": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "problemData", "problemString", "createdAt"]
+    },
+    "JoinRequest": {
         "$schema": "http://json-schema.org/draft-07/schema#",
-        "title": "WrongAnswer",
+        "title": "JoinRequest",
         "type": "object",
-        "description": "Stores problems that a user answered incorrectly.",
+        "description": "A user's request to join a country.",
         "properties": {
-            "id": { "type": "string" },
-            "userId": { "type": "string" },
-            "problemData": { "type": "object" },
-            "problemString": { "type": "string" },
+            "requesterId": { "type": "string" },
+            "requesterNickname": { "type": "string" },
+            "targetCountryId": { "type": "string" },
+            "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
             "createdAt": { "type": "string", "format": "date-time" }
         },
-        "required": ["userId", "problemData", "problemString", "createdAt"]
+        "required": ["requesterId", "requesterNickname", "targetCountryId", "status", "createdAt"]
+    },
+    "AllianceRequest": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "title": "AllianceRequest",
+        "type": "object",
+        "description": "A country's request to form an alliance with another.",
+        "properties": {
+            "requestingCountryId": { "type": "string" },
+            "requestingCountryName": { "type": "string" },
+            "targetCountryId": { "type": "string" },
+            "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+            "createdAt": { "type": "string", "format": "date-time" }
+        },
+        "required": ["requestingCountryId", "requestingCountryName", "targetCountryId", "status", "createdAt"]
     }
   },
-  "auth": {
-    "providers": [
-      "password",
-      "anonymous"
-    ]
-  },
+  "auth": { "providers": ["password", "anonymous"] },
   "firestore": {
     "structure": [
       {
         "path": "/users/{userId}",
-        "definition": {
-          "entityName": "user",
-          "schema": {
-            "$ref": "#/backend/entities/User"
-          },
-          "description": "Stores user profiles. Any authenticated user can read for game state. Users can create their own profile. Only the user can modify their own profile. AI player documents can be updated by game logic.",
-          "allow": ["get", "list", "create", "update"],
-          "params": [
-            {
-              "name": "userId",
-              "description": "The unique identifier of the user."
-            }
-          ]
-        }
+        "definition": { "entityName": "user", "schema": { "$ref": "#/backend/entities/User" }, "description": "Stores user profiles.", "allow": ["get", "list", "create", "update"] }
       },
       {
         "path": "/users/{userId}/wrong_answers/{wrongAnswerId}",
-        "definition": {
-            "entityName": "wrongAnswer",
-            "schema": { "$ref": "#/backend/entities/WrongAnswer" },
-            "description": "Stores incorrect problems for a specific user to review. Only accessible by that user.",
-             "allow": ["list", "get", "create", "update", "delete"],
-             "params": [
-                { "name": "userId", "description": "The UID of the user." },
-                { "name": "wrongAnswerId", "description": "The unique ID for the wrong answer entry." }
-            ]
-        }
+        "definition": { "entityName": "wrongAnswer", "schema": { "$ref": "#/backend/entities/WrongAnswer" }, "description": "Stores incorrect problems for a user.", "allow": ["list", "get", "create", "update", "delete"] }
       },
       {
         "path": "/countries/{countryId}",
-        "definition": {
-          "entityName": "country",
-          "schema": {
-            "$ref": "#/backend/entities/Country"
-          },
-          "description": "Stores all countries created by users. Accessible to all authenticated users.",
-          "allow": ["list", "get", "create", "update"],
-          "params": [
-            {
-              "name": "countryId",
-              "description": "The unique identifier of the country."
-            }
-          ]
-        }
+        "definition": { "entityName": "country", "schema": { "$ref": "#/backend/entities/Country" }, "description": "Stores all countries.", "allow": ["list", "get", "create", "update"] }
       },
       {
         "path": "/land_tiles/{landTileId}",
-        "definition": {
-          "entityName": "landTile",
-          "schema": {
-            "$ref": "#/backend/entities/LandTile"
-          },
-          "description": "Stores all land tiles on the game map. Accessible to all authenticated users for gameplay.",
-           "allow": ["list", "get", "create", "update"],
-          "params": [
-            {
-              "name": "landTileId",
-              "description": "The unique identifier of the land tile."
-            }
-          ]
-        }
+        "definition": { "entityName": "landTile", "schema": { "$ref": "#/backend/entities/LandTile" }, "description": "Stores all land tiles.", "allow": ["list", "get", "create", "update"] }
       },
       {
         "path": "/problem_attempts/{userId}/attempts/{attemptId}",
-        "definition": {
-            "entityName": "problemAttempt",
-            "schema": { "$ref": "#/backend/entities/ProblemAttempt" },
-            "description": "Stores each attempt a user makes on a problem for analytics. Only the user can create and list their own attempts.",
-            "allow": ["list", "get", "create"],
-            "params": [
-                { "name": "userId", "description": "The UID of the user." },
-                { "name": "attemptId", "description": "The unique ID for the attempt." }
-            ]
-        }
+        "definition": { "entityName": "problemAttempt", "schema": { "$ref": "#/backend/entities/ProblemAttempt" }, "description": "Stores user problem attempts.", "allow": ["list", "get", "create"] }
+      },
+      {
+          "path": "/join_requests/{requestId}",
+          "definition": { "entityName": "joinRequest", "schema": { "$ref": "#/backend/entities/JoinRequest" }, "description": "Requests from users to join a country.", "allow": ["list", "get", "create", "update"] }
+      },
+      {
+          "path": "/alliance_requests/{requestId}",
+          "definition": { "entityName": "allianceRequest", "schema": { "$ref": "#/backend/entities/AllianceRequest" }, "description": "Requests from countries to form an alliance.", "allow": ["list", "get", "create", "update"] }
       }
     ]
   }
