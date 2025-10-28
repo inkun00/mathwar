@@ -8,7 +8,7 @@ import { useUser } from "@/firebase/auth/use-user";
 import { useDoc, useFirestore, useMemoFirebase, useCollection } from "@/firebase";
 import { doc, collection, updateDoc, increment, writeBatch, getDocs } from "firebase/firestore";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { User as GameUser, Tile, Country, ProblemAttempt, WrongAnswer } from "@/lib/types";
+import type { User, Tile, Country, ProblemAttempt, WrongAnswer } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 import { isLand } from "@/lib/world-map-shape";
 
@@ -22,7 +22,7 @@ export default function Home() {
     return doc(firestore, "users", authUser.uid);
   }, [firestore, authUser]);
   
-  const { data: userProfile, isLoading: isProfileLoading } = useDoc<GameUser>(userDocRef);
+  const { data: userProfile, isLoading: isProfileLoading } = useDoc<User>(userDocRef);
 
   const landTilesQuery = useMemoFirebase(() => {
     if (!firestore || !authUser) return null;
@@ -50,7 +50,7 @@ export default function Home() {
   }, [firestore, authUser]);
 
   const { data: initialLandTiles, isLoading: areLandTilesLoading } = useCollection<Tile>(landTilesQuery);
-  const { data: allUsers, isLoading: areUsersLoading } = useCollection<GameUser>(usersQuery);
+  const { data: allUsers, isLoading: areUsersLoading } = useCollection<User>(usersQuery);
   const { data: countries, isLoading: areCountriesLoading } = useCollection<Country>(countriesQuery);
   const { data: problemAttempts, isLoading: areAttemptsLoading } = useCollection<ProblemAttempt>(problemAttemptsQuery);
   const { data: wrongAnswers, isLoading: areWrongAnswersLoading } = useCollection<WrongAnswer>(wrongAnswersQuery);
