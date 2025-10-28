@@ -82,6 +82,15 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
   const [isProcessing, setIsProcessing] = useState(false);
   const [isFlagEditorOpen, setFlagEditorOpen] = useState(false);
 
+  // Note: These queries are disabled for now to prevent permission errors.
+  // They will be re-enabled once the backend rules are updated.
+  const joinRequestsQuery = null; // useMemoFirebase(...)
+  const allianceRequestsQuery = null; // useMemoFirebase(...)
+
+  const { data: joinRequests } = useCollection<JoinRequest>(joinRequestsQuery);
+  const { data: allianceRequests } = useCollection<AllianceRequest>(allianceRequestsQuery);
+
+
   const handleLogout = () => {
     signOut(auth);
   };
@@ -138,7 +147,7 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
     
     const sortedCountries: RankedCountry[] = Object.entries(countryTileCount)
       .map(([id, count]) => {
-        const country = countries.find(co => co.id === c.id);
+        const country = countries.find(co => co.id === id);
         return {
           id,
           name: country?.name || '알 수 없는 국가',
@@ -325,6 +334,7 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
           title: '부적절한 국가 이름',
           description: nameModeration.reason || '입력한 국가 이름은 사용할 수 없습니다.',
         });
+        setIsProcessing(false);
         return;
       }
 
