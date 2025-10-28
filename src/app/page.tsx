@@ -24,13 +24,13 @@ export default function Home() {
   
   const { data: userProfile, isLoading: isProfileLoading } = useDoc<User>(userDocRef);
 
-  const countryDocRef = useMemoFirebase(() => {
-    if (!firestore || !userProfile?.countryId) return null;
-    return doc(firestore, 'countries', userProfile.countryId);
-  }, [firestore, userProfile?.countryId]);
+  const countriesQuery = useMemoFirebase(() => {
+    if (!firestore || !authUser) return null;
+    return collection(firestore, 'countries');
+  }, [firestore, authUser]);
 
-  const { data: country, isLoading: isCountryLoading } = useDoc<Country>(countryDocRef);
-
+  const { data: countries, isLoading: areCountriesLoading } = useCollection<Country>(countriesQuery);
+  
   const landTilesQuery = useMemoFirebase(() => {
     if (!firestore || !authUser) return null;
     return collection(firestore, 'land_tiles');
@@ -58,7 +58,7 @@ export default function Home() {
   
   const isLoading = isAuthUserLoading || 
                     (authUser && isProfileLoading) ||
-                    (authUser && userProfile && isCountryLoading) ||
+                    (authUser && areCountriesLoading) ||
                     (authUser && areLandTilesLoading) || 
                     (authUser && areUsersLoading) ||
                     (authUser && areAttemptsLoading) ||
@@ -186,8 +186,6 @@ export default function Home() {
     return <SignUpDetails />;
   }
   
-  const countries = country ? [country] : [];
-
   if (authUser && userProfile && initialLandTiles && allUsers && countries && problemAttempts && wrongAnswers) {
     return (
       <div className="relative flex h-screen w-full flex-col items-center bg-background p-4 sm:p-6 md:p-8">
