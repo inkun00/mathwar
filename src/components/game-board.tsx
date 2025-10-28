@@ -45,85 +45,63 @@ const getMapWithTiles = (baseMap: MapData, tilesToUpdate: Tile[]): MapData => {
 
 // Custom hook for partial map updates
 const usePartialMapUpdates = (
-  currentUser: User | undefined, 
+  currentUser: User | undefined,
+  initialTiles: Tile[],
   onUpdate: (tiles: Tile[]) => void
 ) => {
   const firestore = useFirestore();
 
   useEffect(() => {
-    if (!firestore || !currentUser) {
-      return; 
+    if (!firestore || !currentUser || initialTiles.length === 0) {
+      return;
     }
 
-    let unsubscribePartial: (() => void) | null = null;
+    const userTiles = initialTiles.filter(t => t.ownerId === currentUser.id);
+    if (userTiles.length === 0) return;
 
-    // 1. Get current user's tiles to determine the boundaries
-    const userTilesQuery = query(
+    // 1. Calculate boundaries based on initial user tiles
+    const BORDER_RADIUS = 5;
+    let minX = MAP_WIDTH, maxX = 0, minY = MAP_HEIGHT, maxY = 0;
+    userTiles.forEach(tile => {
+      minX = Math.min(minX, tile.x);
+      maxX = Math.max(maxX, tile.x);
+      minY = Math.min(minY, tile.y);
+      maxY = Math.max(maxY, tile.y);
+    });
+    
+    const minX_watch = Math.max(0, minX - BORDER_RADIUS);
+    const maxX_watch = Math.min(MAP_WIDTH - 1, maxX + BORDER_RADIUS);
+    const minY_watch = Math.max(0, minY - BORDER_RADIUS);
+    const maxY_watch = Math.min(MAP_HEIGHT - 1, maxY + BORDER_RADIUS);
+
+    // 2. Set up a single listener for the surrounding area
+    const partialQuery = query(
       collection(firestore, "land_tiles"),
-      where("ownerId", "==", currentUser.id)
+      where("x", ">=", minX_watch),
+      where("x", "<=", maxX_watch)
     );
 
-    const unsubscribeUserTiles = onSnapshot(userTilesQuery, (snapshot) => {
-      // If a listener for a partial area is already active, unsubscribe first
-      if (unsubscribePartial) {
-        unsubscribePartial();
-        unsubscribePartial = null;
+    const unsubscribe = onSnapshot(partialQuery, (snapshot) => {
+      const updatedTiles: Tile[] = [];
+      snapshot.docChanges().forEach((change) => {
+         const tileData = change.doc.data() as Tile;
+         if (tileData.y >= minY_watch && tileData.y <= maxY_watch) {
+            updatedTiles.push({ id: change.doc.id, ...tileData });
+         }
+      });
+      if (updatedTiles.length > 0) {
+        onUpdate(updatedTiles);
       }
-      
-      const userTiles = snapshot.docs.map(doc => doc.data() as Tile);
-
-      if (userTiles.length === 0) return;
-
-      // 2. Calculate boundaries
-      const BORDER_RADIUS = 5;
-      let minX = MAP_WIDTH, maxX = 0, minY = MAP_HEIGHT, maxY = 0;
-      userTiles.forEach(tile => {
-        minX = Math.min(minX, tile.x);
-        maxX = Math.max(maxX, tile.x);
-        minY = Math.min(minY, tile.y);
-        maxY = Math.max(maxY, tile.y);
-      });
-      
-      const minX_watch = Math.max(0, minX - BORDER_RADIUS);
-      const maxX_watch = Math.min(MAP_WIDTH - 1, maxX + BORDER_RADIUS);
-      const minY_watch = Math.max(0, minY - BORDER_RADIUS);
-      const maxY_watch = Math.min(MAP_HEIGHT - 1, maxY + BORDER_RADIUS);
-
-      // 3. Set up listeners for the surrounding area
-      const partialQuery = query(
-        collection(firestore, "land_tiles"),
-        where("x", ">=", minX_watch),
-        where("x", "<=", maxX_watch)
-      );
-
-      unsubscribePartial = onSnapshot(partialQuery, (snapshot) => {
-        const updatedTiles: Tile[] = [];
-        snapshot.docChanges().forEach((change) => {
-           const tileData = change.doc.data() as Tile;
-           if (tileData.y >= minY_watch && tileData.y <= maxY_watch) {
-              updatedTiles.push({ id: change.doc.id, ...tileData });
-           }
-        });
-        if (updatedTiles.length > 0) {
-          onUpdate(updatedTiles);
-        }
-      }, (error) => {
-        console.error("Partial map update listener error:", error);
-      });
-
     }, (error) => {
-        console.error("User tiles listener error:", error);
+      console.error("Partial map update listener error:", error);
     });
 
-    // Main cleanup function for the useEffect hook
+    // 3. Cleanup function for the useEffect hook
     return () => {
-      unsubscribeUserTiles();
-      if (unsubscribePartial) {
-        unsubscribePartial();
-      }
+      unsubscribe();
     };
 
-  }, [firestore, currentUser, onUpdate]);
+  }, [firestore, currentUser, initialTiles, onUpdate]); // Dependencies ensure this runs only when necessary
 };
 
 
@@ -134,6 +112,7 @@ export default function GameBoard({
   countries,
   problemAttempts,
   wrongAnswers,
+  onFullRefresh
 }: GameBoardProps) {
   const firestore = useFirestore();
   const { user: authUser } = useUser();
@@ -162,7 +141,7 @@ export default function GameBoard({
     setDisplayMapData(prevMap => getMapWithTiles(prevMap, updatedTiles));
   }, []);
 
-  usePartialMapUpdates(currentUser, handlePartialUpdate);
+  usePartialMapUpdates(currentUser, initialLandTiles, handlePartialUpdate);
 
   const currentUserCountry = useMemo(() => countries?.find(c => c.id === currentUser.countryId), [countries, currentUser.countryId]);
   
@@ -559,3 +538,4 @@ export default function GameBoard({
     </div>
   );
 }
+ 
