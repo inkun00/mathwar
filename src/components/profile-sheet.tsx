@@ -81,20 +81,6 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
   const [newCountryName, setNewCountryName] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [isFlagEditorOpen, setFlagEditorOpen] = useState(false);
-  
-  // Temporarily disable queries to prevent permission errors
-  const joinRequestsQuery = useMemoFirebase(() => {
-    if (!firestore || !currentUser?.isCountryOwner || !currentUser.countryId) return null;
-    return query(collection(firestore, "join_requests"), where("targetCountryId", "==", currentUser.countryId), where("status", "==", "pending"));
-  }, [firestore, currentUser]);
-  const { data: joinRequests } = useCollection<JoinRequest>(joinRequestsQuery);
-
-  const allianceRequestsQuery = useMemoFirebase(() => {
-    if (!firestore || !currentUser?.isCountryOwner || !currentUser.countryId) return null;
-    return query(collection(firestore, "alliance_requests"), where("targetCountryId", "==", currentUser.countryId), where("status", "==", "pending"));
-  }, [firestore, currentUser]);
-  const { data: allianceRequests } = useCollection<AllianceRequest>(allianceRequestsQuery);
-
 
   const handleLogout = () => {
     signOut(auth);
@@ -152,7 +138,7 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
     
     const sortedCountries: RankedCountry[] = Object.entries(countryTileCount)
       .map(([id, count]) => {
-        const country = countries.find(co => co.id === id);
+        const country = countries.find(co => co.id === c.id);
         return {
           id,
           name: country?.name || '알 수 없는 국가',
@@ -618,59 +604,6 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
             </Card>
            </div>
           
-           {currentUser.isCountryOwner && joinRequests && allianceRequests && (
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold tracking-tight">국가 관리</h3>
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <UserPlus /> 가입 요청
-                    {joinRequests && joinRequests.length > 0 && <Badge>{joinRequests.length}</Badge>}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  {joinRequests && joinRequests.length > 0 ? (
-                    joinRequests.map(req => (
-                      <div key={req.id} className="flex items-center justify-between p-2 rounded-md bg-muted/50">
-                        <span>{req.requesterNickname}</span>
-                        <div className="flex gap-2">
-                          <Button size="sm" variant="outline" onClick={() => handleJoinRequestResponse(req, 'approve')} disabled={isProcessing}><Check className="w-4 h-4" /></Button>
-                          <Button size="sm" variant="destructive" onClick={() => handleJoinRequestResponse(req, 'reject')} disabled={isProcessing}><X className="w-4 h-4" /></Button>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-sm text-muted-foreground">새로운 가입 요청이 없습니다.</p>
-                  )}
-                </CardContent>
-              </Card>
-              <Card>
-                 <CardHeader>
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <ShieldCheck /> 동맹 요청
-                    {allianceRequests && allianceRequests.length > 0 && <Badge>{allianceRequests.length}</Badge>}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                   {allianceRequests && allianceRequests.length > 0 ? (
-                    allianceRequests.map(req => (
-                      <div key={req.id} className="flex items-center justify-between p-2 rounded-md bg-muted/50">
-                        <span>{req.requestingCountryName}</span>
-                        <div className="flex gap-2">
-                          <Button size="sm" variant="outline" onClick={() => handleAllianceRequestResponse(req, 'approve')} disabled={isProcessing}><Check className="w-4 h-4" /></Button>
-                          <Button size="sm" variant="destructive" onClick={() => handleAllianceRequestResponse(req, 'reject')} disabled={isProcessing}><X className="w-4 h-4" /></Button>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-sm text-muted-foreground">새로운 동맹 요청이 없습니다.</p>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-           )}
-
-
           <div className="space-y-4">
              <h3 className="text-lg font-semibold tracking-tight">정답률 현황</h3>
              <Card>
