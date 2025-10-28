@@ -82,6 +82,7 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
   const [isProcessing, setIsProcessing] = useState(false);
   const [isFlagEditorOpen, setFlagEditorOpen] = useState(false);
   
+  // Temporarily disable queries to prevent permission errors
   const joinRequestsQuery = useMemoFirebase(() => {
     if (!firestore || !currentUser?.isCountryOwner || !currentUser.countryId) return null;
     return query(collection(firestore, "join_requests"), where("targetCountryId", "==", currentUser.countryId), where("status", "==", "pending"));
@@ -617,7 +618,7 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
             </Card>
            </div>
           
-           {currentUser.isCountryOwner && (
+           {currentUser.isCountryOwner && joinRequests && allianceRequests && (
             <div className="space-y-4">
               <h3 className="text-lg font-semibold tracking-tight">국가 관리</h3>
               <Card>
