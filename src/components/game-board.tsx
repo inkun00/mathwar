@@ -6,7 +6,7 @@ import { generateMathProblem, isAdjacent, canConquer as canConquerLogic } from "
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { ZoomIn, ZoomOut } from "lucide-react";
-import { useFirestore, useUser, errorEmitter, FirestorePermissionError, useMemoFirebase, useCollection } from "@/firebase";
+import { useFirestore, useUser, errorEmitter, FirestorePermissionError, useMemoFirebase } from "@/firebase";
 import { doc, setDoc, updateDoc, writeBatch, increment, collection, getDocs, arrayUnion, query, where, onSnapshot } from "firebase/firestore";
 import { addWrongAnswer } from "@/firebase/firestore/data";
 
@@ -570,5 +570,3 @@ export default function GameBoard({
     </div>
   );
 }
-
-    

@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import GameBoard from "@/components/game-board";
 import Login from "@/components/login";
 import SignUpDetails from "@/components/signup-details";
 import { useUser } from "@/firebase/auth/use-user";
-import { useDoc, useFirestore, useMemoFirebase, useCollection } from "@/firebase";
-import { doc, collection, updateDoc, increment, writeBatch } from "firebase/firestore";
+import { useFirestore, useMemoFirebase } from "@/firebase";
+import { doc, collection, updateDoc, increment, writeBatch, getDocs } from "firebase/firestore";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { User, Tile, Country, ProblemAttempt, WrongAnswer } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
@@ -16,54 +16,85 @@ export default function Home() {
   const { user: authUser, isUserLoading: isAuthUserLoading } = useUser();
   const firestore = useFirestore();
   const { toast } = useToast();
-
-  const userDocRef = useMemoFirebase(() => {
-    if (!firestore || !authUser) return null;
-    return doc(firestore, "users", authUser.uid);
-  }, [firestore, authUser]);
   
-  const { data: userProfile, isLoading: isProfileLoading } = useDoc<User>(userDocRef);
-
-  const countriesQuery = useMemoFirebase(() => {
-    if (!firestore || !authUser) return null;
-    return collection(firestore, 'countries');
-  }, [firestore, authUser]);
-
-  const { data: countries, isLoading: areCountriesLoading } = useCollection<Country>(countriesQuery);
+  const [userProfile, setUserProfile] = useState<User | null>(null);
+  const [countries, setCountries] = useState<Country[] | null>(null);
+  const [initialLandTiles, setInitialLandTiles] = useState<Tile[] | null>(null);
+  const [allUsers, setAllUsers] = useState<User[] | null>(null);
+  const [problemAttempts, setProblemAttempts] = useState<ProblemAttempt[] | null>(null);
+  const [wrongAnswers, setWrongAnswers] = useState<WrongAnswer[] | null>(null);
   
-  const landTilesQuery = useMemoFirebase(() => {
-    if (!firestore || !authUser) return null;
-    return collection(firestore, 'land_tiles');
-  }, [firestore, authUser]);
-  
-  const usersQuery = useMemoFirebase(() => {
-    if (!firestore || !authUser) return null;
-    return collection(firestore, 'users');
-  }, [firestore, authUser]);
-  
-  const problemAttemptsQuery = useMemoFirebase(() => {
-    if (!authUser || !firestore) return null;
-    return collection(firestore, 'problem_attempts', authUser.uid, 'attempts');
-  }, [firestore, authUser]);
+  const [isProfileLoading, setIsProfileLoading] = useState(true);
+  const [areCoreDataLoading, setAreCoreDataLoading] = useState(true);
+  const [areUserSpecificDataLoading, setAreUserSpecificDataLoading] = useState(true);
 
-  const wrongAnswersQuery = useMemoFirebase(() => {
-    if (!authUser || !firestore) return null;
-    return collection(firestore, 'users', authUser.uid, 'wrong_answers');
-  }, [firestore, authUser]);
+  // Effect for fetching the user profile specifically
+  useEffect(() => {
+    if (!authUser || !firestore) {
+      if (!isAuthUserLoading) {
+        setIsProfileLoading(false);
+      }
+      return;
+    }
+    
+    setIsProfileLoading(true);
+    const userDocRef = doc(firestore, "users", authUser.uid);
+    getDocs(collection(firestore, "users"))
+        .then(snapshot => {
+            const usersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
+            setAllUsers(usersData);
+            const currentUserProfile = usersData.find(u => u.id === authUser.uid);
+            setUserProfile(currentUserProfile || null);
+        })
+        .catch(console.error)
+        .finally(() => setIsProfileLoading(false));
 
-  const { data: initialLandTiles, isLoading: areLandTilesLoading } = useCollection<Tile>(landTilesQuery);
-  const { data: allUsers, isLoading: areUsersLoading } = useCollection<User>(usersQuery);
-  const { data: problemAttempts, isLoading: areAttemptsLoading } = useCollection<ProblemAttempt>(problemAttemptsQuery);
-  const { data: wrongAnswers, isLoading: areWrongAnswersLoading } = useCollection<WrongAnswer>(wrongAnswersQuery);
+  }, [authUser, firestore, isAuthUserLoading]);
+
+  // Effect for fetching core game data (countries, tiles) once
+  useEffect(() => {
+    if (!firestore) return;
+    
+    setAreCoreDataLoading(true);
+    const fetchCoreData = async () => {
+        try {
+            const countriesSnapshot = await getDocs(collection(firestore, 'countries'));
+            setCountries(countriesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Country)));
+
+            const tilesSnapshot = await getDocs(collection(firestore, 'land_tiles'));
+            setInitialLandTiles(tilesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Tile)));
+        } catch (error) {
+            console.error("Error fetching core game data:", error);
+        } finally {
+            setAreCoreDataLoading(false);
+        }
+    };
+    fetchCoreData();
+  }, [firestore]);
   
-  const isLoading = isAuthUserLoading || 
-                    (authUser && isProfileLoading) ||
-                    (authUser && areCountriesLoading) ||
-                    (authUser && areLandTilesLoading) || 
-                    (authUser && areUsersLoading) ||
-                    (authUser && areAttemptsLoading) ||
-                    (authUser && areWrongAnswersLoading);
+  // Effect for fetching user-specific data (attempts, wrong answers)
+  useEffect(() => {
+    if (!authUser || !firestore) return;
 
+    setAreUserSpecificDataLoading(true);
+    const fetchUserData = async () => {
+        try {
+            const attemptsSnapshot = await getDocs(collection(firestore, 'problem_attempts', authUser.uid, 'attempts'));
+            setProblemAttempts(attemptsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ProblemAttempt)));
+
+            const wrongAnswersSnapshot = await getDocs(collection(firestore, 'users', authUser.uid, 'wrong_answers'));
+            setWrongAnswers(wrongAnswersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as WrongAnswer)));
+
+        } catch (error) {
+            console.error("Error fetching user-specific data:", error);
+        } finally {
+            setAreUserSpecificDataLoading(false);
+        }
+    };
+    fetchUserData();
+  }, [authUser, firestore]);
+
+  const isLoading = isAuthUserLoading || isProfileLoading || areCoreDataLoading || areUserSpecificDataLoading;
 
   useEffect(() => {
     if (userProfile && initialLandTiles && firestore && authUser) {
