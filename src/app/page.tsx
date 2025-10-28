@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import GameBoard from "@/components/game-board";
 import Login from "@/components/login";
 import SignUpDetails from "@/components/signup-details";
 import { useUser } from "@/firebase/auth/use-user";
 import { useDoc, useFirestore, useMemoFirebase, useCollection } from "@/firebase";
-import { doc, collection, updateDoc, increment, writeBatch, getDocs } from "firebase/firestore";
+import { doc, collection, updateDoc, increment, writeBatch } from "firebase/firestore";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { User, Tile, Country, ProblemAttempt, WrongAnswer } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
@@ -24,6 +24,13 @@ export default function Home() {
   
   const { data: userProfile, isLoading: isProfileLoading } = useDoc<User>(userDocRef);
 
+  const countryDocRef = useMemoFirebase(() => {
+    if (!firestore || !userProfile?.countryId) return null;
+    return doc(firestore, 'countries', userProfile.countryId);
+  }, [firestore, userProfile?.countryId]);
+
+  const { data: country, isLoading: isCountryLoading } = useDoc<Country>(countryDocRef);
+
   const landTilesQuery = useMemoFirebase(() => {
     if (!firestore || !authUser) return null;
     return collection(firestore, 'land_tiles');
@@ -32,11 +39,6 @@ export default function Home() {
   const usersQuery = useMemoFirebase(() => {
     if (!firestore || !authUser) return null;
     return collection(firestore, 'users');
-  }, [firestore, authUser]);
-
-  const countriesQuery = useMemoFirebase(() => {
-      if (!firestore || !authUser) return null;
-      return collection(firestore, 'countries');
   }, [firestore, authUser]);
   
   const problemAttemptsQuery = useMemoFirebase(() => {
@@ -51,15 +53,14 @@ export default function Home() {
 
   const { data: initialLandTiles, isLoading: areLandTilesLoading } = useCollection<Tile>(landTilesQuery);
   const { data: allUsers, isLoading: areUsersLoading } = useCollection<User>(usersQuery);
-  const { data: countries, isLoading: areCountriesLoading } = useCollection<Country>(countriesQuery);
   const { data: problemAttempts, isLoading: areAttemptsLoading } = useCollection<ProblemAttempt>(problemAttemptsQuery);
   const { data: wrongAnswers, isLoading: areWrongAnswersLoading } = useCollection<WrongAnswer>(wrongAnswersQuery);
   
   const isLoading = isAuthUserLoading || 
-                    (authUser && isProfileLoading) || 
+                    (authUser && isProfileLoading) ||
+                    (authUser && userProfile && isCountryLoading) ||
                     (authUser && areLandTilesLoading) || 
-                    (authUser && areUsersLoading) || 
-                    (authUser && areCountriesLoading) ||
+                    (authUser && areUsersLoading) ||
                     (authUser && areAttemptsLoading) ||
                     (authUser && areWrongAnswersLoading);
 
@@ -184,6 +185,8 @@ export default function Home() {
   if (authUser && !userProfile) {
     return <SignUpDetails />;
   }
+  
+  const countries = country ? [country] : [];
 
   if (authUser && userProfile && initialLandTiles && allUsers && countries && problemAttempts && wrongAnswers) {
     return (
