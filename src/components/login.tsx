@@ -8,9 +8,8 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Logo } from './icons/logo';
-import { User, Mail, KeyRound } from "lucide-react";
+import { Mail, KeyRound } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
-import { signInAnonymously } from 'firebase/auth';
 
 const LAST_LOGIN_TIMESTAMP_KEY = 'decimalConquestLastLogin';
 const LOGIN_COOLDOWN_MS = 60 * 60 * 1000; // 1 hour
@@ -105,21 +104,6 @@ export default function Login() {
     }
   };
 
-
-  const handleAnonymousLogin = async () => {
-    if (!checkLoginCooldown()) return;
-    try {
-      await signInAnonymously(auth);
-    } catch (error) {
-      console.error("익명 로그인 오류:", error);
-      toast({
-        variant: "destructive",
-        title: "익명 로그인 오류",
-        description: "익명 로그인 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
-      });
-    }
-  };
-
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md text-center shadow-2xl">
@@ -168,17 +152,6 @@ export default function Login() {
               {isSignUp ? '이메일로 회원가입' : '이메일로 로그인'}
             </Button>
           </form>
-
-          <div className="my-4 flex items-center">
-            <div className="flex-grow border-t border-muted-foreground/20"></div>
-            <span className="mx-4 text-xs text-muted-foreground">또는</span>
-            <div className="flex-grow border-t border-muted-foreground/20"></div>
-          </div>
-          
-          <Button variant="secondary" size="lg" className="w-full" onClick={handleAnonymousLogin}>
-            <User className="mr-2 h-5 w-5" />
-            익명으로 게임 시작
-          </Button>
         </CardContent>
         <CardFooter className="flex justify-center">
            <Button variant="link" onClick={() => setIsSignUp(!isSignUp)}>
