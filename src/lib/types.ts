@@ -53,7 +53,7 @@ export interface Tile {
 
 export interface MapAggregate {
     id: string;
-    mapData: string; // Base64 encoded string of bytes
+    mapData: Uint8Array; // This will be received as a Uint8Array from Firestore bytes
     updatedAt: any;
 }
 

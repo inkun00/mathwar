@@ -26,10 +26,14 @@ const createEmptyMap = (): MapData =>
 
 const constructMapFromAggregate = (aggregate: MapAggregate | null): MapData => {
   const emptyMap = createEmptyMap();
-  if (!aggregate || typeof aggregate.mapData !== 'string') return emptyMap;
+  // Firestore bytes type can be received as a Uint8Array.
+  if (!aggregate || !(aggregate.mapData instanceof Uint8Array)) return emptyMap;
 
   try {
-    const decodedString = atob(aggregate.mapData);
+    // The Uint8Array needs to be decoded into a string first.
+    const decoder = new TextDecoder('utf-8');
+    const decodedString = decoder.decode(aggregate.mapData);
+
     const ownerIds: (string | null)[] = [];
     const idByteLength = 32;
 
