@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useAuth, useCollection, useFirestore, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
-import { collection, addDoc, doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, doc, setDoc, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
@@ -16,6 +16,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { cn } from '@/lib/utils';
 import { Check } from 'lucide-react';
 import { moderateText } from '@/ai/flows/moderate-text-flow';
+import { MAP_WIDTH, MAP_HEIGHT } from '@/lib/world-map-shape';
 
 
 export default function SignUpDetails() {
@@ -68,6 +69,7 @@ export default function SignUpDetails() {
         return;
       }
 
+      const batch = writeBatch(firestore);
       let finalCountryId = '';
       let isCountryOwner = false;
 
@@ -94,7 +96,8 @@ export default function SignUpDetails() {
             return;
         }
 
-        const countryRef = await addDoc(collection(firestore, 'countries'), {
+        const countryRef = doc(collection(firestore, 'countries'));
+        batch.set(countryRef, {
           name: newCountryName,
           createdBy: currentUser.uid,
           color: `hsl(${Math.random() * 360}, 60%, 70%)`,
@@ -103,25 +106,25 @@ export default function SignUpDetails() {
         });
         finalCountryId = countryRef.id;
         isCountryOwner = true;
+
+        // --- Add Map Initialization Logic Here ---
+        const mapRef = doc(firestore, 'maps', 'world_1');
+        const initialTileOwners = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(null));
+        const initialWalls = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(false));
+        batch.set(mapRef, {
+            tileOwners: initialTileOwners,
+            walls: initialWalls,
+            lastUpdated: serverTimestamp(),
+        });
+        // -----------------------------------------
+
       } else { // 'existing'
          if (!selectedCountryId) {
             toast({ variant: 'destructive', title: '선택 오류', description: '기존 국가 중 하나를 선택해주세요.' });
             setIsLoading(false);
             return;
         }
-        // Send a join request instead of joining directly
-        await addDoc(collection(firestore, 'join_requests'), {
-          requesterId: currentUser.uid,
-          requesterNickname: nickname,
-          targetCountryId: selectedCountryId,
-          status: 'pending',
-          createdAt: serverTimestamp(),
-        });
-
-        // User profile will be created with a temporary countryId or null
-        // And will be updated upon request approval.
-        // For simplicity, we'll let them "wait" without a country for now.
-        finalCountryId = ''; // Or a placeholder ID for 'unaffiliated'
+        finalCountryId = selectedCountryId;
         isCountryOwner = false;
       }
 
@@ -141,15 +144,22 @@ export default function SignUpDetails() {
         createdAt: new Date().toISOString(),
       };
 
-      await setDoc(userDocRef, userData);
+      batch.set(userDocRef, userData);
+      await batch.commit();
       
-      if (countryOption === 'existing') {
-        toast({ title: '가입 요청 완료!', description: '국가 소유주의 수락을 기다려주세요. 수락 전까지는 소속 국가 없이 게임이 진행됩니다.' });
-      } else {
-        toast({ title: '프로필 생성 완료!', description: '이제 게임을 시작할 수 있습니다.' });
-      }
+      toast({ title: '프로필 생성 완료!', description: '이제 게임을 시작할 수 있습니다.' });
+
     } catch (error: any) {
       console.error('프로필 생성 오류:', error);
+      // Let's create a contextual error for better debugging if it's a permission issue
+      if (error.code === 'permission-denied') {
+         const permissionError = new FirestorePermissionError({
+          path: `users/${currentUser.uid}`,
+          operation: 'create',
+          requestResourceData: {nickname, countryId: selectedCountryId || newCountryName},
+        });
+        errorEmitter.emit('permission-error', permissionError);
+      }
       toast({ variant: 'destructive', title: '프로필 생성 오류', description: error.message || '프로필을 만드는 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.' });
     } finally {
        setIsLoading(false);
