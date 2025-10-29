@@ -167,6 +167,64 @@ export default function Home() {
       }
   }, [firestore, authUser, initialLandTiles, toast]);
 
+  useEffect(() => {
+    if (
+      firestore &&
+      authUser &&
+      userProfile &&
+      initialLandTiles &&
+      userProfile.tokens < 0 &&
+      !sessionStorage.getItem(`token_reset_check_${authUser.uid}`)
+    ) {
+      const tilesToRemoveCount = Math.abs(userProfile.tokens);
+      const userTiles = initialLandTiles.filter(tile => tile.ownerId === authUser.uid);
+
+      if (userTiles.length >= tilesToRemoveCount) {
+        const tilesToConfiscate = userTiles.slice(0, tilesToRemoveCount);
+        const batch = writeBatch(firestore);
+
+        tilesToConfiscate.forEach(tile => {
+          const tileRef = doc(firestore, "land_tiles", tile.id);
+          batch.update(tileRef, { ownerId: null });
+        });
+
+        const userRef = doc(firestore, "users", authUser.uid);
+        batch.update(userRef, { tokens: 0 });
+
+        batch.commit()
+          .then(() => {
+            toast({
+              variant: "destructive",
+              title: "비정상 토큰 상태 수정",
+              description: `부정하게 획득한 영토 ${tilesToConfiscate.length}개가 회수되고 토큰이 0으로 조정되었습니다.`,
+              duration: 7000,
+            });
+            sessionStorage.setItem(`token_reset_check_${authUser.uid}`, 'true');
+            // Force a refresh to reflect changes immediately
+            window.location.reload();
+          })
+          .catch(error => {
+            console.error("비정상 토큰/영토 회수 실패:", error);
+          });
+      } else {
+        // Not enough tiles to confiscate, just reset tokens
+        const userRef = doc(firestore, "users", authUser.uid);
+        const batch = writeBatch(firestore);
+        batch.update(userRef, { tokens: 0 });
+        batch.commit().then(() => {
+             toast({
+              variant: "destructive",
+              title: "비정상 토큰 상태 수정",
+              description: `토큰이 0으로 조정되었습니다.`,
+            });
+             sessionStorage.setItem(`token_reset_check_${authUser.uid}`, 'true');
+             window.location.reload();
+        }).catch(error => console.error("토큰 리셋 실패", error))
+       
+      }
+    }
+  }, [firestore, authUser, userProfile, initialLandTiles, toast]);
+
   if (isAuthUserLoading || isProfileLoading || isGameDataLoading) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
