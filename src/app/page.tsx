@@ -5,11 +5,9 @@ import GameBoard from "@/components/game-board";
 import Login from "@/components/login";
 import SignUpDetails from "@/components/signup-details";
 import { useUser, useFirestore } from "@/firebase";
-import { doc, getDoc, collection, getDocs } from "firebase/firestore";
+import { doc, getDoc, collection, getDocs, query } from "firebase/firestore";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { User, Country, GameMap } from "@/lib/types";
-
-const MAP_DOC_ID = "world_1";
+import type { User, Country, ClientTile } from "@/lib/types";
 
 export default function Home() {
   const { user: authUser, isUserLoading: isAuthUserLoading } = useUser();
@@ -19,7 +17,7 @@ export default function Home() {
   const [userProfile, setUserProfile] = useState<User | null>(null);
   const [countries, setCountries] = useState<Country[]>([]);
   const [allUsers, setAllUsers] = useState<User[]>([]);
-  const [gameMap, setGameMap] = useState<GameMap | null>(null);
+  const [landTiles, setLandTiles] = useState<ClientTile[]>([]);
 
   useEffect(() => {
     if (isAuthUserLoading || !firestore) return;
@@ -30,34 +28,35 @@ export default function Home() {
 
     const fetchData = async () => {
       try {
+        // All queries are prepared here
         const userDocRef = doc(firestore, 'users', authUser.uid);
         const countriesQuery = collection(firestore, "countries");
         const usersQuery = collection(firestore, "users");
-        const mapDocRef = doc(firestore, "maps", MAP_DOC_ID);
+        const landTilesQuery = collection(firestore, "land_tiles");
 
-        const [userDocSnap, countriesSnap, usersSnap, mapDocSnap] = await Promise.all([
+        // Execute all queries in parallel
+        const [userDocSnap, countriesSnap, usersSnap, landTilesSnap] = await Promise.all([
           getDoc(userDocRef),
           getDocs(countriesQuery),
           getDocs(usersQuery),
-          getDoc(mapDocRef),
+          getDocs(landTilesQuery),
         ]);
 
+        // Process user profile
         if (userDocSnap.exists()) {
           setUserProfile({ ...userDocSnap.data(), id: userDocSnap.id } as User);
         } else {
-          setUserProfile(null);
+          setUserProfile(null); // Explicitly set to null if not found
         }
-
+        
+        // Process other collections
         setCountries(countriesSnap.docs.map(doc => ({ ...doc.data(), id: doc.id } as Country)));
         setAllUsers(usersSnap.docs.map(doc => ({ ...doc.data(), id: doc.id } as User)));
-        
-        if (mapDocSnap.exists()) {
-          setGameMap({ ...mapDocSnap.data(), id: mapDocSnap.id } as GameMap);
-        }
+        setLandTiles(landTilesSnap.docs.map(doc => ({ ...doc.data(), id: doc.id } as ClientTile)));
 
       } catch (error) {
         console.error("Error fetching initial data:", error);
-        // Handle error appropriately
+        // Handle error appropriately, e.g., show an error message to the user
       } finally {
         setIsLoading(false);
       }
@@ -77,29 +76,29 @@ export default function Home() {
       </div>
     );
   }
-
+  
   if (!authUser) {
     return <Login />;
   }
 
-  if (authUser && userProfile === null) {
+  if (authUser && !userProfile) {
     return <SignUpDetails />;
   }
   
-  if (userProfile && gameMap) {
+  if (userProfile) {
     return (
       <div className="relative flex h-screen w-full flex-col items-center bg-background p-4 sm:p-6 md:p-8">
         <GameBoard 
           currentUser={userProfile}
           initialCountries={countries}
           initialAllUsers={allUsers}
-          initialGameMap={gameMap}
+          initialLandTiles={landTiles}
         />
       </div>
     );
   }
 
-  // Fallback for any other state, e.g. map not created yet for the first user
+  // Fallback for any other state
   return (
     <div className="flex h-screen w-full items-center justify-center bg-background">
        <div className="flex flex-col items-center gap-4">

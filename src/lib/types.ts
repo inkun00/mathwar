@@ -43,24 +43,14 @@ export interface AllianceRequest {
   createdAt: any; // Firestore ServerTimestamp
 }
 
-// Represents a single tile's data on the client side, derived from the GameMap
+// Represents a single tile's data, either from a direct doc or aggregate
 export interface ClientTile {
+  id?: string; // ID from land_tiles document
   x: number;
   y: number;
   ownerId: string | null;
   hasWall: boolean;
 }
-
-// Represents the single document in the 'maps' collection
-export interface GameMap {
-  id: string; // e.g., 'world_1'
-  // A 2D array representing the map. Each string is a user ID or null.
-  tileOwners: (string | null)[][]; 
-  // A 2D array for walls, to keep it separate from ownership.
-  walls: boolean[][];
-  lastUpdated: any; // Firestore ServerTimestamp
-}
-
 
 export type MapData = ClientTile[][];
 
@@ -136,6 +126,7 @@ export interface WrongAnswer {
 export type InvasionTarget = {
     x: number;
     y: number;
+    id?: string; // The ID of the land_tile document
     originalOwnerId: string | null;
     hasWall?: boolean;
 } | null;

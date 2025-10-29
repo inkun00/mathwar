@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useAuth, useCollection, useFirestore, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
-import { collection, addDoc, doc, setDoc, serverTimestamp, writeBatch } from 'firebase/firestore';
+import { collection, addDoc, doc, setDoc, writeBatch } from 'firebase/firestore';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
@@ -16,8 +16,6 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { cn } from '@/lib/utils';
 import { Check } from 'lucide-react';
 import { moderateText } from '@/ai/flows/moderate-text-flow';
-import { MAP_WIDTH, MAP_HEIGHT } from '@/lib/world-map-shape';
-
 
 export default function SignUpDetails() {
   const auth = useAuth();
@@ -31,7 +29,7 @@ export default function SignUpDetails() {
   const [isLoading, setIsLoading] = useState(false);
   const [open, setOpen] = useState(false)
 
-  const countriesQuery = useMemoFirebase(() => collection(firestore, 'countries'), [firestore]);
+  const countriesQuery = useMemoFirebase(() => firestore ? collection(firestore, 'countries') : null, [firestore]);
   const { data: countries, isLoading: countriesLoading } = useCollection<Country>(countriesQuery);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -106,17 +104,6 @@ export default function SignUpDetails() {
         });
         finalCountryId = countryRef.id;
         isCountryOwner = true;
-
-        // --- Add Map Initialization Logic Here ---
-        const mapRef = doc(firestore, 'maps', 'world_1');
-        const initialTileOwners = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(null));
-        const initialWalls = Array(MAP_HEIGHT).fill(null).map(() => Array(MAP_WIDTH).fill(false));
-        batch.set(mapRef, {
-            tileOwners: initialTileOwners,
-            walls: initialWalls,
-            lastUpdated: serverTimestamp(),
-        });
-        // -----------------------------------------
 
       } else { // 'existing'
          if (!selectedCountryId) {
