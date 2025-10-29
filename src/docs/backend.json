@@ -15,7 +15,8 @@
         "gamePoints": { "type": "number", "description": "Points earned by the user for holding territory." },
         "lastPointDistribution": { "type": "string", "description": "The date (YYYY-MM-DD) when the last points were distributed." },
         "walls": { "type": "number", "description": "The number of wall items the user possesses." },
-        "isCountryOwner": { "type": "boolean", "description": "Whether the user is the owner of their country." }
+        "isCountryOwner": { "type": "boolean", "description": "Whether the user is the owner of their country." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "The timestamp when the user was created." }
       },
       "required": ["id", "email", "nickname"]
     },
@@ -103,7 +104,7 @@
         "required": ["requestingCountryId", "requestingCountryName", "targetCountryId", "status", "createdAt"]
     }
   },
-  "auth": { "providers": ["password", "anonymous"] },
+  "auth": { "providers": ["password"] },
   "firestore": {
     "structure": [
       {

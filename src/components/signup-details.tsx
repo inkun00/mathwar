@@ -138,6 +138,7 @@ export default function SignUpDetails() {
         lastPointDistribution: new Date().toISOString().slice(0, 10),
         conqueredCountries: [],
         isCountryOwner: isCountryOwner,
+        createdAt: new Date().toISOString(),
       };
 
       await setDoc(userDocRef, userData);
