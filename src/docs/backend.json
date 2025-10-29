@@ -35,19 +35,33 @@
       },
       "required": ["id", "name", "createdBy", "color"]
     },
-    "LandTile": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "LandTile",
-      "type": "object",
-      "description": "Represents a single land tile on the game map.",
-      "properties": {
-        "id": { "type": "string", "description": "Unique identifier for the LandTile entity." },
-        "x": { "type": "number", "description": "X-coordinate of the land tile on the map." },
-        "y": { "type": "number", "description": "Y-coordinate of the land tile on the map." },
-        "ownerId": { "type": "string", "description": "Reference to the User who owns this land tile. (Relationship: User 1:N LandTile)" },
-        "hasWall": { "type": "boolean", "description": "Indicates if a defensive wall is built on this tile." }
-      },
-      "required": ["id", "x", "y", "ownerId"]
+    "GameMap": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "title": "GameMap",
+        "type": "object",
+        "description": "A single document storing the entire state of the game map.",
+        "properties": {
+            "tileOwners": {
+                "type": "array",
+                "description": "A 2D array (120x144) where each element is the owner's user ID (string) or null.",
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "type": ["string", "null"]
+                    }
+                }
+            },
+            "walls": {
+                "type": "array",
+                "description": "A 2D array (120x144) indicating if a wall exists on a tile.",
+                "items": {
+                    "type": "array",
+                    "items": { "type": "boolean" }
+                }
+            },
+            "lastUpdated": { "type": "string", "format": "date-time" }
+        },
+        "required": ["tileOwners", "walls"]
     },
     "ProblemAttempt": {
       "$schema": "http://json-schema.org/draft-07/schema#",
@@ -120,8 +134,8 @@
         "definition": { "entityName": "country", "schema": { "$ref": "#/backend/entities/Country" }, "description": "Stores all countries.", "allow": ["list", "get", "create", "update"] }
       },
       {
-        "path": "/land_tiles/{landTileId}",
-        "definition": { "entityName": "landTile", "schema": { "$ref": "#/backend/entities/LandTile" }, "description": "Stores all land tiles.", "allow": ["list", "get", "create", "update"] }
+        "path": "/maps/{mapId}",
+        "definition": { "entityName": "gameMap", "schema": { "$ref": "#/backend/entities/GameMap" }, "description": "Stores the entire game map state in a single document.", "allow": ["get", "update"] }
       },
       {
         "path": "/problem_attempts/{userId}/attempts/{attemptId}",

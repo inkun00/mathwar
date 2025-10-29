@@ -43,21 +43,26 @@ export interface AllianceRequest {
   createdAt: any; // Firestore ServerTimestamp
 }
 
-export interface Tile {
-  id: string;
+// Represents a single tile's data on the client side, derived from the GameMap
+export interface ClientTile {
   x: number;
   y: number;
   ownerId: string | null;
   hasWall: boolean;
 }
 
-export interface MapAggregate {
-    id: string;
-    mapData: Uint8Array; // This will be received as a Uint8Array from Firestore bytes
-    updatedAt: any;
+// Represents the single document in the 'maps' collection
+export interface GameMap {
+  id: string; // e.g., 'world_1'
+  // A 2D array representing the map. Each string is a user ID or null.
+  tileOwners: (string | null)[][]; 
+  // A 2D array for walls, to keep it separate from ownership.
+  walls: boolean[][];
+  lastUpdated: any; // Firestore ServerTimestamp
 }
 
-export type MapData = Tile[][];
+
+export type MapData = ClientTile[][];
 
 export type ProblemType = 'decimal' | 'fraction' | 'conversion' | 'mixed';
 export type ProblemSubType = 

@@ -1,6 +1,6 @@
 
 'use client';
-import type { MapData, User, Tile, Country } from "@/lib/types";
+import type { MapData, User, ClientTile, Country } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { isLand } from "@/lib/world-map-shape";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -13,8 +13,8 @@ interface WorldMapProps {
   users: User[];
   countries: Country[];
   onTileClick: (x: number, y: number) => void;
-  canConquer: (tile: Tile) => boolean;
-  canBuildWall: (tile: Tile) => boolean;
+  canConquer: (tile: ClientTile) => boolean;
+  canBuildWall: (tile: ClientTile) => boolean;
   zoomLevel: number;
 }
 
@@ -26,7 +26,7 @@ const TileComponent = React.memo(({
   isWallBuildable,
   tooltipContent
 }: {
-  tile: Tile;
+  tile: ClientTile;
   ownerColor: string | null;
   onClick: () => void;
   isConquerable: boolean;
@@ -91,7 +91,7 @@ export default function WorldMap({ displayMapData, users, countries, onTileClick
     return null;
   };
 
-  const getTooltipContent = (tile: Tile): React.ReactNode => {
+  const getTooltipContent = (tile: ClientTile): React.ReactNode => {
     if (!isLand(tile.x, tile.y)) return null;
     if (!tile.ownerId) return <p className="text-lg">미개척지</p>;
     const owner = users.find(u => u.id === tile.ownerId);

@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import type { User, Country, Tile, RankedUser, RankedCountry } from '@/lib/types';
+import type { User, Country, ClientTile, RankedUser, RankedCountry } from '@/lib/types';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from './ui/badge';
@@ -12,7 +12,7 @@ import { collection } from 'firebase/firestore';
 interface LeaderboardSheetProps {
   users: User[];
   countries: Country[];
-  landTiles: Tile[];
+  landTiles: ClientTile[];
 }
 
 const RankingTable = ({ data, type }: { data: (RankedUser | RankedCountry)[], type: 'user' | 'country' }) => {

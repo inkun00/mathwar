@@ -3,7 +3,7 @@
 import { Logo } from "@/components/icons/logo";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import type { User, Tile } from "@/lib/types";
+import type { User, ClientTile } from "@/lib/types";
 import { UserCircle, HelpCircle, User as UserIcon, Trophy, Store, Shield, AlertTriangle } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import ProfileSheet from "./profile-sheet";
@@ -22,7 +22,7 @@ interface HeaderProps {
   onSolveProblemClick: () => void;
   countries: Country[];
   problemAttempts: ProblemAttempt[];
-  landTiles: Tile[];
+  landTiles: ClientTile[];
   users: User[];
   wrongAnswers: WrongAnswer[];
   isBuildingWall: boolean;
@@ -67,15 +67,7 @@ export default function Header({
   };
   
   const handleWallBuildClick = () => {
-    if ((currentUser.walls ?? 0) <= 0) {
-       toast({
-        variant: "destructive",
-        title: "성벽 없음",
-        description: "마켓에서 성벽을 먼저 구매해주세요.",
-      });
-    } else {
-      onToggleWallBuilding();
-    }
+    onToggleWallBuilding();
   }
 
   const continents = ["대륙 1", "대륙 2", "대륙 3", "대륙 4", "대륙 5"];

@@ -1,7 +1,7 @@
 'use client';
 import type {
   MathProblem,
-  Tile,
+  ClientTile,
   User,
   ProblemSubType,
   StorableProblem,
@@ -556,7 +556,7 @@ export const isAnswerCorrect = (userAnswers: string[], correctAnswers: string[])
 
 
 // --- Game Logic Functions ---
-export const isAdjacent = (tileX: number, tileY: number, userTiles: Tile[]) => {
+export const isAdjacent = (tileX: number, tileY: number, userTiles: ClientTile[]) => {
   return userTiles.some(
     userTile =>
       (Math.abs(userTile.x - tileX) === 1 && userTile.y === tileY) ||
@@ -565,7 +565,7 @@ export const isAdjacent = (tileX: number, tileY: number, userTiles: Tile[]) => {
 };
 
 
-export const canConquer = (tile: Tile, currentUser: User, allUsers: User[], userCountryTiles: Tile[], landTiles: Tile[]) => {
+export const canConquer = (tile: ClientTile, currentUser: User, allUsers: User[], userCountryTiles: ClientTile[], landTiles: ClientTile[]) => {
     if (!currentUser || (currentUser.tokens ?? 0) <= 0) {
       return false;
     }

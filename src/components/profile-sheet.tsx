@@ -1,7 +1,7 @@
 'use client';
 
 import React from "react";
-import type { User, Country, ProblemAttempt, ProblemSubType, WrongAnswer, StorableProblem, Tile, RankedUser, RankedCountry, JoinRequest, AllianceRequest, MapAggregate } from "@/lib/types";
+import type { User, Country, ProblemAttempt, ProblemSubType, WrongAnswer, StorableProblem, ClientTile, RankedUser, RankedCountry, JoinRequest, AllianceRequest } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useMemo, useState } from "react";
@@ -31,7 +31,7 @@ interface ProfileSheetProps {
   userCountry?: Country;
   problemAttempts: ProblemAttempt[];
   wrongAnswers: WrongAnswer[];
-  landTiles: Tile[];
+  landTiles: ClientTile[];
   users: User[];
   countries: Country[];
 }
@@ -158,7 +158,7 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
     
     const sortedCountries: RankedCountry[] = Object.entries(countryTileCount)
         .map(([id, count]) => {
-            const country = countries.find(co => co.id === id);
+            const country = countries.find(co => co.id === c.id);
             return {
                 id,
                 name: country?.name || '알 수 없는 국가',
