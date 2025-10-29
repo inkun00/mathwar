@@ -5,25 +5,24 @@ import type { Tile, MathProblem, Country, User, ProblemAttempt, InvasionTarget, 
 import { generateMathProblem, isAdjacent, canConquer as canConquerLogic } from "@/lib/game-logic";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { ZoomIn, ZoomOut } from "lucide-react";
-import { useFirestore, useUser, errorEmitter, FirestorePermissionError } from "@/firebase";
-import { doc, setDoc, updateDoc, writeBatch, increment, collection, arrayUnion, query, where, onSnapshot, getDocs } from "firebase/firestore";
+import { ZoomIn, ZoomOut, RefreshCw } from "lucide-react";
+import { useFirestore, useUser, errorEmitter, FirestorePermissionError, useDoc, useMemoFirebase } from "@/firebase";
+import { doc, setDoc, updateDoc, writeBatch, increment, collection, arrayUnion, query, where, onSnapshot } from "firebase/firestore";
 import { addWrongAnswer } from "@/firebase/firestore/data";
 
 import Header from "./header";
 import WorldMap from "./world-map";
 import ProblemModal from "./problem-modal";
 import DemiseScreen from "./demise-screen";
+import { Skeleton } from "./ui/skeleton";
 import { MAP_WIDTH, MAP_HEIGHT } from "@/lib/world-map-shape";
 
 interface GameBoardProps {
-  currentUserProfile: User;
   initialLandTiles: Tile[];
   allUsers: User[];
   countries: Country[];
   problemAttempts: ProblemAttempt[];
   wrongAnswers: WrongAnswer[];
-  onFullRefresh: () => Promise<void>;
 }
 
 const createEmptyMap = (): MapData => 
@@ -43,9 +42,8 @@ const getMapWithTiles = (baseMap: MapData, tilesToUpdate: Tile[]): MapData => {
     return newMap;
 };
 
-// Custom hook for partial map updates
 const usePartialMapUpdates = (
-  currentUser: User | undefined,
+  currentUser: User | null | undefined,
   initialTiles: Tile[],
   onUpdate: (tiles: Tile[]) => void
 ) => {
@@ -59,7 +57,6 @@ const usePartialMapUpdates = (
     const userTiles = initialTiles.filter(t => t.ownerId === currentUser.id);
     if (userTiles.length === 0) return;
 
-    // 1. Calculate boundaries based on initial user tiles
     const BORDER_RADIUS = 5;
     let minX = MAP_WIDTH, maxX = 0, minY = MAP_HEIGHT, maxY = 0;
     userTiles.forEach(tile => {
@@ -74,7 +71,6 @@ const usePartialMapUpdates = (
     const minY_watch = Math.max(0, minY - BORDER_RADIUS);
     const maxY_watch = Math.min(MAP_HEIGHT - 1, maxY + BORDER_RADIUS);
 
-    // 2. Set up a query for the surrounding rectangular area
     const partialQuery = query(
       collection(firestore, "land_tiles"),
       where("x", ">=", minX_watch),
@@ -85,7 +81,6 @@ const usePartialMapUpdates = (
       const updatedTiles: Tile[] = [];
       snapshot.docChanges().forEach((change) => {
          const tileData = change.doc.data() as Tile;
-         // Filter by Y on the client
          if (tileData.y >= minY_watch && tileData.y <= maxY_watch) {
             updatedTiles.push({ id: change.doc.id, ...tileData });
          }
@@ -97,27 +92,30 @@ const usePartialMapUpdates = (
       console.error("Partial map update listener error:", error);
     });
 
-    // 3. Cleanup function for the useEffect hook
     return () => {
       unsubscribe();
     };
 
-  }, [firestore, currentUser, initialTiles, onUpdate]); // Dependencies ensure this runs only when necessary
+  }, [firestore, currentUser, initialTiles, onUpdate]);
 };
 
 
 export default function GameBoard({ 
-  currentUserProfile, 
   initialLandTiles,
   allUsers,
   countries,
   problemAttempts,
   wrongAnswers,
-  onFullRefresh
 }: GameBoardProps) {
   const firestore = useFirestore();
   const { user: authUser } = useUser();
-  const currentUser = currentUserProfile;
+  
+  const userRef = useMemoFirebase(() => {
+      if (!authUser) return null;
+      return doc(firestore, "users", authUser.uid);
+  }, [authUser, firestore]);
+
+  const { data: currentUser, isLoading: isUserLoading } = useDoc<User>(userRef);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentProblem, setCurrentProblem] = useState<MathProblem | null>(null);
@@ -132,7 +130,6 @@ export default function GameBoard({
     getMapWithTiles(createEmptyMap(), initialLandTiles)
   );
   
-  // When initialLandTiles prop changes (e.g., after a full refresh), update the map state
   useEffect(() => {
     setDisplayMapData(getMapWithTiles(createEmptyMap(), initialLandTiles));
   }, [initialLandTiles]);
@@ -144,7 +141,7 @@ export default function GameBoard({
 
   usePartialMapUpdates(currentUser, initialLandTiles, handlePartialUpdate);
 
-  const currentUserCountry = useMemo(() => countries?.find(c => c.id === currentUser.countryId), [countries, currentUser.countryId]);
+  const currentUserCountry = useMemo(() => countries?.find(c => c.id === currentUser?.countryId), [countries, currentUser]);
   
   const userCountryTiles = useMemo(() => {
     if (!currentUser || !allUsers) return [];
@@ -168,8 +165,7 @@ export default function GameBoard({
   };
   
   const handleGainToken = () => {
-    if (!currentUser || !firestore) return;
-    const userRef = doc(firestore, "users", currentUser.id);
+    if (!currentUser || !firestore || !userRef) return;
     const updateData = { tokens: increment(1) };
     updateDoc(userRef, updateData).catch(error => {
         console.error("토큰 획득 실패:", error);
@@ -273,7 +269,7 @@ export default function GameBoard({
 
 
   const handleInvasionSuccess = async () => {
-    if (!currentUser || !firestore || !invasionTarget) return;
+    if (!currentUser || !firestore || !invasionTarget || !userRef) return;
 
     if (invasionTarget.hasWall && invasionWallBreaks < 1) {
       setInvasionWallBreaks(1);
@@ -320,7 +316,7 @@ export default function GameBoard({
   };
 
   const handleTileClick = (x: number, y: number) => {
-    if (!currentUser || !firestore || isProcessingClick || !allUsers) return;
+    if (!currentUser || !firestore || isProcessingClick || !allUsers || !userRef) return;
 
     setIsProcessingClick(true);
     const clickedTile = displayMapData[y][x];
@@ -328,7 +324,6 @@ export default function GameBoard({
     if (isBuildingWall) {
       if (clickedTile.ownerId === currentUser.id && !clickedTile.hasWall) {
         const tileRef = doc(firestore, "land_tiles", clickedTile.id);
-        const userRef = doc(firestore, "users", currentUser.id);
         
         const batch = writeBatch(firestore);
         batch.update(tileRef, { hasWall: true });
@@ -371,7 +366,6 @@ export default function GameBoard({
     }
     
     const originalOwnerId = clickedTile.ownerId;
-    const userRef = doc(firestore, "users", currentUser.id);
 
     if (originalOwnerId === null) {
         const tileId = `${x}-${y}`;
@@ -433,9 +427,8 @@ export default function GameBoard({
   };
   
   const handleRestart = () => {
-    if (!currentUser || !firestore) return;
+    if (!currentUser || !firestore || !userRef) return;
   
-    const userRef = doc(firestore, "users", currentUser.id);
     const updateData = { tokens: 1 };
   
     updateDoc(userRef, updateData)
@@ -493,6 +486,14 @@ export default function GameBoard({
     }
   };
 
+  if (isUserLoading || !currentUser) {
+    return (
+      <div className="flex h-full w-full items-center justify-center bg-background">
+        <Skeleton className="h-[80vh] w-full" />
+      </div>
+    );
+  }
+
   return (
     <div className="flex w-full flex-grow flex-col gap-6">
       <Header 
@@ -505,7 +506,6 @@ export default function GameBoard({
         wrongAnswers={wrongAnswers}
         isBuildingWall={isBuildingWall}
         onToggleWallBuilding={handleToggleWallBuilding}
-        onFullRefresh={onFullRefresh}
       />
       <div className="relative h-full w-full max-w-7xl flex-grow">
         <WorldMap 

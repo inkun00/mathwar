@@ -6,9 +6,9 @@ import Login from "@/components/login";
 import SignUpDetails from "@/components/signup-details";
 import { useUser } from "@/firebase/auth/use-user";
 import { useFirestore } from "@/firebase";
-import { doc, collection, updateDoc, increment, writeBatch, getDocs } from "firebase/firestore";
+import { collection, writeBatch, getDocs } from "firebase/firestore";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { User, Tile, Country, ProblemAttempt, WrongAnswer } from "@/lib/types";
+import type { Tile, Country, User, ProblemAttempt, WrongAnswer } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 import { isLand } from "@/lib/world-map-shape";
 
@@ -17,19 +17,22 @@ export default function Home() {
   const firestore = useFirestore();
   const { toast } = useToast();
   
+  // SignUpDetails를 위한 userProfile 상태는 유지합니다.
   const [userProfile, setUserProfile] = useState<User | null>(null);
+  const [isProfileLoading, setIsProfileLoading] = useState(true);
+
   const [countries, setCountries] = useState<Country[] | null>(null);
   const [initialLandTiles, setInitialLandTiles] = useState<Tile[] | null>(null);
   const [allUsers, setAllUsers] = useState<User[] | null>(null);
   const [problemAttempts, setProblemAttempts] = useState<ProblemAttempt[] | null>(null);
   const [wrongAnswers, setWrongAnswers] = useState<WrongAnswer[] | null>(null);
   
-  const [isLoading, setIsLoading] = useState(true);
+  const [isGameDataLoading, setIsGameDataLoading] = useState(true);
 
   const loadInitialData = useCallback(async () => {
     if (!firestore || !authUser) return;
 
-    setIsLoading(true);
+    setIsGameDataLoading(true);
     try {
       // Fetch all core data in parallel
       const [usersSnapshot, countriesSnapshot, tilesSnapshot, attemptsSnapshot, wrongAnswersSnapshot] = await Promise.all([
@@ -42,7 +45,7 @@ export default function Home() {
 
       const usersData = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
       setAllUsers(usersData);
-
+      
       const currentUserProfile = usersData.find(u => u.id === authUser.uid);
       setUserProfile(currentUserProfile || null);
 
@@ -63,27 +66,6 @@ export default function Home() {
 
       setWrongAnswers(wrongAnswersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as WrongAnswer)));
 
-      // Point distribution logic moved here to ensure it runs after data is loaded
-      if (currentUserProfile) {
-        const today = new Date().toISOString().slice(0, 10);
-        if (currentUserProfile.lastPointDistribution !== today) {
-          const userTilesCount = tilesData.filter(tile => tile.ownerId === authUser.uid).length;
-          const userRef = doc(firestore, "users", authUser.uid);
-          
-          if (userTilesCount > 0) {
-            await updateDoc(userRef, {
-              gamePoints: increment(userTilesCount),
-              lastPointDistribution: today,
-            });
-          } else {
-              await updateDoc(userRef, {
-                lastPointDistribution: today,
-              });
-          }
-        }
-      }
-
-
     } catch (error) {
       console.error("Error loading initial game data:", error);
       toast({
@@ -92,21 +74,20 @@ export default function Home() {
         description: "게임 데이터를 불러오는 데 실패했습니다. 페이지를 새로고침해주세요.",
       });
     } finally {
-      setIsLoading(false);
+      setIsGameDataLoading(false);
+      setIsProfileLoading(false);
     }
   }, [firestore, authUser, toast]);
 
-  // Load initial data only once when the user is authenticated.
   useEffect(() => {
     if (authUser && firestore) {
       loadInitialData();
     } else if (!isAuthUserLoading) {
-      // If auth is not loading and there's no user, stop loading.
-      setIsLoading(false);
+      setIsGameDataLoading(false);
+      setIsProfileLoading(false);
     }
   }, [authUser, firestore, isAuthUserLoading, loadInitialData]);
   
-  // This effect remains for the special territory check
   useEffect(() => {
       if (
           firestore && 
@@ -138,6 +119,7 @@ export default function Home() {
                           duration: 5000,
                       });
                       sessionStorage.setItem(`territory_check_special_${authUser.uid}`, 'true');
+                      // We might want to trigger a refresh here.
                   })
                   .catch(error => {
                       console.error("영토 회수 실패(특별):", error);
@@ -148,7 +130,6 @@ export default function Home() {
       }
   }, [firestore, authUser, initialLandTiles, userProfile, toast]);
 
-  // This effect remains for the water tile check
   useEffect(() => {
       if (
           firestore &&
@@ -186,7 +167,7 @@ export default function Home() {
       }
   }, [firestore, authUser, initialLandTiles, toast]);
 
-  if (isLoading) {
+  if (isAuthUserLoading || isProfileLoading || isGameDataLoading) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
@@ -209,21 +190,18 @@ export default function Home() {
     return (
       <div className="relative flex h-screen w-full flex-col items-center bg-background p-4 sm:p-6 md:p-8">
         <GameBoard
-            currentUserProfile={userProfile}
             initialLandTiles={initialLandTiles}
             allUsers={allUsers}
             countries={countries}
             problemAttempts={problemAttempts}
             wrongAnswers={wrongAnswers}
-            onFullRefresh={loadInitialData}
         />
       </div>
     );
   }
 
   // Fallback for when data is not fully loaded but loading is false
-  // This can happen if the user profile doesn't exist yet after login.
-  if (authUser && !isLoading) {
+  if (authUser && !isGameDataLoading) {
       return <SignUpDetails />;
   }
 

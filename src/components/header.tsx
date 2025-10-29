@@ -11,7 +11,7 @@ import LeaderboardSheet from "./leaderboard-sheet";
 import MarketSheet from "./market-sheet";
 import type { Country, ProblemAttempt, WrongAnswer } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
-import { useMemo, useState, useEffect, useCallback } from "react";
+import { useMemo, useState } from "react";
 import { Badge } from "./ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 import { cn } from "@/lib/utils";
@@ -26,7 +26,6 @@ interface HeaderProps {
   wrongAnswers: WrongAnswer[];
   isBuildingWall: boolean;
   onToggleWallBuilding: () => void;
-  onFullRefresh: () => Promise<void>;
 }
 
 export default function Header({ 
@@ -39,38 +38,9 @@ export default function Header({
   wrongAnswers,
   isBuildingWall,
   onToggleWallBuilding,
-  onFullRefresh,
 }: HeaderProps) {
   const userCountry = countries.find(c => c.id === currentUser.countryId);
   const { toast } = useToast();
-  const [cooldownTime, setCooldownTime] = useState(0);
-  const [isRefreshDisabled, setIsRefreshDisabled] = useState(false);
-
-  const calculateRemainingCooldown = useCallback(() => {
-    const lastRefresh = localStorage.getItem('lastFullRefresh');
-    if (lastRefresh) {
-      const timePassed = Date.now() - parseInt(lastRefresh, 10);
-      const COOLDOWN_MS = 10 * 60 * 1000;
-      const remaining = COOLDOWN_MS - timePassed;
-      if (remaining > 0) {
-        setCooldownTime(remaining);
-        setIsRefreshDisabled(true);
-        return remaining;
-      }
-    }
-    setCooldownTime(0);
-    setIsRefreshDisabled(false);
-    return 0;
-  }, []);
-
-  useEffect(() => {
-    const remaining = calculateRemainingCooldown();
-    if (remaining > 0) {
-      const interval = setInterval(calculateRemainingCooldown, 1000);
-      return () => clearInterval(interval);
-    }
-  }, [calculateRemainingCooldown]);
-
 
   const remainingProblems = useMemo(() => {
     const twentyFourHoursAgo = Date.now() - 24 * 60 * 60 * 1000;
@@ -106,32 +76,6 @@ export default function Header({
       onToggleWallBuilding();
     }
   }
-
-  const handleFullRefreshClick = () => {
-    if (calculateRemainingCooldown() > 0) {
-      toast({
-        variant: "destructive",
-        title: "새로고침 대기 중",
-        description: `새로고침은 10분에 한 번만 가능합니다.`,
-      });
-      return;
-    }
-
-    onFullRefresh().then(() => {
-        localStorage.setItem('lastFullRefresh', Date.now().toString());
-        calculateRemainingCooldown();
-        toast({
-            title: "지도 새로고침 완료",
-            description: "전체 지도 데이터를 최신 상태로 업데이트했습니다.",
-        });
-    });
-  };
-
-  const formatTime = (ms: number) => {
-    const minutes = Math.floor(ms / 60000);
-    const seconds = ((ms % 60000) / 1000).toFixed(0);
-    return `${minutes}:${parseInt(seconds) < 10 ? '0' : ''}${seconds}`;
-  };
 
   const continents = ["대륙 1", "대륙 2", "대륙 3", "대륙 4", "대륙 5"];
 
