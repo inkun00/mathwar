@@ -20,17 +20,18 @@ import { MAP_WIDTH, MAP_HEIGHT } from "@/lib/world-map-shape";
 const createEmptyMap = (): MapData => 
   Array.from({ length: MAP_HEIGHT }, (_, y) =>
     Array.from({ length: MAP_WIDTH }, (__, x) => ({
-      id: `${x}-${y}`, x, y, ownerId: null,
+      id: `${x}-${y}`, x, y, ownerId: null, hasWall: false,
     }))
   );
 
 const constructMapFromAggregate = (aggregate: MapAggregate | null): MapData => {
   const emptyMap = createEmptyMap();
-  // Firestore bytes type can be received as a Uint8Array.
-  if (!aggregate || !(aggregate.mapData instanceof Uint8Array)) return emptyMap;
+  // The mapData field from Firestore bytes is received as a Uint8Array.
+  if (!aggregate || !aggregate.mapData || !(aggregate.mapData instanceof Uint8Array)) {
+    return emptyMap;
+  }
 
   try {
-    // The Uint8Array needs to be decoded into a string first.
     const decoder = new TextDecoder('utf-8');
     const decodedString = decoder.decode(aggregate.mapData);
 
@@ -45,10 +46,11 @@ const constructMapFromAggregate = (aggregate: MapAggregate | null): MapData => {
       ownerIds.push(ownerId.length > 0 ? ownerId : null);
     }
     
-    return emptyMap.map((row, y) => 
-      row.map((tile, x) => {
-        const index = y * MAP_WIDTH + x;
-        const ownerId = ownerIds[index] || null;
+    let tileIndex = 0;
+    return emptyMap.map((row) => 
+      row.map((tile) => {
+        const ownerId = ownerIds[tileIndex] || null;
+        tileIndex++;
         return { ...tile, ownerId };
       })
     );
@@ -74,8 +76,8 @@ export default function GameBoard() {
   const usersQuery = useMemoFirebase(() => firestore ? collection(firestore, "users") : null, [firestore]);
   const { data: allUsers, isLoading: isAllUsersLoading } = useCollection<User>(usersQuery);
 
-  const mapAggregateQuery = useMemoFirebase(() => firestore ? query(collection(firestore, "map_aggregates"), where("id", "==", "latest")) : null, [firestore]);
-  const { data: mapAggregate, isLoading: isMapLoading } = useCollection<MapAggregate>(mapAggregateQuery);
+  const mapAggregateQuery = useMemoFirebase(() => firestore ? collection(firestore, "map_aggregates") : null, [firestore]);
+  const { data: mapAggregateResult, isLoading: isMapLoading } = useCollection<MapAggregate>(mapAggregateQuery);
 
   const problemAttemptsQuery = useMemoFirebase(() => authUser && firestore ? collection(firestore, 'problem_attempts', authUser.uid, 'attempts') : null, [authUser, firestore]);
   const { data: problemAttempts } = useCollection<ProblemAttempt>(problemAttemptsQuery);
@@ -93,7 +95,7 @@ export default function GameBoard() {
   const [isBuildingWall, setIsBuildingWall] = useState(false);
 
   // --- Memoized Derived State ---
-  const displayMapData = useMemo(() => constructMapFromAggregate(mapAggregate?.[0] ?? null), [mapAggregate]);
+  const displayMapData = useMemo(() => constructMapFromAggregate(mapAggregateResult?.[0] ?? null), [mapAggregateResult]);
 
   const currentUserCountry = useMemo(() => countries?.find(c => c.id === currentUser?.countryId), [countries, currentUser]);
   
@@ -105,10 +107,10 @@ export default function GameBoard() {
   }, [displayMapData, allUsers, currentUser]);
   
   const isDemise = useMemo(() => {
-    if (!currentUser || isMapLoading || !displayMapData || displayMapData.length === 0) return false;
+    if (isUserLoading || isMapLoading || !currentUser || !displayMapData || displayMapData.length === 0) return false;
     const hasLand = displayMapData.flat().some(tile => tile.ownerId === currentUser.id);
     return !hasLand && (currentUser.tokens ?? 0) <= 0;
-  }, [displayMapData, currentUser, isMapLoading]);
+  }, [displayMapData, currentUser, isUserLoading, isMapLoading]);
 
   // --- Event Handlers & Logic ---
   const handleSolveProblemForToken = () => {
@@ -265,7 +267,7 @@ export default function GameBoard() {
   };
 
   const handleTileClick = (x: number, y: number) => {
-    if (!currentUser || !firestore || isProcessingClick || !allUsers || !userRef) return;
+    if (!currentUser || !firestore || isProcessingClick || !allUsers || !userRef || !displayMapData) return;
 
     setIsProcessingClick(true);
     const clickedTile = displayMapData[y][x];
@@ -394,7 +396,7 @@ export default function GameBoard() {
   }
 
   const canConquer = (tile: Tile) => {
-    if (!currentUser || !allUsers || (currentUser.tokens ?? 0) <= 0 || isProcessingClick || isBuildingWall) {
+    if (!currentUser || !allUsers || (currentUser.tokens ?? 0) <= 0 || isProcessingClick || isBuildingWall || !displayMapData) {
       return false;
     }
     return canConquerLogic(tile, currentUser, allUsers, userCountryTiles, displayMapData.flat());
@@ -430,7 +432,7 @@ export default function GameBoard() {
   
   const isLoading = isUserLoading || isCountriesLoading || isAllUsersLoading || isMapLoading;
   
-  if (isLoading || !currentUser || !countries || !allUsers || !problemAttempts || !wrongAnswers) {
+  if (isLoading || !currentUser || !countries || !allUsers || !problemAttempts || !wrongAnswers || !displayMapData) {
     return (
       <div className="flex h-full w-full items-center justify-center bg-background">
         <Skeleton className="h-[80vh] w-[90vw] max-w-7xl" />

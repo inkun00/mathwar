@@ -48,7 +48,7 @@ export interface Tile {
   x: number;
   y: number;
   ownerId: string | null;
-  hasWall?: boolean; // True if the tile has a wall
+  hasWall: boolean;
 }
 
 export interface MapAggregate {
