@@ -47,7 +47,9 @@ export default function Home() {
       setUserProfile(currentUserProfile || null);
 
       setCountries(countriesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Country)));
-      setInitialLandTiles(tilesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Tile)));
+      
+      const tilesData = tilesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Tile));
+      setInitialLandTiles(tilesData);
 
       const attemptsData = attemptsSnapshot.docs.map(doc => {
           const data = doc.data();
@@ -60,6 +62,27 @@ export default function Home() {
       setProblemAttempts(attemptsData);
 
       setWrongAnswers(wrongAnswersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as WrongAnswer)));
+
+      // Point distribution logic moved here to ensure it runs after data is loaded
+      if (currentUserProfile) {
+        const today = new Date().toISOString().slice(0, 10);
+        if (currentUserProfile.lastPointDistribution !== today) {
+          const userTilesCount = tilesData.filter(tile => tile.ownerId === authUser.uid).length;
+          const userRef = doc(firestore, "users", authUser.uid);
+          
+          if (userTilesCount > 0) {
+            await updateDoc(userRef, {
+              gamePoints: increment(userTilesCount),
+              lastPointDistribution: today,
+            });
+          } else {
+              await updateDoc(userRef, {
+                lastPointDistribution: today,
+              });
+          }
+        }
+      }
+
 
     } catch (error) {
       console.error("Error loading initial game data:", error);
@@ -83,30 +106,6 @@ export default function Home() {
     }
   }, [authUser, firestore, isAuthUserLoading, loadInitialData]);
   
-  // This effect remains to handle point distribution logic
-  useEffect(() => {
-    if (userProfile && initialLandTiles && firestore && authUser) {
-      const today = new Date().toISOString().slice(0, 10);
-      const lastDistribution = userProfile.lastPointDistribution;
-
-      if (lastDistribution !== today) {
-        const userTilesCount = initialLandTiles.filter(tile => tile.ownerId === authUser.uid).length;
-        const userRef = doc(firestore, "users", authUser.uid);
-        
-        if (userTilesCount > 0) {
-          updateDoc(userRef, {
-            gamePoints: increment(userTilesCount),
-            lastPointDistribution: today,
-          }).catch(console.error);
-        } else if (!lastDistribution || lastDistribution !== today) {
-            updateDoc(userRef, {
-              lastPointDistribution: today,
-            }).catch(console.error);
-        }
-      }
-    }
-  }, [userProfile, initialLandTiles, firestore, authUser]);
-
   // This effect remains for the special territory check
   useEffect(() => {
       if (
@@ -223,8 +222,9 @@ export default function Home() {
   }
 
   // Fallback for when data is not fully loaded but loading is false
+  // This can happen if the user profile doesn't exist yet after login.
   if (authUser && !isLoading) {
-      return <SignUpDetails />; // Or a specific error/retry component
+      return <SignUpDetails />;
   }
 
   return <Login />;
