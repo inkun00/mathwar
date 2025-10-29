@@ -7,7 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { ZoomIn, ZoomOut } from "lucide-react";
 import { useFirestore, useUser, errorEmitter, FirestorePermissionError } from "@/firebase";
-import { doc, setDoc, updateDoc, writeBatch, increment, collection, arrayUnion, query, where, onSnapshot } from "firebase/firestore";
+import { doc, setDoc, updateDoc, writeBatch, increment, collection, arrayUnion, query, where, onSnapshot, getDocs } from "firebase/firestore";
 import { addWrongAnswer } from "@/firebase/firestore/data";
 
 import Header from "./header";
@@ -78,16 +78,17 @@ const usePartialMapUpdates = (
     const partialQuery = query(
       collection(firestore, "land_tiles"),
       where("x", ">=", minX_watch),
-      where("x", "<=", maxX_watch),
-      where("y", ">=", minY_watch),
-      where("y", "<=", maxY_watch)
+      where("x", "<=", maxX_watch)
     );
 
     const unsubscribe = onSnapshot(partialQuery, (snapshot) => {
       const updatedTiles: Tile[] = [];
       snapshot.docChanges().forEach((change) => {
          const tileData = change.doc.data() as Tile;
-         updatedTiles.push({ id: change.doc.id, ...tileData });
+         // Filter by Y on the client
+         if (tileData.y >= minY_watch && tileData.y <= maxY_watch) {
+            updatedTiles.push({ id: change.doc.id, ...tileData });
+         }
       });
       if (updatedTiles.length > 0) {
         onUpdate(updatedTiles);
@@ -185,8 +186,7 @@ export default function GameBoard({
     if (!firestore || !currentUser || !allUsers) return;
 
     try {
-        const currentLandTiles = currentMapData.flat();
-        const ownedTiles = currentLandTiles.filter(t => t.ownerId === originalOwnerId);
+        const ownedTiles = currentMapData.flat().filter(t => t.ownerId === originalOwnerId);
 
         if (ownedTiles.length === 0) {
           if (conquerorId) {
@@ -505,6 +505,7 @@ export default function GameBoard({
         wrongAnswers={wrongAnswers}
         isBuildingWall={isBuildingWall}
         onToggleWallBuilding={handleToggleWallBuilding}
+        onFullRefresh={onFullRefresh}
       />
       <div className="relative h-full w-full max-w-7xl flex-grow">
         <WorldMap 
