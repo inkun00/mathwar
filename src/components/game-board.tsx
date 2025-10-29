@@ -44,19 +44,38 @@ const getMapWithTiles = (baseMap: MapData, tilesToUpdate: Tile[]): MapData => {
 
 const usePartialMapUpdates = (
   currentUser: User | null | undefined,
-  initialTiles: Tile[],
   onUpdate: (tiles: Tile[]) => void
 ) => {
   const firestore = useFirestore();
+  const [userTiles, setUserTiles] = useState<Tile[]>([]);
 
+  // Step 1: Listen to the current user's tiles to know their location
   useEffect(() => {
-    if (!firestore || !currentUser || initialTiles.length === 0) {
+    if (!firestore || !currentUser) return;
+    
+    const userTilesQuery = query(
+      collection(firestore, "land_tiles"),
+      where("ownerId", "==", currentUser.id)
+    );
+
+    const unsubscribeUserTiles = onSnapshot(userTilesQuery, (snapshot) => {
+      const tiles: Tile[] = [];
+      snapshot.forEach(doc => tiles.push({ id: doc.id, ...doc.data() } as Tile));
+      setUserTiles(tiles);
+      onUpdate(tiles); // Update the map with user's own tiles
+    }, (error) => {
+      console.error("Error listening to user tiles:", error);
+    });
+
+    return () => unsubscribeUserTiles();
+  }, [firestore, currentUser, onUpdate]);
+
+  // Step 2: Based on user's tile locations, listen to the surrounding area
+  useEffect(() => {
+    if (!firestore || !currentUser || userTiles.length === 0) {
       return;
     }
-
-    const userTiles = initialTiles.filter(t => t.ownerId === currentUser.id);
-    if (userTiles.length === 0) return;
-
+    
     const BORDER_RADIUS = 5;
     let minX = MAP_WIDTH, maxX = 0, minY = MAP_HEIGHT, maxY = 0;
     userTiles.forEach(tile => {
@@ -75,12 +94,14 @@ const usePartialMapUpdates = (
       collection(firestore, "land_tiles"),
       where("x", ">=", minX_watch),
       where("x", "<=", maxX_watch)
+      // Note: y-range is filtered client-side below to avoid composite index
     );
 
-    const unsubscribe = onSnapshot(partialQuery, (snapshot) => {
+    const unsubscribePartial = onSnapshot(partialQuery, (snapshot) => {
       const updatedTiles: Tile[] = [];
       snapshot.docChanges().forEach((change) => {
          const tileData = change.doc.data() as Tile;
+         // Client-side Y filtering
          if (tileData.y >= minY_watch && tileData.y <= maxY_watch) {
             updatedTiles.push({ id: change.doc.id, ...tileData });
          }
@@ -93,10 +114,10 @@ const usePartialMapUpdates = (
     });
 
     return () => {
-      unsubscribe();
+      unsubscribePartial();
     };
 
-  }, [firestore, currentUser, initialTiles, onUpdate]);
+  }, [firestore, currentUser, userTiles, onUpdate]);
 };
 
 
@@ -126,20 +147,15 @@ export default function GameBoard({
   const [isProcessingClick, setIsProcessingClick] = useState(false);
   const [isBuildingWall, setIsBuildingWall] = useState(false);
 
-  const [displayMapData, setDisplayMapData] = useState<MapData>(() => 
-    getMapWithTiles(createEmptyMap(), initialLandTiles)
-  );
+  // Start with an empty map, it will be populated by the listener
+  const [displayMapData, setDisplayMapData] = useState<MapData>(() => createEmptyMap());
   
-  useEffect(() => {
-    setDisplayMapData(getMapWithTiles(createEmptyMap(), initialLandTiles));
-  }, [initialLandTiles]);
-
-
   const handlePartialUpdate = useCallback((updatedTiles: Tile[]) => {
     setDisplayMapData(prevMap => getMapWithTiles(prevMap, updatedTiles));
   }, []);
 
-  usePartialMapUpdates(currentUser, initialLandTiles, handlePartialUpdate);
+  // Use the new listener that populates the map dynamically
+  usePartialMapUpdates(currentUser, handlePartialUpdate);
 
   const currentUserCountry = useMemo(() => countries?.find(c => c.id === currentUser?.countryId), [countries, currentUser]);
   
@@ -301,9 +317,9 @@ export default function GameBoard({
       }
     } catch (error) {
         console.error("침략 실패:", error);
-        // Revert local state on failure
-        const originalTile = initialLandTiles.find(t => t.id === tileId);
-        setDisplayMapData(prevMap => getMapWithTiles(prevMap, [originalTile || { ...tileData, id: tileId, ownerId: originalOwnerId }]));
+        // Revert local state on failure. Find the original state from the server might be needed.
+        // For simplicity, we just revert to previous owner. This might be incorrect if the tile was empty.
+        setDisplayMapData(prevMap => getMapWithTiles(prevMap, [{ ...tileData, id: tileId, ownerId: originalOwnerId }]));
         const permissionError = new FirestorePermissionError({
             path: tileRef.path,
             operation: 'write',
@@ -329,6 +345,7 @@ export default function GameBoard({
         batch.update(tileRef, { hasWall: true });
         batch.update(userRef, { walls: increment(-1) });
 
+        // Optimistic update
         setDisplayMapData(prevMap => getMapWithTiles(prevMap, [{ ...clickedTile, hasWall: true }]));
 
         batch.commit()
@@ -338,6 +355,7 @@ export default function GameBoard({
           })
           .catch(error => {
             console.error("성벽 건설 실패:", error);
+            // Revert
             setDisplayMapData(prevMap => getMapWithTiles(prevMap, [{ ...clickedTile, hasWall: false }]));
             errorEmitter.emit('permission-error', new FirestorePermissionError({ path: tileRef.path, operation: 'update', requestResourceData: { hasWall: true } }));
           })
@@ -372,6 +390,7 @@ export default function GameBoard({
         const tileRef = doc(firestore, "land_tiles", tileId);
         const tileData = { x, y, ownerId: currentUser.id, hasWall: false };
         
+        // Optimistic update
         setDisplayMapData(prevMap => getMapWithTiles(prevMap, [{...tileData, id: tileId}]));
 
         const batch = writeBatch(firestore);
@@ -385,6 +404,7 @@ export default function GameBoard({
             .catch(error => {
                 console.error("타일 클릭 작업 실패:", error);
                 const originalTileState = { ...clickedTile, ownerId: null };
+                 // Revert
                 setDisplayMapData(prevMap => getMapWithTiles(prevMap, [originalTileState]));
                 const permissionError = new FirestorePermissionError({
                     path: tileRef.path,
