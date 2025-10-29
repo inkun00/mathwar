@@ -60,7 +60,11 @@ export default function GameBoard({
   const countriesQuery = useMemoFirebase(() => firestore ? collection(firestore, 'countries') : null, [firestore]);
   const landTilesQuery = useMemoFirebase(() => firestore ? collection(firestore, 'land_tiles') : null, [firestore]);
   const wrongAnswersQuery = useMemoFirebase(() => authUser ? collection(firestore, 'users', authUser.uid, 'wrong_answers') : null, [authUser, firestore]);
-  const attemptsQuery = useMemoFirebase(() => authUser ? collection(firestore, 'problem_attempts', authUser.uid, 'attempts') : null, [authUser, firestore]);
+  
+  const attemptsQuery = useMemoFirebase(() => {
+    if (!authUser || !firestore) return null;
+    return collection(firestore, 'problem_attempts', authUser.uid, 'attempts');
+  }, [authUser, firestore]);
 
   const { data: liveAllUsers, isLoading: usersLoading } = useCollection<User>(usersQuery);
   const { data: liveCountries, isLoading: countriesLoading } = useCollection<Country>(countriesQuery);
@@ -143,8 +147,8 @@ export default function GameBoard({
 
         toast({
           variant: "destructive",
-          title: "무리한 확장!",
-          description: `토큰 부족으로 영토 ${tilesToRemoveCount}개를 잃었습니다.`,
+          title: "무리한 확장 페널티",
+          description: `문제를 풀지 않고 확장한 영토 ${tilesToRemoveCount}개가 회수되었습니다.`,
         });
 
       } catch (error) {
