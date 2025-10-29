@@ -1,11 +1,11 @@
 'use client';
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import GameBoard from "@/components/game-board";
 import Login from "@/components/login";
 import SignUpDetails from "@/components/signup-details";
-import { useUser, useFirestore, useDoc, useMemoFirebase, useCollection } from "@/firebase";
-import { doc, collection } from "firebase/firestore";
+import { useUser, useFirestore } from "@/firebase";
+import { doc, getDoc, collection, getDocs } from "firebase/firestore";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { User, Country, GameMap } from "@/lib/types";
 
@@ -15,24 +15,59 @@ export default function Home() {
   const { user: authUser, isUserLoading: isAuthUserLoading } = useUser();
   const firestore = useFirestore();
 
-  // --- All core data is now fetched at the top level ---
-  const userDocRef = useMemoFirebase(() => authUser ? doc(firestore, 'users', authUser.uid) : null, [authUser, firestore]);
-  const { data: userProfile, isLoading: isUserProfileLoading } = useDoc<User>(userDocRef);
+  const [isLoading, setIsLoading] = useState(true);
+  const [userProfile, setUserProfile] = useState<User | null>(null);
+  const [countries, setCountries] = useState<Country[]>([]);
+  const [allUsers, setAllUsers] = useState<User[]>([]);
+  const [gameMap, setGameMap] = useState<GameMap | null>(null);
 
-  const countriesQuery = useMemoFirebase(() => firestore ? collection(firestore, "countries") : null, [firestore]);
-  const { data: countries, isLoading: isCountriesLoading } = useCollection<Country>(countriesQuery);
-  
-  const usersQuery = useMemoFirebase(() => firestore ? collection(firestore, "users") : null, [firestore]);
-  const { data: allUsers, isLoading: isAllUsersLoading } = useCollection<User>(usersQuery);
+  useEffect(() => {
+    if (isAuthUserLoading || !firestore) return;
+    if (!authUser) {
+      setIsLoading(false);
+      return;
+    }
 
-  const mapDocRef = useMemoFirebase(() => firestore ? doc(firestore, "maps", MAP_DOC_ID) : null, [firestore]);
-  const { data: gameMap, isLoading: isMapLoading } = useDoc<GameMap>(mapDocRef);
-  
-  // Overall loading state: true if auth is loading OR if any of the dependent data is still loading
-  const isLoading = isAuthUserLoading || (authUser && (isUserProfileLoading || isCountriesLoading || isAllUsersLoading || isMapLoading));
+    const fetchData = async () => {
+      try {
+        const userDocRef = doc(firestore, 'users', authUser.uid);
+        const countriesQuery = collection(firestore, "countries");
+        const usersQuery = collection(firestore, "users");
+        const mapDocRef = doc(firestore, "maps", MAP_DOC_ID);
 
-  // Base loading skeleton for initial auth check
-  if (isAuthUserLoading) {
+        const [userDocSnap, countriesSnap, usersSnap, mapDocSnap] = await Promise.all([
+          getDoc(userDocRef),
+          getDocs(countriesQuery),
+          getDocs(usersQuery),
+          getDoc(mapDocRef),
+        ]);
+
+        if (userDocSnap.exists()) {
+          setUserProfile({ ...userDocSnap.data(), id: userDocSnap.id } as User);
+        } else {
+          setUserProfile(null);
+        }
+
+        setCountries(countriesSnap.docs.map(doc => ({ ...doc.data(), id: doc.id } as Country)));
+        setAllUsers(usersSnap.docs.map(doc => ({ ...doc.data(), id: doc.id } as User)));
+        
+        if (mapDocSnap.exists()) {
+          setGameMap({ ...mapDocSnap.data(), id: mapDocSnap.id } as GameMap);
+        }
+
+      } catch (error) {
+        console.error("Error fetching initial data:", error);
+        // Handle error appropriately
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchData();
+
+  }, [authUser, isAuthUserLoading, firestore]);
+
+  if (isLoading || isAuthUserLoading) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
@@ -43,30 +78,15 @@ export default function Home() {
     );
   }
 
-  // User is not authenticated, show login page.
   if (!authUser) {
     return <Login />;
   }
 
-  // User is authenticated, but we are waiting for their profile to load (or determine non-existence)
-  if (isLoading && authUser) {
-      return (
-        <div className="flex h-screen w-full items-center justify-center bg-background">
-           <div className="flex flex-col items-center gap-4">
-              <Skeleton className="h-16 w-64" />
-              <Skeleton className="h-96 w-[80vw] max-w-4xl" />
-            </div>
-        </div>
-      );
-  }
-
-  // If the user is authenticated but has no profile, show the sign-up details form.
   if (authUser && userProfile === null) {
     return <SignUpDetails />;
   }
   
-  // If the user profile and all other essential data exists, render the game board.
-  if (userProfile && countries && allUsers && gameMap) {
+  if (userProfile && gameMap) {
     return (
       <div className="relative flex h-screen w-full flex-col items-center bg-background p-4 sm:p-6 md:p-8">
         <GameBoard 
@@ -79,12 +99,12 @@ export default function Home() {
     );
   }
 
-  // Fallback loading state for when user is authenticated and profile exists, but other data is still loading
+  // Fallback for any other state, e.g. map not created yet for the first user
   return (
     <div className="flex h-screen w-full items-center justify-center bg-background">
        <div className="flex flex-col items-center gap-4">
-          <Skeleton className="h-16 w-64" />
-          <Skeleton className="h-96 w-[80vw] max-w-4xl" />
+          <h2 className="text-xl font-semibold">데이터를 준비하는 중입니다...</h2>
+          <p className="text-muted-foreground">잠시 후 새로고침 해주세요.</p>
         </div>
     </div>
   );
