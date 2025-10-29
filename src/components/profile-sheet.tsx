@@ -158,7 +158,7 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
     
     const sortedCountries: RankedCountry[] = Object.entries(countryTileCount)
         .map(([id, count]) => {
-            const country = countries.find(co => co.id === c.id);
+            const country = countries.find(co => co.id === id);
             return {
                 id,
                 name: country?.name || '알 수 없는 국가',
