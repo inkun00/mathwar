@@ -26,7 +26,6 @@ const createEmptyMap = (): MapData =>
 
 const constructMapFromAggregate = (aggregate: MapAggregate | null): MapData => {
   const emptyMap = createEmptyMap();
-  // The mapData field from Firestore bytes is received as a Uint8Array.
   if (!aggregate || !aggregate.mapData || !(aggregate.mapData instanceof Uint8Array)) {
     return emptyMap;
   }
@@ -34,7 +33,7 @@ const constructMapFromAggregate = (aggregate: MapAggregate | null): MapData => {
   try {
     const decoder = new TextDecoder('utf-8');
     const decodedString = decoder.decode(aggregate.mapData);
-
+    
     const ownerIds: (string | null)[] = [];
     const idByteLength = 32;
 
@@ -487,3 +486,5 @@ export default function GameBoard() {
     </div>
   );
 }
+
+    
