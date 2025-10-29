@@ -6,7 +6,7 @@ import Login from "@/components/login";
 import SignUpDetails from "@/components/signup-details";
 import { useUser } from "@/firebase/auth/use-user";
 import { useFirestore } from "@/firebase";
-import { collection, writeBatch, getDocs } from "firebase/firestore";
+import { collection, writeBatch, getDocs, doc, increment } from "firebase/firestore";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Tile, Country, User, ProblemAttempt, WrongAnswer } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
@@ -94,7 +94,7 @@ export default function Home() {
           authUser && 
           initialLandTiles && 
           userProfile && 
-          userProfile.nickname === '지냥김밥' &&
+          userProfile.nickname === '채노아' &&
           !sessionStorage.getItem(`territory_check_special_${authUser.uid}`)
       ) {
           const userTiles = initialLandTiles.filter(tile => tile.ownerId === authUser.uid);
