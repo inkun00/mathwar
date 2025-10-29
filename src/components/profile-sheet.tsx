@@ -85,8 +85,8 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
 
   // Note: These queries are disabled for now to prevent permission errors.
   // They will be re-enabled once the backend rules are updated.
-  const joinRequestsQuery = null; // useMemoFirebase(...)
-  const allianceRequestsQuery = null; // useMemoFirebase(...)
+  const joinRequestsQuery = useMemoFirebase(() => null, []); 
+  const allianceRequestsQuery = useMemoFirebase(() => null, []);
 
   const { data: joinRequests } = useCollection<JoinRequest>(joinRequestsQuery);
   const { data: allianceRequests } = useCollection<AllianceRequest>(allianceRequestsQuery);

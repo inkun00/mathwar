@@ -6,6 +6,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from './ui/badge';
 import { MAP_HEIGHT, MAP_WIDTH } from '@/lib/world-map-shape';
+import { useCollection, useMemoFirebase } from '@/firebase';
+import { collection } from 'firebase/firestore';
 
 interface LeaderboardSheetProps {
   users: User[];
@@ -56,16 +58,13 @@ export default function LeaderboardSheet({ users, countries, landTiles }: Leader
       return acc;
     }, {} as Record<string, number>);
 
-    for(let y = 0; y < MAP_HEIGHT; y++) {
-      for (let x = 0; x < MAP_WIDTH; x++) {
-        const tile = landTiles.find(t => t.x === x && t.y === y);
+    landTiles.forEach(tile => {
         if (tile && tile.ownerId) {
-          if (userTileCount[tile.ownerId] !== undefined) {
-            userTileCount[tile.ownerId]++;
-          }
+            if (userTileCount[tile.ownerId] !== undefined) {
+                userTileCount[tile.ownerId]++;
+            }
         }
-      }
-    }
+    });
 
     const sortedUsers: RankedUser[] = Object.entries(userTileCount)
       .map(([id, count]) => ({ id, count }))
@@ -88,17 +87,14 @@ export default function LeaderboardSheet({ users, countries, landTiles }: Leader
 
     const userToCountryMap = new Map(users.map(u => [u.id, u.countryId]));
 
-    for(let y = 0; y < MAP_HEIGHT; y++) {
-      for (let x = 0; x < MAP_WIDTH; x++) {
-        const tile = landTiles.find(t => t.x === x && t.y === y);
+    landTiles.forEach(tile => {
         if (tile && tile.ownerId) {
-          const countryId = userToCountryMap.get(tile.ownerId);
-          if (countryId && countryTileCount[countryId] !== undefined) {
-            countryTileCount[countryId]++;
-          }
+            const countryId = userToCountryMap.get(tile.ownerId);
+            if (countryId && countryTileCount[countryId] !== undefined) {
+                countryTileCount[countryId]++;
+            }
         }
-      }
-    }
+    });
 
     const sortedCountries: RankedCountry[] = Object.entries(countryTileCount)
       .map(([id, count]) => ({ id, count }))

@@ -29,10 +29,13 @@ const constructMapFromAggregate = (aggregate: MapAggregate | null): MapData => {
   if (!aggregate) return emptyMap;
 
   const { mapData } = aggregate;
+  // Ensure mapData is an array before processing
+  const safeMapData = Array.isArray(mapData) ? mapData : [];
+  
   return emptyMap.map((row, y) => 
     row.map((tile, x) => {
       const index = y * MAP_WIDTH + x;
-      const ownerId = mapData[index] || null;
+      const ownerId = safeMapData[index] || null;
       return { ...tile, ownerId };
     })
   );
@@ -48,19 +51,19 @@ export default function GameBoard() {
   const userRef = useMemoFirebase(() => authUser ? doc(firestore, "users", authUser.uid) : null, [authUser, firestore]);
   const { data: currentUser, isLoading: isUserLoading } = useDoc<User>(userRef);
   
-  const countriesQuery = useMemoFirebase(() => collection(firestore, "countries"), [firestore]);
+  const countriesQuery = useMemoFirebase(() => firestore ? collection(firestore, "countries") : null, [firestore]);
   const { data: countries, isLoading: isCountriesLoading } = useCollection<Country>(countriesQuery);
   
-  const usersQuery = useMemoFirebase(() => collection(firestore, "users"), [firestore]);
+  const usersQuery = useMemoFirebase(() => firestore ? collection(firestore, "users") : null, [firestore]);
   const { data: allUsers, isLoading: isAllUsersLoading } = useCollection<User>(usersQuery);
 
-  const mapAggregateQuery = useMemoFirebase(() => query(collection(firestore, "map_aggregates"), where("id", "==", "latest")), [firestore]);
+  const mapAggregateQuery = useMemoFirebase(() => firestore ? query(collection(firestore, "map_aggregates"), where("id", "==", "latest")) : null, [firestore]);
   const { data: mapAggregate, isLoading: isMapLoading } = useCollection<MapAggregate>(mapAggregateQuery);
 
-  const problemAttemptsQuery = useMemoFirebase(() => authUser ? collection(firestore, 'problem_attempts', authUser.uid, 'attempts') : null, [authUser, firestore]);
+  const problemAttemptsQuery = useMemoFirebase(() => authUser && firestore ? collection(firestore, 'problem_attempts', authUser.uid, 'attempts') : null, [authUser, firestore]);
   const { data: problemAttempts } = useCollection<ProblemAttempt>(problemAttemptsQuery);
 
-  const wrongAnswersQuery = useMemoFirebase(() => authUser ? collection(firestore, 'users', authUser.uid, 'wrong_answers') : null, [authUser, firestore]);
+  const wrongAnswersQuery = useMemoFirebase(() => authUser && firestore ? collection(firestore, 'users', authUser.uid, 'wrong_answers') : null, [authUser, firestore]);
   const { data: wrongAnswers } = useCollection<WrongAnswer>(wrongAnswersQuery);
   
   // --- Component State ---
@@ -85,7 +88,7 @@ export default function GameBoard() {
   }, [displayMapData, allUsers, currentUser]);
   
   const isDemise = useMemo(() => {
-    if (!currentUser || isMapLoading) return false;
+    if (!currentUser || isMapLoading || !displayMapData) return false;
     const hasLand = displayMapData.flat().some(tile => tile.ownerId === currentUser.id);
     return !hasLand && (currentUser.tokens ?? 0) <= 0;
   }, [displayMapData, currentUser, isMapLoading]);
