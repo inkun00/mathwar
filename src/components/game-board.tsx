@@ -147,8 +147,8 @@ export default function GameBoard({
 
         toast({
           variant: "destructive",
-          title: "무리한 확장 페널티",
-          description: `문제를 풀지 않고 확장한 영토 ${tilesToRemoveCount}개가 회수되었습니다.`,
+          title: "부적절한 확장 페널티",
+          description: `부적절한 방법으로 확장한 영토 ${tilesToRemoveCount}개가 회수되었습니다.`,
         });
 
       } catch (error) {
