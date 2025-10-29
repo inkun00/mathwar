@@ -102,6 +102,66 @@ export default function GameBoard({
     return !hasLand && (liveCurrentUser.tokens ?? 0) <= 0;
   }, [liveLandTiles, initialLandTiles, liveCurrentUser]);
 
+  // --- Negative Token Penalty Logic ---
+  useEffect(() => {
+    if (!liveCurrentUser || !firestore || (liveCurrentUser.tokens ?? 0) >= 0) {
+      return;
+    }
+
+    const handleNegativeTokens = async () => {
+      const negativeTokens = Math.abs(liveCurrentUser.tokens);
+      const userTiles = (liveLandTiles ?? initialLandTiles).filter(tile => tile.ownerId === liveCurrentUser.id);
+
+      if (userTiles.length === 0) {
+        // No tiles to remove, just reset tokens
+        const userRef = doc(firestore, 'users', liveCurrentUser.id);
+        await updateDoc(userRef, { tokens: 0 });
+        return;
+      }
+      
+      const tilesToRemoveCount = Math.min(negativeTokens, userTiles.length);
+      if (tilesToRemoveCount === 0) return;
+
+      // Select random tiles to remove
+      const shuffledTiles = userTiles.sort(() => 0.5 - Math.random());
+      const tilesToRemove = shuffledTiles.slice(0, tilesToRemoveCount);
+
+      try {
+        const batch = writeBatch(firestore);
+        
+        // Neutralize tiles
+        tilesToRemove.forEach(tile => {
+          const tileRef = doc(firestore, 'land_tiles', tile.id!);
+          batch.update(tileRef, { ownerId: null, hasWall: false });
+        });
+
+        // Reset user tokens
+        const userRef = doc(firestore, 'users', liveCurrentUser.id);
+        batch.update(userRef, { tokens: 0 });
+
+        await batch.commit();
+
+        toast({
+          variant: "destructive",
+          title: "무리한 확장!",
+          description: `토큰 부족으로 영토 ${tilesToRemoveCount}개를 잃었습니다.`,
+        });
+
+      } catch (error) {
+        console.error("영토 페널티 처리 실패:", error);
+        toast({
+          variant: "destructive",
+          title: "오류",
+          description: "페널티를 처리하는 중 오류가 발생했습니다.",
+        });
+      }
+    };
+
+    handleNegativeTokens();
+
+  }, [liveCurrentUser, firestore, liveLandTiles, initialLandTiles, toast]);
+
+
   // --- Event Handlers & Logic ---
   const handleSolveProblemForToken = () => {
     setIsBuildingWall(false);
