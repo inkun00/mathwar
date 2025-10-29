@@ -39,52 +39,40 @@ interface GameBoardProps {
   initialCountries: Country[];
   initialAllUsers: User[];
   initialLandTiles: ClientTile[];
+  initialProblemAttempts: ProblemAttempt[];
+  initialWrongAnswers: WrongAnswer[];
 }
 
-export default function GameBoard({ currentUser, initialCountries, initialAllUsers, initialLandTiles }: GameBoardProps) {
+export default function GameBoard({ 
+  currentUser, 
+  initialCountries, 
+  initialAllUsers, 
+  initialLandTiles,
+  initialProblemAttempts,
+  initialWrongAnswers,
+}: GameBoardProps) {
   const firestore = useFirestore();
   const { user: authUser } = useUser();
   const { toast } = useToast();
   
   // --- Real-time data hooks ---
-  const usersQuery = useMemoFirebase(() => collection(firestore, 'users'), [firestore]);
-  const countriesQuery = useMemoFirebase(() => collection(firestore, 'countries'), [firestore]);
-  const landTilesQuery = useMemoFirebase(() => collection(firestore, 'land_tiles'), [firestore]);
+  const usersQuery = useMemoFirebase(() => firestore ? collection(firestore, 'users') : null, [firestore]);
+  const countriesQuery = useMemoFirebase(() => firestore ? collection(firestore, 'countries') : null, [firestore]);
+  const landTilesQuery = useMemoFirebase(() => firestore ? collection(firestore, 'land_tiles') : null, [firestore]);
+  const wrongAnswersQuery = useMemoFirebase(() => authUser ? collection(firestore, 'users', authUser.uid, 'wrong_answers') : null, [authUser, firestore]);
+  const attemptsQuery = useMemoFirebase(() => authUser ? collection(firestore, 'problem_attempts', authUser.uid, 'attempts') : null, [authUser, firestore]);
 
   const { data: liveAllUsers, isLoading: usersLoading } = useCollection<User>(usersQuery);
   const { data: liveCountries, isLoading: countriesLoading } = useCollection<Country>(countriesQuery);
   const { data: liveLandTiles, isLoading: landTilesLoading } = useCollection<ClientTile>(landTilesQuery);
+  const { data: liveWrongAnswers, isLoading: wrongAnswersLoading } = useCollection<WrongAnswer>(wrongAnswersQuery);
+  const { data: liveProblemAttempts, isLoading: attemptsLoading } = useCollection<ProblemAttempt>(attemptsQuery);
+
 
   const liveCurrentUser = useMemo(() => liveAllUsers?.find(u => u.id === currentUser.id) || currentUser, [liveAllUsers, currentUser]);
 
-  // --- Data Fetching for secondary data ---
-  const [problemAttempts, setProblemAttempts] = useState<ProblemAttempt[]>([]);
-  const [wrongAnswers, setWrongAnswers] = useState<WrongAnswer[]>([]);
-  const [secondaryDataLoading, setSecondaryDataLoading] = useState(true);
-
-  useEffect(() => {
-    if (!authUser || !firestore) return;
-    const fetchSecondaryData = async () => {
-      try {
-        const attemptsQuery = collection(firestore, 'problem_attempts', authUser.uid, 'attempts');
-        const wrongAnswersQuery = collection(firestore, 'users', authUser.uid, 'wrong_answers');
-        
-        const [attemptsSnap, wrongAnswersSnap] = await Promise.all([
-          getDocs(attemptsQuery),
-          getDocs(wrongAnswersQuery)
-        ]);
-        
-        setProblemAttempts(attemptsSnap.docs.map(d => ({...d.data(), id: d.id} as ProblemAttempt)));
-        setWrongAnswers(wrongAnswersSnap.docs.map(d => ({...d.data(), id: d.id} as WrongAnswer)));
-
-      } catch (e) {
-        console.error("Error fetching secondary data", e);
-      } finally {
-        setSecondaryDataLoading(false);
-      }
-    };
-    fetchSecondaryData();
-  }, [authUser, firestore]);
+  const problemAttempts = useMemo(() => liveProblemAttempts ?? initialProblemAttempts, [liveProblemAttempts, initialProblemAttempts]);
+  const wrongAnswers = useMemo(() => liveWrongAnswers ?? initialWrongAnswers, [liveWrongAnswers, initialWrongAnswers]);
   
   // --- Component State ---
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -430,7 +418,9 @@ export default function GameBoard({ currentUser, initialCountries, initialAllUse
     }
   };
   
-  if (usersLoading || countriesLoading || landTilesLoading || secondaryDataLoading) {
+  const isLoading = usersLoading || countriesLoading || landTilesLoading || wrongAnswersLoading || attemptsLoading;
+
+  if (isLoading) {
      return (
       <div className="flex h-full w-full items-center justify-center bg-background">
         <Skeleton className="h-[80vh] w-[90vw] max-w-7xl" />
