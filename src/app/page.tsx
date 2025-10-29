@@ -49,7 +49,7 @@ export default function Home() {
   }
 
   // User is authenticated, but we are waiting for their profile to load (or determine non-existence)
-  if (isUserProfileLoading) {
+  if (isLoading && authUser) {
       return (
         <div className="flex h-screen w-full items-center justify-center bg-background">
            <div className="flex flex-col items-center gap-4">

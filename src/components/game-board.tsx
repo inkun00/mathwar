@@ -27,7 +27,7 @@ const constructMapFromDoc = (gameMap: GameMap | null): MapData => {
     }))
   );
 
-  if (!gameMap) return map;
+  if (!gameMap || !gameMap.tileOwners) return map;
 
   for (let y = 0; y < MAP_HEIGHT; y++) {
     for (let x = 0; x < MAP_WIDTH; x++) {
@@ -56,6 +56,7 @@ export default function GameBoard({ currentUser, initialCountries, initialAllUse
   
   // --- Data coming from props is now the source of truth for real-time updates ---
   const userRef = useMemoFirebase(() => authUser ? doc(firestore, "users", authUser.uid) : null, [authUser, firestore]);
+  // We use the currentUser from props for most things, but listen to live updates for things like tokens
   const { data: liveCurrentUser } = useDoc<User>(userRef);
 
   const countriesQuery = useMemoFirebase(() => firestore ? collection(firestore, "countries") : null, [firestore]);
@@ -417,7 +418,7 @@ export default function GameBoard({ currentUser, initialCountries, initialAllUse
       setIsProcessingClick(false); // Make sure this is reset
       if (invasionTarget) {
         // If invasion was cancelled, refund the token
-        updateDoc(userRef, { tokens: increment(1) });
+        if (userRef) updateDoc(userRef, { tokens: increment(1) });
         setInvasionTarget(null);
         setInvasionWallBreaks(0);
         toast({ title: "침략 취소", description: "사용한 토큰이 반환되었습니다.", variant: "default" });
