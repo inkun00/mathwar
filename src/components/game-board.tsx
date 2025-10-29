@@ -338,7 +338,7 @@ export default function GameBoard() {
           await updateDoc(userRef, { tokens: increment(-1) });
           setInvasionTarget({ x, y, originalOwnerId: originalOwnerId!, hasWall: clickedTile.hasWall });
           setInvasionWallBreaks(0);
-          setCurrentProblem(generateMathProblem());
+setCurrentProblem(generateMathProblem());
           setIsModalOpen(true);
       }
     } catch (error) {
