@@ -1,7 +1,7 @@
 'use client';
 
 import React from "react";
-import type { User, Country, ProblemAttempt, ProblemSubType, WrongAnswer, StorableProblem, Tile, RankedUser, RankedCountry, JoinRequest, AllianceRequest } from "@/lib/types";
+import type { User, Country, ProblemAttempt, ProblemSubType, WrongAnswer, StorableProblem, Tile, RankedUser, RankedCountry, JoinRequest, AllianceRequest, MapAggregate } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useMemo, useState } from "react";
@@ -24,6 +24,7 @@ import FlagDisplay from "./flag-display";
 import FlagEditor from "./flag-editor";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 import { generateProblemFromData } from "@/lib/game-logic";
+import { MAP_WIDTH, MAP_HEIGHT } from "@/lib/world-map-shape";
 
 interface ProfileSheetProps {
   currentUser: User;
@@ -121,45 +122,55 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
   };
 
   const { userRankings, countryRankings } = useMemo(() => {
-    const userTileCount = users.reduce((acc, user) => {
-      acc[user.id] = landTiles.filter(tile => tile.ownerId === user.id).length;
-      return acc;
-    }, {} as Record<string, number>);
+    const userTileCount: Record<string, number> = {};
+    users.forEach(user => userTileCount[user.id] = 0);
+
+    landTiles.forEach(tile => {
+        if (tile.ownerId && userTileCount[tile.ownerId] !== undefined) {
+            userTileCount[tile.ownerId]++;
+        }
+    });
 
     const sortedUsers: RankedUser[] = Object.entries(userTileCount)
-      .map(([id, count]) => {
-        const user = users.find(u => u.id === id);
-        return {
-          id,
-          nickname: user?.nickname || '알 수 없는 플레이어',
-          tileCount: count,
-        };
-      })
-      .sort((a, b) => b.tileCount - a.tileCount)
-      .map((p, index) => ({ ...p, rank: index + 1 }));
+        .map(([id, count]) => {
+            const user = users.find(u => u.id === id);
+            return {
+                id,
+                nickname: user?.nickname || '알 수 없는 플레이어',
+                tileCount: count,
+            };
+        })
+        .sort((a, b) => b.tileCount - a.tileCount)
+        .map((p, index) => ({ ...p, rank: index + 1 }));
 
-    const countryTileCount = countries.reduce((acc, country) => {
-      const members = users.filter(u => u.countryId === country.id);
-      const count = members.reduce((sum, member) => sum + (userTileCount[member.id] || 0), 0);
-      acc[country.id] = count;
-      return acc;
-    }, {} as Record<string, number>);
+    const countryTileCount: Record<string, number> = {};
+    countries.forEach(country => countryTileCount[country.id] = 0);
+    const userToCountryMap = new Map(users.map(u => [u.id, u.countryId]));
+
+    landTiles.forEach(tile => {
+        if (tile.ownerId) {
+            const countryId = userToCountryMap.get(tile.ownerId);
+            if (countryId && countryTileCount[countryId] !== undefined) {
+                countryTileCount[countryId]++;
+            }
+        }
+    });
     
     const sortedCountries: RankedCountry[] = Object.entries(countryTileCount)
-      .map(([id, count]) => {
-        const country = countries.find(co => co.id === id);
-        return {
-          id,
-          name: country?.name || '알 수 없는 국가',
-          color: country?.color || '#888',
-          tileCount: count,
-        };
-      })
-      .sort((a, b) => b.tileCount - a.tileCount)
-      .map((c, index) => ({ ...c, rank: index + 1 }));
+        .map(([id, count]) => {
+            const country = countries.find(co => co.id === id);
+            return {
+                id,
+                name: country?.name || '알 수 없는 국가',
+                color: country?.color || '#888',
+                tileCount: count,
+            };
+        })
+        .sort((a, b) => b.tileCount - a.tileCount)
+        .map((c, index) => ({ ...c, rank: index + 1 }));
 
     return { userRankings: sortedUsers, countryRankings: sortedCountries };
-  }, [users, countries, landTiles]);
+}, [users, countries, landTiles]);
   
   const myRank = userRankings.find(u => u.id === currentUser.id);
   const myCountryRank = countryRankings.find(c => c.id === currentUser.countryId);

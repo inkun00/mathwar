@@ -1,13 +1,13 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback } from "react";
-import type { Tile, MathProblem, Country, User, ProblemAttempt, InvasionTarget, WrongAnswer, MapData } from "@/lib/types";
+import type { Tile, MathProblem, Country, User, ProblemAttempt, InvasionTarget, WrongAnswer, MapData, MapAggregate } from "@/lib/types";
 import { generateMathProblem, isAdjacent, canConquer as canConquerLogic } from "@/lib/game-logic";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { ZoomIn, ZoomOut, RefreshCw } from "lucide-react";
-import { useFirestore, useUser, errorEmitter, FirestorePermissionError, useDoc, useMemoFirebase } from "@/firebase";
-import { doc, setDoc, updateDoc, writeBatch, increment, collection, arrayUnion, query, where, onSnapshot } from "firebase/firestore";
+import { ZoomIn, ZoomOut } from "lucide-react";
+import { useFirestore, useUser, errorEmitter, FirestorePermissionError, useDoc, useMemoFirebase, useCollection } from "@/firebase";
+import { doc, setDoc, updateDoc, writeBatch, increment, collection, arrayUnion, query, where, getDocs } from "firebase/firestore";
 import { addWrongAnswer } from "@/firebase/firestore/data";
 
 import Header from "./header";
@@ -17,14 +17,6 @@ import DemiseScreen from "./demise-screen";
 import { Skeleton } from "./ui/skeleton";
 import { MAP_WIDTH, MAP_HEIGHT } from "@/lib/world-map-shape";
 
-interface GameBoardProps {
-  initialLandTiles: Tile[];
-  allUsers: User[];
-  countries: Country[];
-  problemAttempts: ProblemAttempt[];
-  wrongAnswers: WrongAnswer[];
-}
-
 const createEmptyMap = (): MapData => 
   Array.from({ length: MAP_HEIGHT }, (_, y) =>
     Array.from({ length: MAP_WIDTH }, (__, x) => ({
@@ -32,147 +24,73 @@ const createEmptyMap = (): MapData =>
     }))
   );
 
-const getMapWithTiles = (baseMap: MapData, tilesToUpdate: Tile[]): MapData => {
-    const newMap = [...baseMap.map(row => [...row])];
-    tilesToUpdate.forEach(tile => {
-      if (newMap[tile.y]?.[tile.x]) {
-        newMap[tile.y][tile.x] = { ...newMap[tile.y][tile.x], ...tile };
-      }
-    });
-    return newMap;
-};
+const constructMapFromAggregate = (aggregate: MapAggregate | null): MapData => {
+  const emptyMap = createEmptyMap();
+  if (!aggregate) return emptyMap;
 
-const usePartialMapUpdates = (
-  currentUser: User | null | undefined,
-  onUpdate: (tiles: Tile[]) => void
-) => {
-  const firestore = useFirestore();
-  const [userTiles, setUserTiles] = useState<Tile[]>([]);
-
-  // Step 1: Listen to the current user's tiles to know their location
-  useEffect(() => {
-    if (!firestore || !currentUser) return;
-    
-    const userTilesQuery = query(
-      collection(firestore, "land_tiles"),
-      where("ownerId", "==", currentUser.id)
-    );
-
-    const unsubscribeUserTiles = onSnapshot(userTilesQuery, (snapshot) => {
-      const tiles: Tile[] = [];
-      snapshot.forEach(doc => tiles.push({ id: doc.id, ...doc.data() } as Tile));
-      setUserTiles(tiles);
-      onUpdate(tiles); // Update the map with user's own tiles
-    }, (error) => {
-      console.error("Error listening to user tiles:", error);
-    });
-
-    return () => unsubscribeUserTiles();
-  }, [firestore, currentUser, onUpdate]);
-
-  // Step 2: Based on user's tile locations, listen to the surrounding area
-  useEffect(() => {
-    if (!firestore || !currentUser || userTiles.length === 0) {
-      return;
-    }
-    
-    const BORDER_RADIUS = 5;
-    let minX = MAP_WIDTH, maxX = 0, minY = MAP_HEIGHT, maxY = 0;
-    userTiles.forEach(tile => {
-      minX = Math.min(minX, tile.x);
-      maxX = Math.max(maxX, tile.x);
-      minY = Math.min(minY, tile.y);
-      maxY = Math.max(maxY, tile.y);
-    });
-    
-    const minX_watch = Math.max(0, minX - BORDER_RADIUS);
-    const maxX_watch = Math.min(MAP_WIDTH - 1, maxX + BORDER_RADIUS);
-    const minY_watch = Math.max(0, minY - BORDER_RADIUS);
-    const maxY_watch = Math.min(MAP_HEIGHT - 1, maxY + BORDER_RADIUS);
-
-    const partialQuery = query(
-      collection(firestore, "land_tiles"),
-      where("x", ">=", minX_watch),
-      where("x", "<=", maxX_watch)
-      // Note: y-range is filtered client-side below to avoid composite index
-    );
-
-    const unsubscribePartial = onSnapshot(partialQuery, (snapshot) => {
-      const updatedTiles: Tile[] = [];
-      snapshot.docChanges().forEach((change) => {
-         const tileData = change.doc.data() as Tile;
-         // Client-side Y filtering
-         if (tileData.y >= minY_watch && tileData.y <= maxY_watch) {
-            updatedTiles.push({ id: change.doc.id, ...tileData });
-         }
-      });
-      if (updatedTiles.length > 0) {
-        onUpdate(updatedTiles);
-      }
-    }, (error) => {
-      console.error("Partial map update listener error:", error);
-    });
-
-    return () => {
-      unsubscribePartial();
-    };
-
-  }, [firestore, currentUser, userTiles, onUpdate]);
+  const { mapData } = aggregate;
+  return emptyMap.map((row, y) => 
+    row.map((tile, x) => {
+      const index = y * MAP_WIDTH + x;
+      const ownerId = mapData[index] || null;
+      return { ...tile, ownerId };
+    })
+  );
 };
 
 
-export default function GameBoard({ 
-  initialLandTiles,
-  allUsers,
-  countries,
-  problemAttempts,
-  wrongAnswers,
-}: GameBoardProps) {
+export default function GameBoard() {
   const firestore = useFirestore();
   const { user: authUser } = useUser();
+  const { toast } = useToast();
   
-  const userRef = useMemoFirebase(() => {
-      if (!authUser) return null;
-      return doc(firestore, "users", authUser.uid);
-  }, [authUser, firestore]);
-
+  // --- Data Fetching ---
+  const userRef = useMemoFirebase(() => authUser ? doc(firestore, "users", authUser.uid) : null, [authUser, firestore]);
   const { data: currentUser, isLoading: isUserLoading } = useDoc<User>(userRef);
+  
+  const countriesQuery = useMemoFirebase(() => collection(firestore, "countries"), [firestore]);
+  const { data: countries, isLoading: isCountriesLoading } = useCollection<Country>(countriesQuery);
+  
+  const usersQuery = useMemoFirebase(() => collection(firestore, "users"), [firestore]);
+  const { data: allUsers, isLoading: isAllUsersLoading } = useCollection<User>(usersQuery);
 
+  const mapAggregateQuery = useMemoFirebase(() => query(collection(firestore, "map_aggregates"), where("id", "==", "latest")), [firestore]);
+  const { data: mapAggregate, isLoading: isMapLoading } = useCollection<MapAggregate>(mapAggregateQuery);
+
+  const problemAttemptsQuery = useMemoFirebase(() => authUser ? collection(firestore, 'problem_attempts', authUser.uid, 'attempts') : null, [authUser, firestore]);
+  const { data: problemAttempts } = useCollection<ProblemAttempt>(problemAttemptsQuery);
+
+  const wrongAnswersQuery = useMemoFirebase(() => authUser ? collection(firestore, 'users', authUser.uid, 'wrong_answers') : null, [authUser, firestore]);
+  const { data: wrongAnswers } = useCollection<WrongAnswer>(wrongAnswersQuery);
+  
+  // --- Component State ---
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentProblem, setCurrentProblem] = useState<MathProblem | null>(null);
   const [invasionTarget, setInvasionTarget] = useState<InvasionTarget>(null);
   const [invasionWallBreaks, setInvasionWallBreaks] = useState(0);
-  const { toast } = useToast();
   const [zoomLevel, setZoomLevel] = useState(1);
   const [isProcessingClick, setIsProcessingClick] = useState(false);
   const [isBuildingWall, setIsBuildingWall] = useState(false);
 
-  // Start with an empty map, it will be populated by the listener
-  const [displayMapData, setDisplayMapData] = useState<MapData>(() => createEmptyMap());
-  
-  const handlePartialUpdate = useCallback((updatedTiles: Tile[]) => {
-    setDisplayMapData(prevMap => getMapWithTiles(prevMap, updatedTiles));
-  }, []);
-
-  // Use the new listener that populates the map dynamically
-  usePartialMapUpdates(currentUser, handlePartialUpdate);
+  // --- Memoized Derived State ---
+  const displayMapData = useMemo(() => constructMapFromAggregate(mapAggregate?.[0] ?? null), [mapAggregate]);
 
   const currentUserCountry = useMemo(() => countries?.find(c => c.id === currentUser?.countryId), [countries, currentUser]);
   
   const userCountryTiles = useMemo(() => {
-    if (!currentUser || !allUsers) return [];
+    if (!currentUser || !allUsers || !displayMapData) return [];
     const countryMembers = allUsers.filter(u => u.countryId === currentUser.countryId);
     const memberIds = new Set(countryMembers.map(u => u.id));
-    
     return displayMapData.flat().filter(tile => tile.ownerId && memberIds.has(tile.ownerId));
   }, [displayMapData, allUsers, currentUser]);
   
   const isDemise = useMemo(() => {
-      if (!currentUser) return false;
-      const hasLand = displayMapData.flat().some(tile => tile.ownerId === currentUser.id);
-      return !hasLand && (currentUser.tokens ?? 0) <= 0;
-  }, [displayMapData, currentUser]);
+    if (!currentUser || isMapLoading) return false;
+    const hasLand = displayMapData.flat().some(tile => tile.ownerId === currentUser.id);
+    return !hasLand && (currentUser.tokens ?? 0) <= 0;
+  }, [displayMapData, currentUser, isMapLoading]);
 
+  // --- Event Handlers & Logic ---
   const handleSolveProblemForToken = () => {
     setIsBuildingWall(false);
     setInvasionTarget(null);
@@ -194,11 +112,14 @@ export default function GameBoard({
     });
   };
 
-  const handleTerritoryCut = async (originalOwnerId: string, conquerorId: string | null, currentMapData: MapData) => {
+  const handleTerritoryCut = async (originalOwnerId: string, conquerorId: string | null) => {
     if (!firestore || !currentUser || !allUsers) return;
 
+    // We can't rely on local map data for this complex operation. Fetching fresh data is necessary.
+    // This is an expensive operation, should be moved to a Cloud Function in the future.
     try {
-        const ownedTiles = currentMapData.flat().filter(t => t.ownerId === originalOwnerId);
+        const ownedTilesSnapshot = await getDocs(query(collection(firestore, "land_tiles"), where("ownerId", "==", originalOwnerId)));
+        const ownedTiles = ownedTilesSnapshot.docs.map(doc => doc.data() as Tile);
 
         if (ownedTiles.length === 0) {
           if (conquerorId) {
@@ -258,7 +179,7 @@ export default function GameBoard({
             if (tilesToNeutralize.length > 0) {
                 const batch = writeBatch(firestore);
                 tilesToNeutralize.forEach(tile => {
-                    const tileRef = doc(firestore, "land_tiles", tile.id);
+                    const tileRef = doc(firestore, "land_tiles", `${tile.x}-${tile.y}`);
                     batch.update(tileRef, { ownerId: null });
                 });
                 
@@ -305,21 +226,13 @@ export default function GameBoard({
     const tileRef = doc(firestore, "land_tiles", tileId);
     const tileData = { x: invasionTarget.x, y: invasionTarget.y, ownerId: currentUser.id, hasWall: false };
 
-    // Optimistically update local state
-    const newMapData = getMapWithTiles(displayMapData, [{ ...tileData, id: tileId }]);
-    setDisplayMapData(newMapData);
-
     try {
       await setDoc(tileRef, tileData, { merge: true });
       if (originalOwnerId) {
-        // Pass the new map data directly
-        await handleTerritoryCut(originalOwnerId, currentUser.id, newMapData);
+        await handleTerritoryCut(originalOwnerId, currentUser.id);
       }
     } catch (error) {
         console.error("침략 실패:", error);
-        // Revert local state on failure. Find the original state from the server might be needed.
-        // For simplicity, we just revert to previous owner. This might be incorrect if the tile was empty.
-        setDisplayMapData(prevMap => getMapWithTiles(prevMap, [{ ...tileData, id: tileId, ownerId: originalOwnerId }]));
         const permissionError = new FirestorePermissionError({
             path: tileRef.path,
             operation: 'write',
@@ -345,9 +258,6 @@ export default function GameBoard({
         batch.update(tileRef, { hasWall: true });
         batch.update(userRef, { walls: increment(-1) });
 
-        // Optimistic update
-        setDisplayMapData(prevMap => getMapWithTiles(prevMap, [{ ...clickedTile, hasWall: true }]));
-
         batch.commit()
           .then(() => {
             toast({ title: "성벽 건설!", description: "영토에 성벽을 성공적으로 건설했습니다." });
@@ -355,8 +265,6 @@ export default function GameBoard({
           })
           .catch(error => {
             console.error("성벽 건설 실패:", error);
-            // Revert
-            setDisplayMapData(prevMap => getMapWithTiles(prevMap, [{ ...clickedTile, hasWall: false }]));
             errorEmitter.emit('permission-error', new FirestorePermissionError({ path: tileRef.path, operation: 'update', requestResourceData: { hasWall: true } }));
           })
           .finally(() => setIsProcessingClick(false));
@@ -390,9 +298,6 @@ export default function GameBoard({
         const tileRef = doc(firestore, "land_tiles", tileId);
         const tileData = { x, y, ownerId: currentUser.id, hasWall: false };
         
-        // Optimistic update
-        setDisplayMapData(prevMap => getMapWithTiles(prevMap, [{...tileData, id: tileId}]));
-
         const batch = writeBatch(firestore);
         batch.set(tileRef, tileData, { merge: true });
         batch.update(userRef, { tokens: increment(-1) });
@@ -403,9 +308,6 @@ export default function GameBoard({
             })
             .catch(error => {
                 console.error("타일 클릭 작업 실패:", error);
-                const originalTileState = { ...clickedTile, ownerId: null };
-                 // Revert
-                setDisplayMapData(prevMap => getMapWithTiles(prevMap, [originalTileState]));
                 const permissionError = new FirestorePermissionError({
                     path: tileRef.path,
                     operation: 'write',
@@ -505,11 +407,13 @@ export default function GameBoard({
       addWrongAnswer(firestore, authUser.uid, problem);
     }
   };
-
-  if (isUserLoading || !currentUser) {
+  
+  const isLoading = isUserLoading || isCountriesLoading || isAllUsersLoading || isMapLoading;
+  
+  if (isLoading || !currentUser || !countries || !allUsers || !problemAttempts || !wrongAnswers) {
     return (
       <div className="flex h-full w-full items-center justify-center bg-background">
-        <Skeleton className="h-[80vh] w-full" />
+        <Skeleton className="h-[80vh] w-[90vw] max-w-7xl" />
       </div>
     );
   }
@@ -521,11 +425,11 @@ export default function GameBoard({
         onSolveProblemClick={handleSolveProblemForToken} 
         countries={countries}
         problemAttempts={problemAttempts}
-        landTiles={displayMapData.flat()}
         users={allUsers}
         wrongAnswers={wrongAnswers}
         isBuildingWall={isBuildingWall}
         onToggleWallBuilding={handleToggleWallBuilding}
+        landTiles={displayMapData.flat()}
       />
       <div className="relative h-full w-full max-w-7xl flex-grow">
         <WorldMap 

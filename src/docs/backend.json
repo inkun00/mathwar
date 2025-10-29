@@ -49,6 +49,27 @@
       },
       "required": ["id", "x", "y", "ownerId"]
     },
+    "MapAggregate": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "MapAggregate",
+      "type": "object",
+      "description": "A document that stores an aggregated view of the entire map state.",
+      "properties": {
+        "mapData": {
+          "type": "array",
+          "description": "A flattened array representing the owner of each tile on the map. The index corresponds to (y * MAP_WIDTH + x).",
+          "items": {
+            "type": ["string", "null"]
+          }
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The timestamp when this aggregate was last updated."
+        }
+      },
+      "required": ["mapData", "updatedAt"]
+    },
     "ProblemAttempt": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "ProblemAttempt",
@@ -122,6 +143,10 @@
       {
         "path": "/land_tiles/{landTileId}",
         "definition": { "entityName": "landTile", "schema": { "$ref": "#/backend/entities/LandTile" }, "description": "Stores all land tiles.", "allow": ["list", "get", "create", "update"] }
+      },
+      {
+        "path": "/map_aggregates/{aggregateId}",
+        "definition": { "entityName": "mapAggregate", "schema": { "$ref": "#/backend/entities/MapAggregate" }, "description": "Stores aggregated map data for efficient reads.", "allow": ["get", "list"] }
       },
       {
         "path": "/problem_attempts/{userId}/attempts/{attemptId}",

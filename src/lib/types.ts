@@ -51,6 +51,12 @@ export interface Tile {
   hasWall?: boolean; // True if the tile has a wall
 }
 
+export interface MapAggregate {
+    id: string;
+    mapData: (string | null)[];
+    updatedAt: any;
+}
+
 export type MapData = Tile[][];
 
 export type ProblemType = 'decimal' | 'fraction' | 'conversion' | 'mixed';
