@@ -116,94 +116,94 @@ export default function GameBoard() {
   };
 
   const handleTerritoryCut = async (originalOwnerId: string, conquerorId: string | null) => {
-    if (!firestore || !currentUser || !allUsers) return;
-
-    // We can't rely on local map data for this complex operation. Fetching fresh data is necessary.
-    // This is an expensive operation, should be moved to a Cloud Function in the future.
+    if (!firestore || !currentUser || !allUsers || !displayMapData) return;
+  
     try {
-        const ownedTilesSnapshot = await getDocs(query(collection(firestore, "land_tiles"), where("ownerId", "==", originalOwnerId)));
-        const ownedTiles = ownedTilesSnapshot.docs.map(doc => doc.data() as Tile);
-
-        if (ownedTiles.length === 0) {
-          if (conquerorId) {
-            const originalOwnerUser = allUsers.find(u => u.id === originalOwnerId);
-            if (originalOwnerUser && originalOwnerUser.countryId) {
-                const conquerorRef = doc(firestore, "users", conquerorId);
-                const countryRef = doc(firestore, "countries", originalOwnerUser.countryId);
-                const batch = writeBatch(firestore);
-                batch.update(conquerorRef, { conqueredCountries: arrayUnion(originalOwnerUser.countryId) });
-                batch.update(countryRef, { demised: true });
-
-                await batch.commit().catch(error => {
-                    console.error("정복/멸망 처리 실패:", error);
-                    errorEmitter.emit('permission-error', new FirestorePermissionError({ path: conquerorRef.path, operation: 'update'}));
-                });
+      // Use the real-time map data from state instead of fetching
+      const ownedTiles = displayMapData.flat().filter(tile => tile.ownerId === originalOwnerId);
+  
+      if (ownedTiles.length === 0) {
+        if (conquerorId) {
+          const originalOwnerUser = allUsers.find(u => u.id === originalOwnerId);
+          if (originalOwnerUser && originalOwnerUser.countryId) {
+            const conquerorRef = doc(firestore, "users", conquerorId);
+            const countryRef = doc(firestore, "countries", originalOwnerUser.countryId);
+            const batch = writeBatch(firestore);
+            batch.update(conquerorRef, { conqueredCountries: arrayUnion(originalOwnerUser.countryId) });
+            batch.update(countryRef, { demised: true });
+  
+            await batch.commit().catch(error => {
+              console.error("정복/멸망 처리 실패:", error);
+              errorEmitter.emit('permission-error', new FirestorePermissionError({ path: conquerorRef.path, operation: 'update'}));
+            });
+          }
+        }
+        return;
+      }
+  
+      const visited = new Set<string>();
+      const territories: Tile[][] = [];
+  
+      for (const tile of ownedTiles) {
+        const tileId = `${tile.x},${tile.y}`;
+        if (!visited.has(tileId)) {
+          const newTerritory: Tile[] = [];
+          const queue: Tile[] = [tile];
+          visited.add(tileId);
+  
+          while (queue.length > 0) {
+            const current = queue.shift()!;
+            newTerritory.push(current);
+            const neighbors = [
+              { x: current.x, y: current.y - 1 }, { x: current.x, y: current.y + 1 },
+              { x: current.x - 1, y: current.y }, { x: current.x + 1, y: current.y }
+            ];
+            for (const n of neighbors) {
+              const neighborId = `${n.x},${n.y}`;
+              if (!visited.has(neighborId)) {
+                // Find the neighbor from the ownedTiles list, not the entire map
+                const neighborTile = ownedTiles.find(t => t.x === n.x && t.y === n.y);
+                if (neighborTile) {
+                  visited.add(neighborId);
+                  queue.push(neighborTile);
+                }
+              }
             }
           }
-          return;
+          territories.push(newTerritory);
         }
-
-        const visited = new Set<string>();
-        const territories: Tile[][] = [];
-
-        for (const tile of ownedTiles) {
-            const tileId = `${tile.x},${tile.y}`;
-            if (!visited.has(tileId)) {
-                const newTerritory: Tile[] = [];
-                const queue: Tile[] = [tile];
-                visited.add(tileId);
-
-                while (queue.length > 0) {
-                    const current = queue.shift()!;
-                    newTerritory.push(current);
-                    const neighbors = [
-                        { x: current.x, y: current.y - 1 }, { x: current.x, y: current.y + 1 },
-                        { x: current.x - 1, y: current.y }, { x: current.x + 1, y: current.y }
-                    ];
-                    for (const n of neighbors) {
-                        const neighborId = `${n.x},${n.y}`;
-                        if (!visited.has(neighborId)) {
-                            const neighborTile = ownedTiles.find(t => t.x === n.x && t.y === n.y);
-                            if (neighborTile) {
-                                visited.add(neighborId);
-                                queue.push(neighborTile);
-                            }
-                        }
-                    }
-                }
-                territories.push(newTerritory);
-            }
+      }
+  
+      if (territories.length > 1) {
+        // The largest territory remains, the rest are neutralized
+        territories.sort((a, b) => b.length - a.length);
+        const tilesToNeutralize = territories.slice(1).flat();
+        
+        if (tilesToNeutralize.length > 0) {
+          const batch = writeBatch(firestore);
+          tilesToNeutralize.forEach(tile => {
+            const tileRef = doc(firestore, "land_tiles", `${tile.x}-${tile.y}`);
+            batch.update(tileRef, { ownerId: null });
+          });
+          
+          await batch.commit().catch(error => {
+            console.error("영토 분단 처리 실패:", error);
+            errorEmitter.emit('permission-error', new FirestorePermissionError({ path: 'land_tiles', operation: 'update'}));
+          });
+  
+          const ownerIsCurrentUser = originalOwnerId === currentUser.id;
+          const originalOwner = allUsers.find(u => u.id === originalOwnerId);
+          const ownerName = originalOwner?.nickname || '상대방';
+  
+          toast({
+            variant: ownerIsCurrentUser ? "destructive" : "default",
+            title: ownerIsCurrentUser ? "영토 분단!" : `공격 성공! (${ownerName})`,
+            description: `영토가 분단되어 타일 ${tilesToNeutralize.length}개를 잃었습니다.`,
+          });
         }
-
-        if (territories.length > 1) {
-            territories.sort((a, b) => b.length - a.length);
-            const tilesToNeutralize = territories.slice(1).flat();
-            
-            if (tilesToNeutralize.length > 0) {
-                const batch = writeBatch(firestore);
-                tilesToNeutralize.forEach(tile => {
-                    const tileRef = doc(firestore, "land_tiles", `${tile.x}-${tile.y}`);
-                    batch.update(tileRef, { ownerId: null });
-                });
-                
-                await batch.commit().catch(error => {
-                    console.error("영토 분단 처리 실패:", error);
-                    errorEmitter.emit('permission-error', new FirestorePermissionError({ path: 'land_tiles or users', operation: 'update'}));
-                });
-
-                const ownerIsCurrentUser = originalOwnerId === currentUser.id;
-                const originalOwner = allUsers.find(u => u.id === originalOwnerId);
-                const ownerName = originalOwner?.nickname || '상대방';
-
-                toast({
-                    variant: ownerIsCurrentUser ? "destructive" : "default",
-                    title: ownerIsCurrentUser ? "영토 분단!" : `공격 성공! (${ownerName})`,
-                    description: `영토가 분단되어 타일 ${tilesToNeutralize.length}개를 잃었습니다.`,
-                });
-            }
-        }
+      }
     } catch(error) {
-         console.error("An error occurred in handleTerritoryCut:", error);
+      console.error("An error occurred in handleTerritoryCut:", error);
     }
   };
 
