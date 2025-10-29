@@ -53,7 +53,7 @@ export interface Tile {
 
 export interface MapAggregate {
     id: string;
-    mapData: (string | null)[];
+    mapData: string; // Base64 encoded string of bytes
     updatedAt: any;
 }
 

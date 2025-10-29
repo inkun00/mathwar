@@ -26,19 +26,32 @@ const createEmptyMap = (): MapData =>
 
 const constructMapFromAggregate = (aggregate: MapAggregate | null): MapData => {
   const emptyMap = createEmptyMap();
-  if (!aggregate) return emptyMap;
+  if (!aggregate || typeof aggregate.mapData !== 'string') return emptyMap;
 
-  const { mapData } = aggregate;
-  // Ensure mapData is an array before processing
-  const safeMapData = Array.isArray(mapData) ? mapData : [];
-  
-  return emptyMap.map((row, y) => 
-    row.map((tile, x) => {
-      const index = y * MAP_WIDTH + x;
-      const ownerId = safeMapData[index] || null;
-      return { ...tile, ownerId };
-    })
-  );
+  try {
+    const decodedString = atob(aggregate.mapData);
+    const ownerIds: (string | null)[] = [];
+    const idByteLength = 32;
+
+    for (let i = 0; i < decodedString.length; i += idByteLength) {
+      const idBytes = decodedString.substring(i, i + idByteLength);
+      // Firestore's null bytes are actual \x00 characters.
+      // We trim them off before checking if the ID is empty.
+      const ownerId = idBytes.replace(/\x00/g, '');
+      ownerIds.push(ownerId.length > 0 ? ownerId : null);
+    }
+    
+    return emptyMap.map((row, y) => 
+      row.map((tile, x) => {
+        const index = y * MAP_WIDTH + x;
+        const ownerId = ownerIds[index] || null;
+        return { ...tile, ownerId };
+      })
+    );
+  } catch (e) {
+    console.error("Failed to decode or parse map data:", e);
+    return emptyMap; // Return empty map on error
+  }
 };
 
 
@@ -88,7 +101,7 @@ export default function GameBoard() {
   }, [displayMapData, allUsers, currentUser]);
   
   const isDemise = useMemo(() => {
-    if (!currentUser || isMapLoading || !displayMapData) return false;
+    if (!currentUser || isMapLoading || !displayMapData || displayMapData.length === 0) return false;
     const hasLand = displayMapData.flat().some(tile => tile.ownerId === currentUser.id);
     return !hasLand && (currentUser.tokens ?? 0) <= 0;
   }, [displayMapData, currentUser, isMapLoading]);
