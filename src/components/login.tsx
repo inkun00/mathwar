@@ -8,8 +8,9 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Logo } from './icons/logo';
-import { Mail, KeyRound } from "lucide-react";
+import { Mail, KeyRound, AlertTriangle } from "lucide-react";
 import { useToast } from '@/hooks/use-toast';
+import { Alert, AlertDescription } from './ui/alert';
 
 const LAST_LOGIN_TIMESTAMP_KEY = 'decimalConquestLastLogin';
 const LOGIN_COOLDOWN_MS = 60 * 60 * 1000; // 1 hour
@@ -115,6 +116,12 @@ export default function Login() {
           <CardDescription className="text-lg">
             {isSignUp ? '새로운 계정을 만들어 영토를 정복하세요.' : '수학 문제를 풀고 영토를 확장하자'}
           </CardDescription>
+           <Alert variant="destructive" className="mt-4 text-left">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              부적절한 방법으로 영토를 확장하는 경우, 경고 없이 계정이 삭제될 수 있습니다.
+            </AlertDescription>
+          </Alert>
         </CardHeader>
         <CardContent>
           <form onSubmit={isSignUp ? handleSignUp : handleSignIn} className="space-y-4 text-left">
