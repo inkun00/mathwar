@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useCallback } from "react";
-import type { Tile, MathProblem, Country, User, ProblemAttempt, InvasionTarget, WrongAnswer, MapData, MapAggregate } from "@/lib/types";
+import type { Tile, MathProblem, Country, User, ProblemAttempt, InvasionTarget, WrongAnswer, MapData } from "@/lib/types";
 import { generateMathProblem, isAdjacent, canConquer as canConquerLogic } from "@/lib/game-logic";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -24,39 +24,17 @@ const createEmptyMap = (): MapData =>
     }))
   );
 
-const constructMapFromAggregate = (aggregate: MapAggregate | null): MapData => {
-  const emptyMap = createEmptyMap();
-  if (!aggregate || !aggregate.mapData || !(aggregate.mapData instanceof Uint8Array)) {
-    return emptyMap;
-  }
+const constructMapFromTiles = (tiles: Tile[] | null): MapData => {
+  const map = createEmptyMap();
+  if (!tiles) return map;
 
-  try {
-    const decoder = new TextDecoder('utf-8');
-    const decodedString = decoder.decode(aggregate.mapData);
-    
-    const ownerIds: (string | null)[] = [];
-    const idByteLength = 32;
-
-    for (let i = 0; i < decodedString.length; i += idByteLength) {
-      const idBytes = decodedString.substring(i, i + idByteLength);
-      // Firestore's null bytes are actual \x00 characters.
-      // We trim them off before checking if the ID is empty.
-      const ownerId = idBytes.replace(/\x00/g, '');
-      ownerIds.push(ownerId.length > 0 ? ownerId : null);
+  tiles.forEach(tile => {
+    if (map[tile.y] && map[tile.y][tile.x]) {
+      map[tile.y][tile.x] = { ...tile };
     }
-    
-    let tileIndex = 0;
-    return emptyMap.map((row) => 
-      row.map((tile) => {
-        const ownerId = ownerIds[tileIndex] || null;
-        tileIndex++;
-        return { ...tile, ownerId };
-      })
-    );
-  } catch (e) {
-    console.error("Failed to decode or parse map data:", e);
-    return emptyMap; // Return empty map on error
-  }
+  });
+
+  return map;
 };
 
 
@@ -75,8 +53,8 @@ export default function GameBoard() {
   const usersQuery = useMemoFirebase(() => firestore ? collection(firestore, "users") : null, [firestore]);
   const { data: allUsers, isLoading: isAllUsersLoading } = useCollection<User>(usersQuery);
 
-  const mapAggregateQuery = useMemoFirebase(() => firestore ? collection(firestore, "map_aggregates") : null, [firestore]);
-  const { data: mapAggregateResult, isLoading: isMapLoading } = useCollection<MapAggregate>(mapAggregateQuery);
+  const landTilesQuery = useMemoFirebase(() => firestore ? collection(firestore, "land_tiles") : null, [firestore]);
+  const { data: landTiles, isLoading: isMapLoading } = useCollection<Tile>(landTilesQuery);
 
   const problemAttemptsQuery = useMemoFirebase(() => authUser && firestore ? collection(firestore, 'problem_attempts', authUser.uid, 'attempts') : null, [authUser, firestore]);
   const { data: problemAttempts } = useCollection<ProblemAttempt>(problemAttemptsQuery);
@@ -94,7 +72,7 @@ export default function GameBoard() {
   const [isBuildingWall, setIsBuildingWall] = useState(false);
 
   // --- Memoized Derived State ---
-  const displayMapData = useMemo(() => constructMapFromAggregate(mapAggregateResult?.[0] ?? null), [mapAggregateResult]);
+  const displayMapData = useMemo(() => constructMapFromTiles(landTiles), [landTiles]);
 
   const currentUserCountry = useMemo(() => countries?.find(c => c.id === currentUser?.countryId), [countries, currentUser]);
   
@@ -486,5 +464,3 @@ export default function GameBoard() {
     </div>
   );
 }
-
-    
