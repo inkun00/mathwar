@@ -181,15 +181,13 @@ export default function GameBoard({
     });
   };
 
-  const handleTerritoryCut = async (originalOwnerId: string, conquerorId: string | null) => {
+  const handleTerritoryCut = async (originalOwnerId: string, conquerorId: string | null, currentMapData: MapData) => {
     if (!firestore || !currentUser || !allUsers) return;
 
     try {
-        const tilesCollectionRef = collection(firestore, "land_tiles");
-        const landTilesSnapshot = await getDocs(tilesCollectionRef);
-        const currentLandTiles = landTilesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Tile));
-
+        const currentLandTiles = currentMapData.flat();
         const ownedTiles = currentLandTiles.filter(t => t.ownerId === originalOwnerId);
+
         if (ownedTiles.length === 0) {
           if (conquerorId) {
             const originalOwnerUser = allUsers.find(u => u.id === originalOwnerId);
@@ -295,15 +293,19 @@ export default function GameBoard({
     const tileRef = doc(firestore, "land_tiles", tileId);
     const tileData = { x: invasionTarget.x, y: invasionTarget.y, ownerId: currentUser.id, hasWall: false };
 
-    setDisplayMapData(prevMap => getMapWithTiles(prevMap, [{ ...tileData, id: tileId }]));
+    // Optimistically update local state
+    const newMapData = getMapWithTiles(displayMapData, [{ ...tileData, id: tileId }]);
+    setDisplayMapData(newMapData);
 
     try {
       await setDoc(tileRef, tileData, { merge: true });
       if (originalOwnerId) {
-        await handleTerritoryCut(originalOwnerId, currentUser.id);
+        // Pass the new map data directly
+        await handleTerritoryCut(originalOwnerId, currentUser.id, newMapData);
       }
     } catch (error) {
         console.error("침략 실패:", error);
+        // Revert local state on failure
         const originalTile = initialLandTiles.find(t => t.id === tileId);
         setDisplayMapData(prevMap => getMapWithTiles(prevMap, [originalTile || { ...tileData, id: tileId, ownerId: originalOwnerId }]));
         const permissionError = new FirestorePermissionError({
@@ -503,6 +505,7 @@ export default function GameBoard({
         wrongAnswers={wrongAnswers}
         isBuildingWall={isBuildingWall}
         onToggleWallBuilding={handleToggleWallBuilding}
+        onFullRefresh={onFullRefresh}
       />
       <div className="relative h-full w-full max-w-7xl flex-grow">
         <WorldMap 
@@ -538,4 +541,5 @@ export default function GameBoard({
     </div>
   );
 }
- 
+
+    
