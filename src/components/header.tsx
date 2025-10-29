@@ -4,14 +4,14 @@ import { Logo } from "@/components/icons/logo";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import type { User, Tile } from "@/lib/types";
-import { UserCircle, HelpCircle, User as UserIcon, Trophy, Store, Shield, RefreshCw } from "lucide-react";
+import { UserCircle, HelpCircle, User as UserIcon, Trophy, Store, Shield } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import ProfileSheet from "./profile-sheet";
 import LeaderboardSheet from "./leaderboard-sheet";
 import MarketSheet from "./market-sheet";
 import type { Country, ProblemAttempt, WrongAnswer } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
-import { useMemo, useState, useEffect, useCallback } from "react";
+import { useMemo, useState } from "react";
 import { Badge } from "./ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 import { cn } from "@/lib/utils";
@@ -26,10 +26,7 @@ interface HeaderProps {
   wrongAnswers: WrongAnswer[];
   isBuildingWall: boolean;
   onToggleWallBuilding: () => void;
-  onFullRefresh: () => Promise<void>;
 }
-
-const REFRESH_COOLDOWN = 10 * 60 * 1000; // 10 minutes
 
 export default function Header({ 
   currentUser, 
@@ -41,39 +38,9 @@ export default function Header({
   wrongAnswers,
   isBuildingWall,
   onToggleWallBuilding,
-  onFullRefresh,
 }: HeaderProps) {
   const userCountry = countries.find(c => c.id === currentUser.countryId);
   const { toast } = useToast();
-  
-  const [cooldownTime, setCooldownTime] = useState(0);
-
-  const calculateRemainingCooldown = useCallback(() => {
-    const lastRefresh = localStorage.getItem('lastFullRefresh');
-    if (lastRefresh) {
-        const timePassed = Date.now() - parseInt(lastRefresh, 10);
-        if (timePassed < REFRESH_COOLDOWN) {
-            setCooldownTime(REFRESH_COOLDOWN - timePassed);
-            return REFRESH_COOLDOWN - timePassed;
-        }
-    }
-    setCooldownTime(0);
-    return 0;
-  }, []);
-  
-  useEffect(() => {
-    const remaining = calculateRemainingCooldown();
-    if (remaining > 0) {
-        const interval = setInterval(() => {
-            const newRemaining = calculateRemainingCooldown();
-            if (newRemaining <= 0) {
-                clearInterval(interval);
-            }
-        }, 1000);
-        return () => clearInterval(interval);
-    }
-  }, [calculateRemainingCooldown]);
-
 
   const remainingProblems = useMemo(() => {
     const twentyFourHoursAgo = Date.now() - 24 * 60 * 60 * 1000;
@@ -110,32 +77,7 @@ export default function Header({
     }
   }
 
-  const handleFullRefreshClick = async () => {
-    const remaining = calculateRemainingCooldown();
-    if (remaining > 0) {
-        const minutes = Math.floor(remaining / 60000);
-        const seconds = Math.floor((remaining % 60000) / 1000);
-        toast({
-            variant: "destructive",
-            title: "새로고침 대기시간",
-            description: `다음 새로고침까지 ${minutes}분 ${seconds}초 남았습니다.`,
-        });
-        return;
-    }
-    
-    await onFullRefresh();
-    localStorage.setItem('lastFullRefresh', Date.now().toString());
-    calculateRemainingCooldown(); // Recalculate to start the timer
-  }
-
   const continents = ["대륙 1", "대륙 2", "대륙 3", "대륙 4", "대륙 5"];
-  
-  const formatCooldown = (ms: number) => {
-    if (ms <= 0) return null;
-    const minutes = Math.floor(ms / 60000);
-    const seconds = Math.floor((ms % 60000) / 1000).toString().padStart(2, '0');
-    return `${minutes}:${seconds}`;
-  }
 
   return (
     <header className="w-full max-w-full rounded-lg border bg-card/80 p-4 shadow-md backdrop-blur-sm">
@@ -274,5 +216,3 @@ export default function Header({
     </header>
   );
 }
-
-    

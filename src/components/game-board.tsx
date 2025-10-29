@@ -6,15 +6,15 @@ import { generateMathProblem, isAdjacent, canConquer as canConquerLogic } from "
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { ZoomIn, ZoomOut } from "lucide-react";
-import { useFirestore, useUser, errorEmitter, FirestorePermissionError, useMemoFirebase } from "@/firebase";
-import { doc, setDoc, updateDoc, writeBatch, increment, collection, getDocs, arrayUnion, query, where, onSnapshot } from "firebase/firestore";
+import { useFirestore, useUser, errorEmitter, FirestorePermissionError } from "@/firebase";
+import { doc, setDoc, updateDoc, writeBatch, increment, collection, arrayUnion, query, where, onSnapshot } from "firebase/firestore";
 import { addWrongAnswer } from "@/firebase/firestore/data";
 
 import Header from "./header";
 import WorldMap from "./world-map";
 import ProblemModal from "./problem-modal";
 import DemiseScreen from "./demise-screen";
-import { isLand, MAP_WIDTH, MAP_HEIGHT } from "@/lib/world-map-shape";
+import { MAP_WIDTH, MAP_HEIGHT } from "@/lib/world-map-shape";
 
 interface GameBoardProps {
   currentUserProfile: User;
@@ -74,20 +74,20 @@ const usePartialMapUpdates = (
     const minY_watch = Math.max(0, minY - BORDER_RADIUS);
     const maxY_watch = Math.min(MAP_HEIGHT - 1, maxY + BORDER_RADIUS);
 
-    // 2. Set up a single listener for the surrounding area
+    // 2. Set up a query for the surrounding rectangular area
     const partialQuery = query(
       collection(firestore, "land_tiles"),
       where("x", ">=", minX_watch),
-      where("x", "<=", maxX_watch)
+      where("x", "<=", maxX_watch),
+      where("y", ">=", minY_watch),
+      where("y", "<=", maxY_watch)
     );
 
     const unsubscribe = onSnapshot(partialQuery, (snapshot) => {
       const updatedTiles: Tile[] = [];
       snapshot.docChanges().forEach((change) => {
          const tileData = change.doc.data() as Tile;
-         if (tileData.y >= minY_watch && tileData.y <= maxY_watch) {
-            updatedTiles.push({ id: change.doc.id, ...tileData });
-         }
+         updatedTiles.push({ id: change.doc.id, ...tileData });
       });
       if (updatedTiles.length > 0) {
         onUpdate(updatedTiles);
@@ -505,7 +505,6 @@ export default function GameBoard({
         wrongAnswers={wrongAnswers}
         isBuildingWall={isBuildingWall}
         onToggleWallBuilding={handleToggleWallBuilding}
-        onFullRefresh={onFullRefresh}
       />
       <div className="relative h-full w-full max-w-7xl flex-grow">
         <WorldMap 
@@ -541,5 +540,3 @@ export default function GameBoard({
     </div>
   );
 }
-
-    
