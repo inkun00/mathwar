@@ -28,9 +28,11 @@ export default function Home() {
   const mapDocRef = useMemoFirebase(() => firestore ? doc(firestore, "maps", MAP_DOC_ID) : null, [firestore]);
   const { data: gameMap, isLoading: isMapLoading } = useDoc<GameMap>(mapDocRef);
   
-  const isLoading = isAuthUserLoading || isUserProfileLoading || isCountriesLoading || isAllUsersLoading || isMapLoading;
+  // Overall loading state: true if auth is loading OR if any of the dependent data is still loading
+  const isLoading = isAuthUserLoading || (authUser && (isUserProfileLoading || isCountriesLoading || isAllUsersLoading || isMapLoading));
 
-  if (isLoading) {
+  // Base loading skeleton for initial auth check
+  if (isAuthUserLoading) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
@@ -41,8 +43,21 @@ export default function Home() {
     );
   }
 
+  // User is not authenticated, show login page.
   if (!authUser) {
     return <Login />;
+  }
+
+  // User is authenticated, but we are waiting for their profile to load (or determine non-existence)
+  if (isUserProfileLoading) {
+      return (
+        <div className="flex h-screen w-full items-center justify-center bg-background">
+           <div className="flex flex-col items-center gap-4">
+              <Skeleton className="h-16 w-64" />
+              <Skeleton className="h-96 w-[80vw] max-w-4xl" />
+            </div>
+        </div>
+      );
   }
 
   // If the user is authenticated but has no profile, show the sign-up details form.
@@ -64,7 +79,7 @@ export default function Home() {
     );
   }
 
-  // Fallback loading state or initial state before user profile is determined
+  // Fallback loading state for when user is authenticated and profile exists, but other data is still loading
   return (
     <div className="flex h-screen w-full items-center justify-center bg-background">
        <div className="flex flex-col items-center gap-4">
