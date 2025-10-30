@@ -21,22 +21,22 @@ const TileComponent = React.memo(({
   onClick,
   isConquerable,
   isWallBuildable,
+  isLandTile,
   tooltipContent
 }: {
   tile: ClientTile | null;
   onClick: () => void;
   isConquerable: boolean;
   isWallBuildable: boolean;
+  isLandTile: boolean;
   tooltipContent: React.ReactNode;
 }) => {
-  const isLandTile = !!tile;
-
   const tileClasses = cn(
     "relative aspect-square transition-all duration-300 ease-in-out border border-border/10",
     {
-      'bg-[#f0e6d2]': isLandTile && !tile?.countryColor,
-      'hover:bg-[#e6dac8]': isLandTile && !tile?.countryColor && isConquerable,
-      'bg-[#aadaff]': !isLandTile, 
+      'bg-[#f0e6d2]': isLandTile && tile && !tile.countryColor,
+      'hover:bg-[#e6dac8]': isLandTile && tile && !tile.countryColor && isConquerable,
+      'bg-[#aadaff]': !isLandTile,
     },
     { 'shadow-inner': tile?.countryColor },
     isConquerable && "cursor-pointer ring-2 ring-offset-1 ring-offset-background ring-primary/70 z-10 hover:brightness-110",
@@ -112,20 +112,18 @@ export default function WorldMap({ landTiles, onTileClick, canConquer, canBuildW
         {Array.from({ length: MAP_HEIGHT * MAP_WIDTH }).map((_, index) => {
           const x = index % MAP_WIDTH;
           const y = Math.floor(index / MAP_WIDTH);
-          
-          if (!isLand(x,y)) {
-             return <TileComponent key={index} tile={null} onClick={()=>{}} isConquerable={false} isWallBuildable={false} tooltipContent={null} />
-          }
+          const isLandTile = isLand(x, y);
 
-          const tile = tilesMap.get(`${x},${y}`) || { id: `${x}-${y}`, x, y, ownerId: null, hasWall: false };
+          const tile = isLandTile ? (tilesMap.get(`${x},${y}`) || { id: `${x}-${y}`, x, y, ownerId: null, hasWall: false, ownerNickname: null, countryId: null, countryName: null, countryColor: null }) : null;
 
           return (
             <TileComponent
               key={index}
               tile={tile}
-              onClick={() => onTileClick(tile.x, tile.y)}
-              isConquerable={canConquer(tile)}
-              isWallBuildable={canBuildWall(tile)}
+              onClick={() => onTileClick(x, y)}
+              isConquerable={tile ? canConquer(tile) : false}
+              isWallBuildable={tile ? canBuildWall(tile) : false}
+              isLandTile={isLandTile}
               tooltipContent={getTooltipContent(tile)}
             />
           );

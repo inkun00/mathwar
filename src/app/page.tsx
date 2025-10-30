@@ -34,7 +34,6 @@ export default function Home() {
       try {
         setIsInitialDataLoading(true);
         
-        // Fetch all necessary collections in parallel
         const [tilesSnapshot, countriesSnapshot, usersSnapshot, attemptsSnapshot, wrongsSnapshot] = await Promise.all([
           getDocs(collection(firestore, "land_tiles")),
           getDocs(collection(firestore, "countries")),
