@@ -73,6 +73,8 @@ TileComponent.displayName = "TileComponent";
 
 
 export default function WorldMap({ landTiles, onTileClick, canConquer, canBuildWall, zoomLevel, currentUser }: WorldMapProps) {
+  console.log('[WorldMap] Rendering with landTiles prop length:', landTiles.length);
+  
   const getTooltipContent = (tile: ClientTile): React.ReactNode => {
     if (!isLand(tile.x, tile.y)) return null;
     if (!tile.ownerId) return <p className="text-lg">미개척지</p>;
