@@ -12,7 +12,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import type { MathProblem, StorableProblem } from '@/lib/types';
+import type { MathProblem, StorableProblem, ProblemAttempt } from '@/lib/types';
 import { useState, type FormEvent, useEffect, useMemo } from 'react';
 import { CheckCircle, XCircle, Swords, Shield } from 'lucide-react';
 import { useFirestore } from '@/firebase';
@@ -37,6 +37,7 @@ interface ProblemModalProps {
   reviewProblem?: StorableProblem | null;
   hasWall?: boolean;
   invasionWallBreaks?: number;
+  onAttempt?: (attempt: Omit<ProblemAttempt, 'id'>) => void;
 }
 
 export default function ProblemModal({
@@ -51,6 +52,7 @@ export default function ProblemModal({
   reviewProblem = null,
   hasWall = false,
   invasionWallBreaks = 0,
+  onAttempt,
 }: ProblemModalProps) {
   const [answers, setAnswers] = useState<string[]>([]);
   const { toast } = useToast();
@@ -72,18 +74,26 @@ export default function ProblemModal({
 
   const recordAttempt = async (correctStatus: boolean) => {
     if (!userId || !firestore || !problem || isReview) return;
+    const attemptData = {
+      userId: userId,
+      unit: problem.type,
+      area: problem.subType,
+      correct: correctStatus,
+      timestamp: new Date().toISOString(), // Use client-side timestamp for immediate UI update
+      isReview: isReview,
+      problem: problemNodeToString(problem.problem),
+    };
+
+    // Update local state immediately
+    if (onAttempt) {
+      onAttempt(attemptData);
+    }
+    
+    // Then, save to Firestore with server timestamp
     try {
       await addDoc(
         collection(firestore, 'problem_attempts', userId, 'attempts'),
-        {
-          userId: userId,
-          unit: problem.type,
-          area: problem.subType,
-          correct: correctStatus,
-          timestamp: serverTimestamp(),
-          isReview: isReview,
-          problem: problemNodeToString(problem.problem),
-        }
+        { ...attemptData, timestamp: serverTimestamp() }
       );
     } catch (error) {
       console.error('문제 풀이 기록 오류:', error);

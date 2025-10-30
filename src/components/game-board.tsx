@@ -54,9 +54,6 @@ export default function GameBoard({
     setCurrentUser(liveCurrentUser);
   }, [liveCurrentUser]);
 
-  useEffect(() => {
-    setProblemAttempts(initialProblemAttempts);
-  }, [initialProblemAttempts]);
 
   const flatLandTiles = initialLandTiles;
 
@@ -129,16 +126,6 @@ export default function GameBoard({
      .then(() => {
         // Optimistically update local state
         setCurrentUser(prev => ({ ...prev!, tokens: (prev?.tokens ?? 0) + 1 }));
-        setProblemAttempts(prev => [...prev, {
-            id: Math.random().toString(),
-            userId: authUser.uid,
-            unit: 'decimal',
-            area: 'decimal-add',
-            correct: true,
-            timestamp: new Date().toISOString(),
-            isReview: false,
-            problem: 'optimistic-update'
-        }]);
       })
       .catch(error => {
         const permissionError = new FirestorePermissionError({
@@ -221,6 +208,15 @@ export default function GameBoard({
 
   const handleTileClick = async (x: number, y: number) => {
     if (!currentUser || !firestore || isProcessingClick || !authUser) return;
+    
+    if ((currentUser.tokens ?? 0) <= 0 && !isBuildingWall) {
+      toast({
+        variant: "destructive",
+        title: "토큰이 없습니다!",
+        description: "문제를 풀어 더 많은 확장 토큰을 획득하세요.",
+      });
+      return;
+    }
     setIsProcessingClick(true);
   
     const clickedTile = flatLandTiles.find(t => t.x === x && t.y === y);
@@ -260,16 +256,6 @@ export default function GameBoard({
       return;
     }
   
-    if ((currentUser.tokens ?? 0) <= 0) {
-      toast({
-        variant: "destructive",
-        title: "토큰이 없습니다!",
-        description: "문제를 풀어 더 많은 확장 토큰을 획득하세요.",
-      });
-      setIsProcessingClick(false);
-      return;
-    }
-    
     if (clickedTile) { // Conquering an existing tile
       if (clickedTile.ownerId === currentUser.id) {
         setIsProcessingClick(false); // clicked own tile
@@ -327,8 +313,8 @@ export default function GameBoard({
             transaction.set(newTileRef, tileData);
             transaction.update(userRef, { tokens: increment(-1) });
         });
-
-      } catch (e) {
+        setCurrentUser(prev => ({ ...prev!, tokens: (prev?.tokens ?? 0) - 1 }));
+      } catch (e: any) {
           console.error("타일 클릭 트랜잭션 실패:", e);
           const permissionError = new FirestorePermissionError({
             path: `land_tiles/`, // Path is dynamic, so we just indicate collection
@@ -336,6 +322,7 @@ export default function GameBoard({
             requestResourceData: tileData,
           });
           errorEmitter.emit('permission-error', permissionError);
+          toast({ variant: "destructive", title: "확장 오류", description: e.message || "영토를 확장하는 중 오류가 발생했습니다." });
       } finally {
         setIsProcessingClick(false);
       }
@@ -428,6 +415,10 @@ export default function GameBoard({
       addWrongAnswer(firestore, authUser.uid, problem);
     }
   };
+  
+  const addProblemAttempt = (newAttempt: Omit<ProblemAttempt, 'id'>) => {
+     setProblemAttempts(prev => [...prev, { ...newAttempt, id: Math.random().toString() }]);
+  }
 
   if (!currentUser) {
      return (
@@ -484,6 +475,7 @@ export default function GameBoard({
         reviewProblem={null}
         hasWall={invasionTarget?.hasWall}
         invasionWallBreaks={invasionWallBreaks}
+        onAttempt={addProblemAttempt}
       />
       {isDemise && <DemiseScreen onRestart={handleRestart} />}
     </div>

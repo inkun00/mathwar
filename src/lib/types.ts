@@ -109,7 +109,7 @@ export interface ProblemAttempt {
     unit: ProblemType;
     area: ProblemSubType;
     correct: boolean;
-    timestamp: any; // Firestore ServerTimestamp
+    timestamp: any; // Firestore ServerTimestamp or string for optimistic update
     isReview: boolean;
     problem: string;
 }
