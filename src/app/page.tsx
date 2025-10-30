@@ -16,29 +16,20 @@ export default function Home() {
   // Data fetching hooks
   const userDocRef = useMemoFirebase(() => (firestore && authUser) ? doc(firestore, 'users', authUser.uid) : null, [firestore, authUser]);
   const countriesQuery = useMemoFirebase(() => firestore ? collection(firestore, 'countries') : null, [firestore]);
-  const allUsersQuery = useMemoFirebase(() => firestore ? collection(firestore, 'users') : null, [firestore]);
-  const mapDocRef = useMemoFirebase(() => firestore ? doc(firestore, 'map_aggregates', 'latest') : null, [firestore]);
-  const attemptsQuery = useMemoFirebase(() => {
-    if (!authUser || !firestore) return null;
-    return collection(firestore, 'problem_attempts', authUser.uid, 'attempts');
-  }, [authUser, firestore]);
-   const wrongAnswersQuery = useMemoFirebase(() => {
-    if (!authUser || !firestore) return null;
-    return collection(firestore, 'users', authUser.uid, 'wrong_answers');
-  }, [authUser, firestore]);
-
-
+  const landTilesQuery = useMemoFirebase(() => firestore ? collection(firestore, 'land_tiles') : null, [firestore]);
+  const problemAttemptsQuery = useMemoFirebase(() => (firestore && authUser) ? collection(firestore, 'problem_attempts', authUser.uid, 'attempts') : null, [firestore]);
+  const wrongAnswersQuery = useMemoFirebase(() => (firestore && authUser) ? collection(firestore, 'users', authUser.uid, 'wrong_answers') : null, [firestore]);
+  
   const { data: userProfile, isLoading: isUserProfileLoading } = useDoc<User>(userDocRef);
   const { data: countries, isLoading: isCountriesLoading } = useCollection<Country>(countriesQuery);
-  const { data: allUsers, isLoading: isUsersLoading } = useCollection<User>(allUsersQuery);
-  const { data: gameMap, isLoading: isMapLoading } = useDoc<MapAggregate>(mapDocRef);
-  const { data: problemAttempts, isLoading: isAttemptsLoading } = useCollection<ProblemAttempt>(attemptsQuery);
+  const { data: landTiles, isLoading: isLandTilesLoading } = useCollection<ClientTile>(landTilesQuery);
+  const { data: problemAttempts, isLoading: isAttemptsLoading } = useCollection<ProblemAttempt>(problemAttemptsQuery);
   const { data: wrongAnswers, isLoading: isWrongAnswersLoading } = useCollection<WrongAnswer>(wrongAnswersQuery);
 
-  // Combined loading state
-  const isLoading = isAuthUserLoading || isUserProfileLoading || isCountriesLoading || isUsersLoading || isMapLoading || isAttemptsLoading || isWrongAnswersLoading;
-  
-  if (isAuthUserLoading || (authUser && isLoading)) {
+  // Derived loading state
+  const isCoreDataLoading = isUserProfileLoading || isCountriesLoading || isLandTilesLoading || isAttemptsLoading || isWrongAnswersLoading;
+
+  if (isAuthUserLoading) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
@@ -48,7 +39,7 @@ export default function Home() {
       </div>
     );
   }
-  
+
   if (!authUser) {
     return <Login />;
   }
@@ -57,16 +48,26 @@ export default function Home() {
   if (authUser && !userProfile && !isUserProfileLoading) {
     return <SignUpDetails />;
   }
+  
+  if (isCoreDataLoading) {
+      return (
+      <div className="flex h-screen w-full items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-4">
+            <h2 className="text-xl font-semibold">게임 데이터를 불러오는 중...</h2>
+            <p className="text-muted-foreground">잠시만 기다려주세요.</p>
+        </div>
+      </div>
+    );
+  }
 
   // user is logged in, has a profile, and all data is loaded
-  if (authUser && userProfile && countries && allUsers && gameMap && problemAttempts && wrongAnswers) {
+  if (userProfile && countries && landTiles && problemAttempts && wrongAnswers) {
     return (
       <div className="relative flex h-screen w-full flex-col items-center bg-background p-4 sm:p-6 md:p-8">
         <GameBoard 
           currentUser={userProfile}
           initialCountries={countries}
-          initialAllUsers={allUsers}
-          initialGameMap={gameMap}
+          initialLandTiles={landTiles}
           initialProblemAttempts={problemAttempts}
           initialWrongAnswers={wrongAnswers}
         />
@@ -74,7 +75,7 @@ export default function Home() {
     );
   }
 
-  // Fallback for any other state, including initial load before authUser is known
+  // Fallback for any other state
   return (
     <div className="flex h-screen w-full items-center justify-center bg-background">
        <div className="flex flex-col items-center gap-4">

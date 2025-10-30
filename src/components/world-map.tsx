@@ -2,14 +2,14 @@
 'use client';
 import type { MapData, User, ClientTile, Country } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { isLand } from "@/lib/world-map-shape";
+import { isLand, MAP_WIDTH, MAP_HEIGHT } from "@/lib/world-map-shape";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import React from "react";
 import { useMemo } from 'react';
 import FlagDisplay from "./flag-display";
 
 interface WorldMapProps {
-  displayMapData: MapData;
+  displayMapData: ClientTile[];
   users: User[];
   countries: Country[];
   onTileClick: (x: number, y: number) => void;
@@ -38,11 +38,9 @@ const TileComponent = React.memo(({
   const tileClasses = cn(
     "relative aspect-square transition-all duration-300 ease-in-out border border-border/10",
     {
-      // Land
       'bg-[#f0e6d2]': isLandTile && !ownerColor,
       'hover:bg-[#e6dac8]': isLandTile && !ownerColor && isConquerable,
-      // Water
-      'bg-[#aadaff]': !isLandTile, // Water is always the same color
+      'bg-[#aadaff]': !isLandTile, 
     },
     { 'shadow-inner': ownerColor },
     isConquerable && "cursor-pointer ring-2 ring-offset-1 ring-offset-background ring-primary/70 z-10 hover:brightness-110",
@@ -111,17 +109,29 @@ export default function WorldMap({ displayMapData, users, countries, onTileClick
     );
   };
   
+  const mapGrid = useMemo(() => {
+    const grid: (ClientTile | { x: number; y: number; ownerId: null; hasWall: boolean})[][] = Array.from({ length: MAP_HEIGHT }, (_, y) =>
+        Array.from({ length: MAP_WIDTH }, (_, x) => ({ x, y, ownerId: null, hasWall: false }))
+    );
+    displayMapData.forEach(tile => {
+        if (grid[tile.y] && grid[tile.y][tile.x]) {
+            grid[tile.y][tile.x] = tile;
+        }
+    });
+    return grid.flat();
+  }, [displayMapData]);
+
   return (
     <div className="relative h-full w-full max-w-7xl overflow-auto rounded-lg border bg-card/80 p-2 shadow-inner backdrop-blur-sm md:p-4">
       <div 
         className="grid touch-none select-none gap-0 transition-transform duration-300 ease-in-out"
         style={{
-          gridTemplateColumns: `repeat(${displayMapData[0].length}, minmax(0, 1fr))`,
+          gridTemplateColumns: `repeat(${MAP_WIDTH}, minmax(0, 1fr))`,
           transform: `scale(${zoomLevel})`,
           transformOrigin: 'center center',
         }}
       >
-        {displayMapData.flat().map((tile) => (
+        {mapGrid.map((tile) => (
           <TileComponent
             key={`${tile.x}-${tile.y}`}
             tile={tile}
