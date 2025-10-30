@@ -303,12 +303,23 @@ export default function ProfileSheet({ currentUser: initialUser, onOpenChange }:
               if (type === 'join') {
                   batch.update(doc(firestore, "users", (request as JoinRequest).requesterId), { countryId: (request as JoinRequest).targetCountryId });
                   toast({ title: "가입 수락", description: `${(request as JoinRequest).requesterNickname}님이 국가에 가입했습니다.` });
-              } else {
-                  const q = query(collection(firestore, "users"), where("countryId", "==", (request as AllianceRequest).requestingCountryId));
+              } else { // 'alliance'
+                  const requestingCountryId = (request as AllianceRequest).requestingCountryId;
+                  const targetCountryId = (request as AllianceRequest).targetCountryId;
+
+                  // Find all users from the requesting country
+                  const q = query(collection(firestore, "users"), where("countryId", "==", requestingCountryId));
                   const membersSnapshot = await getDocs(q);
-                  membersSnapshot.forEach(memberDoc => batch.update(memberDoc.ref, { countryId: (request as AllianceRequest).targetCountryId }));
-                  batch.update(doc(firestore, "countries", (request as AllianceRequest).requestingCountryId), { demised: true });
-                  toast({ title: "동맹 체결", description: `${(request as AllianceRequest).requestingCountryName} 국가와 동맹을 맺었습니다.` });
+                  
+                  // Update each member to the target country
+                  membersSnapshot.forEach(memberDoc => {
+                      batch.update(memberDoc.ref, { countryId: targetCountryId, isCountryOwner: false });
+                  });
+                  
+                  // Mark the old country as demised
+                  batch.update(doc(firestore, "countries", requestingCountryId), { demised: true });
+
+                  toast({ title: "동맹 체결 (합병)!", description: `${(request as AllianceRequest).requestingCountryName} 국가가 우리 국가로 합병되었습니다.` });
               }
               await batch.commit();
           } else {
@@ -316,7 +327,7 @@ export default function ProfileSheet({ currentUser: initialUser, onOpenChange }:
               toast({ title: "요청 거절", description: `요청을 거절했습니다.` });
           }
           fetchProfileData(); // Refresh data
-      } catch (e) { toast({ variant: "destructive", title: "오류" }); } finally { setIsProcessing(false); }
+      } catch (e) { console.error(e); toast({ variant: "destructive", title: "오류" }); } finally { setIsProcessing(false); }
   };
 
 
@@ -381,39 +392,45 @@ export default function ProfileSheet({ currentUser: initialUser, onOpenChange }:
               <CardContent className="pt-6 space-y-4">
                 {currentUser.isCountryOwner && (
                     <div>
-                        {profileData.joinRequests.length > 0 && (
-                            <div className="space-y-2">
-                                <h4 className="font-semibold">가입 요청</h4>
-                                {profileData.joinRequests.map(req => (
-                                    <div key={req.id} className="flex items-center justify-between p-2 rounded-md bg-muted">
-                                        <span>{req.requesterNickname}</span>
-                                        <div className="space-x-1"><Button size="icon" variant="ghost" onClick={() => handleRequestResponse(req, 'join', 'approve')}><Check className="h-4 w-4 text-green-500"/></Button><Button size="icon" variant="ghost" onClick={() => handleRequestResponse(req, 'join', 'reject')}><X className="h-4 w-4 text-red-500"/></Button></div>
+                        {(profileData.joinRequests.length > 0 || profileData.allianceRequests.length > 0) ? (
+                            <>
+                                {profileData.joinRequests.length > 0 && (
+                                    <div className="space-y-2">
+                                        <h4 className="font-semibold">가입 요청</h4>
+                                        {profileData.joinRequests.map(req => (
+                                            <div key={req.id} className="flex items-center justify-between p-2 rounded-md bg-muted">
+                                                <span>{req.requesterNickname}</span>
+                                                <div className="space-x-1"><Button size="icon" variant="ghost" onClick={() => handleRequestResponse(req, 'join', 'approve')}><Check className="h-4 w-4 text-green-500"/></Button><Button size="icon" variant="ghost" onClick={() => handleRequestResponse(req, 'join', 'reject')}><X className="h-4 w-4 text-red-500"/></Button></div>
+                                            </div>
+                                        ))}
                                     </div>
-                                ))}
-                            </div>
-                        )}
-                        {profileData.allianceRequests.length > 0 && (
-                             <div className="space-y-2 mt-4">
-                                <h4 className="font-semibold">동맹 요청</h4>
-                                {profileData.allianceRequests.map(req => (
-                                    <div key={req.id} className="flex items-center justify-between p-2 rounded-md bg-muted">
-                                        <span>{req.requestingCountryName}</span>
-                                        <div className="space-x-1"><Button size="icon" variant="ghost" onClick={() => handleRequestResponse(req, 'alliance', 'approve')}><Check className="h-4 w-4 text-green-500"/></Button><Button size="icon" variant="ghost" onClick={() => handleRequestResponse(req, 'alliance', 'reject')}><X className="h-4 w-4 text-red-500"/></Button></div>
+                                )}
+                                {profileData.allianceRequests.length > 0 && (
+                                    <div className="space-y-2 mt-4">
+                                        <h4 className="font-semibold">동맹 요청 (상대 국가가 우리 국가로 합병됩니다)</h4>
+                                        {profileData.allianceRequests.map(req => (
+                                            <div key={req.id} className="flex items-center justify-between p-2 rounded-md bg-muted">
+                                                <span>{req.requestingCountryName}</span>
+                                                <div className="space-x-1"><Button size="icon" variant="ghost" onClick={() => handleRequestResponse(req, 'alliance', 'approve')}><Check className="h-4 w-4 text-green-500"/></Button><Button size="icon" variant="ghost" onClick={() => handleRequestResponse(req, 'alliance', 'reject')}><X className="h-4 w-4 text-red-500"/></Button></div>
+                                            </div>
+                                        ))}
                                     </div>
-                                ))}
-                            </div>
+                                )}
+                            </>
+                        ) : (
+                           <p className="text-sm text-muted-foreground text-center">받은 요청이 없습니다.</p>
                         )}
                          <Popover open={isAllianceComboboxOpen} onOpenChange={setAllianceComboboxOpen}>
                             <PopoverTrigger asChild>
                                 <Button variant="outline" role="combobox" className="w-full justify-between mt-4"><Handshake className="mr-2 h-4 w-4" /> 동맹 요청<ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" /></Button>
                             </PopoverTrigger>
                             <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
-                                <Command><CommandInput placeholder="국가 검색..." /><CommandEmpty>인접 국가 없음</CommandEmpty><CommandGroup><CommandList>{adjacentCountries.map(c => <CommandItem key={c.id} value={c.name} onSelect={() => handleRequestAlliance(c.id)} disabled={isProcessing}>{c.name}</CommandItem>)}</CommandList></CommandGroup></Command>
+                                <Command><CommandInput placeholder="국가 검색..." /><CommandEmpty>인접한 국가가 없습니다.</CommandEmpty><CommandGroup><CommandList>{adjacentCountries.map(c => <CommandItem key={c.id} value={c.name} onSelect={() => handleRequestAlliance(c.id)} disabled={isProcessing}>{c.name}</CommandItem>)}</CommandList></CommandGroup></Command>
                             </PopoverContent>
                         </Popover>
                     </div>
                 )}
-                {!currentUser.isCountryOwner && (
+                {!currentUser.isCountryOwner && userCountry && (
                    <AlertDialog open={isIndependenceAlertOpen} onOpenChange={setIndependenceAlertOpen}>
                     <AlertDialogTrigger asChild><Button variant="outline" className="w-full"><Flag className="mr-2 h-4 w-4" /> 독립 선언</Button></AlertDialogTrigger>
                     <AlertDialogContent>

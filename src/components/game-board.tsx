@@ -110,9 +110,19 @@ export default function GameBoard({
 
   const isDemise = useMemo(() => {
     if (!currentUser) return false;
-    const hasLand = landTiles.some(tile => tile.ownerId === currentUser.id);
-    return !hasLand && (currentUser.tokens ?? 0) <= 0;
-  }, [landTiles, currentUser]);
+    // User is considered in demise if they have no land and no country affiliation to join.
+    if (!currentUser.countryId) {
+        const hasLand = landTiles.some(tile => tile.ownerId === currentUser.id);
+        return !hasLand && (currentUser.tokens ?? 0) <= 0;
+    }
+    // If they have a country, demise is when the country is demised and they have no land/tokens.
+    const myCountry = countries.find(c => c.id === currentUser.countryId);
+    if (myCountry?.demised) {
+        const hasLand = landTiles.some(tile => tile.ownerId === currentUser.id);
+        return !hasLand && (currentUser.tokens ?? 0) <= 0;
+    }
+    return false;
+  }, [landTiles, currentUser, countries]);
 
 
   useEffect(() => {
@@ -326,7 +336,7 @@ export default function GameBoard({
       
       const owner = allUsers.find(u => u.id === clickedTile.ownerId);
       if (owner && owner.countryId === currentUser.countryId) {
-        toast({ variant: "destructive", title: "공격 불가", description: "같은 국가의 영토는 공격할 수 없습니다." });
+        toast({ variant: "default", title: "공격 불가", description: "같은 국가의 영토는 공격할 수 없습니다." });
         setIsProcessingClick(false);
         return;
       }
@@ -408,7 +418,7 @@ export default function GameBoard({
     setIsRestarting(true);
     const userRef = doc(firestore, 'users', authUser.uid);
   
-    updateDoc(userRef, { tokens: 1 })
+    updateDoc(userRef, { tokens: 1, countryId: "" }) // Reset country affiliation
       .catch(error => {
         errorEmitter.emit('permission-error', new FirestorePermissionError({ path: userRef.path, operation: 'update', requestResourceData: { tokens: 1 } }));
       })
@@ -445,8 +455,6 @@ export default function GameBoard({
   }
 
   const handleProblemModalClose = (open: boolean) => {
-    // This function now only handles the modal's open/close state.
-    // The logic for cancelling an invasion has been completely removed.
     setIsModalOpen(open);
   }
 

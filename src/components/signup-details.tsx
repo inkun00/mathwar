@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useAuth, useCollection, useFirestore, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
-import { collection, addDoc, doc, setDoc, writeBatch } from 'firebase/firestore';
+import { collection, addDoc, doc, setDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
@@ -67,7 +67,6 @@ export default function SignUpDetails() {
         return;
       }
 
-      const batch = writeBatch(firestore);
       let finalCountryId = '';
       let isCountryOwner = false;
 
@@ -93,7 +92,7 @@ export default function SignUpDetails() {
             setIsLoading(false);
             return;
         }
-
+        const batch = writeBatch(firestore);
         const countryRef = doc(collection(firestore, 'countries'));
         batch.set(countryRef, {
           name: newCountryName,
@@ -104,6 +103,23 @@ export default function SignUpDetails() {
         });
         finalCountryId = countryRef.id;
         isCountryOwner = true;
+         const userDocRef = doc(firestore, 'users', currentUser.uid);
+        const userData = {
+            id: currentUser.uid,
+            uid: currentUser.uid,
+            nickname,
+            email: currentUser.email,
+            countryId: finalCountryId,
+            tokens: 1,
+            walls: 0,
+            gamePoints: 0,
+            lastPointDistribution: new Date().toISOString().slice(0, 10),
+            conqueredCountries: [],
+            isCountryOwner: isCountryOwner,
+            createdAt: new Date().toISOString(),
+        };
+        batch.set(userDocRef, userData);
+        await batch.commit();
 
       } else { // 'existing'
          if (!selectedCountryId) {
@@ -111,28 +127,34 @@ export default function SignUpDetails() {
             setIsLoading(false);
             return;
         }
-        finalCountryId = selectedCountryId;
-        isCountryOwner = false;
+        
+        await addDoc(collection(firestore, 'join_requests'), {
+            requesterId: currentUser.uid,
+            requesterNickname: nickname,
+            targetCountryId: selectedCountryId,
+            status: 'pending',
+            createdAt: serverTimestamp()
+        });
+
+        const userDocRef = doc(firestore, 'users', currentUser.uid);
+        const userData = {
+            id: currentUser.uid,
+            uid: currentUser.uid,
+            nickname,
+            email: currentUser.email,
+            countryId: "", // Initially no country until request is approved
+            tokens: 0, // No tokens until they join a country
+            walls: 0,
+            gamePoints: 0,
+            lastPointDistribution: new Date().toISOString().slice(0, 10),
+            conqueredCountries: [],
+            isCountryOwner: false,
+            createdAt: new Date().toISOString(),
+        };
+        await setDoc(userDocRef, userData);
+        toast({ title: '가입 요청 완료!', description: '국가 주인의 수락을 기다려주세요. 수락 전까지는 게임을 플레이할 수 없습니다.' });
+        return; // Stop execution here, user waits for approval
       }
-
-      const userDocRef = doc(firestore, 'users', currentUser.uid);
-      const userData = {
-        id: currentUser.uid,
-        uid: currentUser.uid,
-        nickname,
-        email: currentUser.email,
-        countryId: finalCountryId,
-        tokens: 1,
-        walls: 0,
-        gamePoints: 0,
-        lastPointDistribution: new Date().toISOString().slice(0, 10),
-        conqueredCountries: [],
-        isCountryOwner: isCountryOwner,
-        createdAt: new Date().toISOString(),
-      };
-
-      batch.set(userDocRef, userData);
-      await batch.commit();
       
       toast({ title: '프로필 생성 완료!', description: '이제 게임을 시작할 수 있습니다.' });
 
