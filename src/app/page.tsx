@@ -13,20 +13,21 @@ export default function Home() {
   const { user: authUser, isUserLoading: isAuthUserLoading } = useUser();
   const firestore = useFirestore();
 
-  // Data fetching hooks
+  // Data fetching hooks - ensure they only run when authUser is available
   const userDocRef = useMemoFirebase(() => (firestore && authUser) ? doc(firestore, 'users', authUser.uid) : null, [firestore, authUser]);
-  const countriesQuery = useMemoFirebase(() => firestore ? collection(firestore, 'countries') : null, [firestore]);
-  const problemAttemptsQuery = useMemoFirebase(() => (firestore && authUser) ? collection(firestore, 'problem_attempts', authUser.uid, 'attempts') : null, [firestore, authUser]);
+  const countriesQuery = useMemoFirebase(() => (firestore && authUser) ? collection(firestore, 'countries') : null, [firestore, authUser]);
+  const problemAttemptsQuery = useMemoFirebase(() => (firestore && authUser) ? query(collection(firestore, 'problem_attempts', authUser.uid, 'attempts'), orderBy('timestamp', 'desc')) : null, [firestore, authUser]);
   const wrongAnswersQuery = useMemoFirebase(() => (firestore && authUser) ? collection(firestore, 'users', authUser.uid, 'wrong_answers') : null, [firestore, authUser]);
-  const allUsersQuery = useMemoFirebase(() => firestore ? collection(firestore, 'users') : null, [firestore]);
+  const allUsersQuery = useMemoFirebase(() => (firestore && authUser) ? collection(firestore, 'users') : null, [firestore, authUser]);
+  const mapEventsQuery = useMemoFirebase(() => (firestore && authUser) ? query(collection(firestore, 'map_events'), orderBy('timestamp', 'desc'), limit(50)) : null, [firestore, authUser]);
 
   const [initialLandTiles, setInitialLandTiles] = useState<ClientTile[]>([]);
   const [isLandTilesLoading, setIsLandTilesLoading] = useState(true);
 
-  // Fetch all land_tiles once on initial load
+  // Fetch all land_tiles once on initial load, but only after authentication
   useEffect(() => {
     const fetchTiles = async () => {
-      if (!firestore) return;
+      if (!firestore || !authUser) return; // Wait for authentication
       try {
         setIsLandTilesLoading(true);
         const querySnapshot = await getDocs(collection(firestore, "land_tiles"));
@@ -39,7 +40,7 @@ export default function Home() {
       }
     };
     fetchTiles();
-  }, [firestore]);
+  }, [firestore, authUser]); // Depend on authUser
   
   // Real-time listeners for everything else
   const { data: userProfile, isLoading: isUserProfileLoading } = useDoc<User>(userDocRef);
@@ -47,16 +48,7 @@ export default function Home() {
   const { data: problemAttempts, isLoading: isAttemptsLoading } = useCollection<ProblemAttempt>(problemAttemptsQuery);
   const { data: wrongAnswers, isLoading: isWrongAnswersLoading } = useCollection<WrongAnswer>(wrongAnswersQuery);
   const { data: allUsers, isLoading: isAllUsersLoading } = useCollection<User>(allUsersQuery);
-  
-  // Listen for real-time map events
-  const mapEventsQuery = useMemoFirebase(() => {
-    if (!firestore) return null;
-    // Only listen for events that happened in the last minute to avoid loading a huge history
-    const oneMinuteAgo = Timestamp.fromMillis(Date.now() - 60000);
-    return query(collection(firestore, 'map_events'), orderBy('timestamp', 'desc'), limit(50));
-  }, [firestore]);
   const { data: mapEvents, isLoading: isMapEventsLoading } = useCollection<MapEvent>(mapEventsQuery);
-
 
   // Derived loading state
   const isCoreDataLoading = isUserProfileLoading || isCountriesLoading || isLandTilesLoading || isAttemptsLoading || isWrongAnswersLoading || isAllUsersLoading || isMapEventsLoading;
