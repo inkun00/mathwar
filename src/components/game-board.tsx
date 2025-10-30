@@ -180,7 +180,13 @@ export default function GameBoard({
     
     if (invasionTarget.id) {
         const tileRef = doc(firestore, "land_tiles", invasionTarget.id);
-        const updateData = { ownerId: currentUser.id, hasWall: invasionTarget.hasWall && invasionWallBreaks > 0 ? false : invasionTarget.hasWall };
+        const hasWall = invasionTarget.hasWall ?? false;
+        const shouldBreakWall = hasWall && invasionWallBreaks > 0;
+        
+        const updateData = { 
+            ownerId: currentUser.id, 
+            hasWall: shouldBreakWall ? false : hasWall,
+        };
         
         updateDoc(tileRef, updateData)
             .then(() => {
