@@ -109,8 +109,8 @@ export default function GameBoard({
 
   useEffect(() => {
     const handleTokenPenalty = async () => {
-      // Do not run penalty logic if a restart is in progress.
-      if (!firestore || !currentUser || isRestarting || !currentUser.tokens || currentUser.tokens >= 0) return;
+      // Do not run penalty logic if a restart is in progress or if tokens are undefined/non-negative
+      if (!firestore || !currentUser || isRestarting || currentUser.tokens === undefined || currentUser.tokens >= 0) return;
 
       const penalty = Math.abs(currentUser.tokens);
       toast({
@@ -316,7 +316,7 @@ export default function GameBoard({
       return;
     }
   
-    if (clickedTile) { // Conquering an existing tile
+    if (clickedTile && clickedTile.ownerId !== null) { // Conquering an existing, owned tile
       if (clickedTile.ownerId === currentUser.id) {
         setIsProcessingClick(false); // clicked own tile
         return;
@@ -399,8 +399,11 @@ export default function GameBoard({
           });
           errorEmitter.emit('permission-error', permissionError);
           toast({ variant: "destructive", title: "확장 오류", description: e.message || "영토를 확장하는 중 오류가 발생했습니다." });
+          setIsProcessingClick(false); // Unlock on failure
       } finally {
-        setIsProcessingClick(false);
+        // We do not set isProcessingClick to false here for empty tiles.
+        // It will be handled by the useEffect that listens to mapEvents.
+        // This prevents the user from clicking again before the UI is updated.
       }
     }
   };
@@ -492,7 +495,7 @@ export default function GameBoard({
     }
   };
   
-  const addProblemAttempt = (newAttempt: Omit<ProblemAttempt, 'id'>) => {
+  const addProblemAttempt = (newAttempt: Omit<ProblemAttempt, 'id' | 'timestamp'>) => {
      if (!firestore || !authUser) return;
     const attemptData = {
       ...newAttempt,
@@ -516,6 +519,13 @@ export default function GameBoard({
       </div>
     );
   }
+
+  // This effect will unlock the UI after a map event has been processed
+  useEffect(() => {
+    if (isProcessingClick) {
+        setIsProcessingClick(false);
+    }
+  }, [landTiles]); // It depends on the result of the map event update
 
   return (
     <div className="flex w-full flex-grow flex-col gap-6">
