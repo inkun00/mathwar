@@ -3,19 +3,20 @@
 import { Logo } from "@/components/icons/logo";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import type { User } from "@/lib/types";
+import type { User, Country, ProblemAttempt } from "@/lib/types";
 import { UserCircle, HelpCircle, User as UserIcon, Trophy, Store, Shield, AlertTriangle } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import ProfileSheet from "./profile-sheet";
 import LeaderboardSheet from "./leaderboard-sheet";
 import MarketSheet from "./market-sheet";
-import type { ProblemAttempt } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 import { useMemo, useState } from "react";
 import { Badge } from "./ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 import { cn } from "@/lib/utils";
 import { Alert, AlertDescription } from "./ui/alert";
+import { useCollection, useFirestore, useMemoFirebase } from "@/firebase";
+import { collection } from "firebase/firestore";
 
 interface HeaderProps {
   currentUser: User;
@@ -23,6 +24,8 @@ interface HeaderProps {
   problemAttempts: ProblemAttempt[];
   isBuildingWall: boolean;
   onToggleWallBuilding: () => void;
+  allUsers: User[];
+  countries: Country[];
 }
 
 export default function Header({ 
@@ -31,18 +34,29 @@ export default function Header({
   problemAttempts, 
   isBuildingWall,
   onToggleWallBuilding,
+  allUsers,
+  countries
 }: HeaderProps) {
   const { toast } = useToast();
+  const firestore = useFirestore();
   const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
 
+  // --- Real-time data for sheets ---
+  const landTilesQuery = useMemoFirebase(() => firestore ? collection(firestore, 'land_tiles') : null, [firestore]);
+  const wrongAnswersQuery = useMemoFirebase(() => (firestore && currentUser) ? collection(firestore, 'users', currentUser.id, 'wrong_answers') : null, [firestore, currentUser]);
+
+  const { data: landTiles, isLoading: isLandTilesLoading } = useCollection(landTilesQuery);
+  const { data: wrongAnswers, isLoading: isWrongAnswersLoading } = useCollection(wrongAnswersQuery);
+  
   const remainingProblems = useMemo(() => {
     if (!problemAttempts) return 10;
     const twentyFourHoursAgo = Date.now() - 24 * 60 * 60 * 1000;
     const recentAttempts = problemAttempts.filter(
       (attempt) =>
         attempt.timestamp &&
-        new Date(attempt.timestamp.toDate()).getTime() > twentyFourHoursAgo &&
+        typeof attempt.timestamp.toDate === 'function' && // Ensure it's a Firestore Timestamp
+        attempt.timestamp.toDate().getTime() > twentyFourHoursAgo &&
         !attempt.isReview
     );
     return 10 - recentAttempts.length;
@@ -65,6 +79,7 @@ export default function Header({
   }
 
   const continents = ["대륙 1", "대륙 2", "대륙 3", "대륙 4", "대륙 5"];
+  const isSheetDataLoading = isLandTilesLoading || isWrongAnswersLoading;
 
   return (
     <header className="w-full max-w-full rounded-lg border bg-card/80 p-4 shadow-md backdrop-blur-sm">
@@ -125,7 +140,7 @@ export default function Header({
             
             <Sheet open={isProfileOpen} onOpenChange={setIsProfileOpen}>
               <SheetTrigger asChild>
-                <Button variant="ghost" size="icon">
+                <Button variant="ghost" size="icon" disabled={isSheetDataLoading}>
                   <UserIcon className="h-5 w-5" />
                   <span className="sr-only">프로필 보기</span>
                 </Button>
@@ -134,10 +149,17 @@ export default function Header({
                 <SheetHeader>
                   <SheetTitle>내 프로필</SheetTitle>
                 </SheetHeader>
-                <ProfileSheet 
-                    currentUser={currentUser}
-                    onOpenChange={setIsProfileOpen}
-                />
+                {!isSheetDataLoading && landTiles && wrongAnswers && (
+                  <ProfileSheet 
+                      currentUser={currentUser}
+                      allUsers={allUsers}
+                      allCountries={countries}
+                      landTiles={landTiles}
+                      problemAttempts={problemAttempts}
+                      wrongAnswers={wrongAnswers}
+                      onOpenChange={setIsProfileOpen}
+                  />
+                )}
               </SheetContent>
             </Sheet>
 

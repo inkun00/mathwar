@@ -18,21 +18,21 @@ import DemiseScreen from "./demise-screen";
 
 interface GameBoardProps {
   currentUser: User;
-  initialCountries: Country[];
-  initialLandTiles: ClientTile[];
+  countries: Country[];
+  landTiles: ClientTile[];
   problemAttempts: ProblemAttempt[];
-  initialWrongAnswers: WrongAnswer[];
-  initialAllUsers: User[];
+  wrongAnswers: WrongAnswer[];
+  allUsers: User[];
   mapEvents: MapEvent[];
 }
 
 export default function GameBoard({ 
   currentUser: liveCurrentUser, 
-  initialCountries, 
-  initialLandTiles,
+  countries, 
+  landTiles: initialLandTiles,
   problemAttempts,
-  initialWrongAnswers,
-  initialAllUsers,
+  wrongAnswers,
+  allUsers,
   mapEvents,
 }: GameBoardProps) {
   const firestore = useFirestore();
@@ -51,51 +51,44 @@ export default function GameBoard({
   const [isRestarting, setIsRestarting] = useState(false);
   
   const [landTiles, setLandTiles] = useState<ClientTile[]>([]);
-  const [countries, setCountries] = useState(initialCountries);
-  const [allUsers, setAllUsers] = useState(initialAllUsers);
   
   const userDocRef = useMemoFirebase(() => (firestore && authUser) ? doc(firestore, 'users', authUser.uid) : null, [firestore, authUser]);
   const { data: currentUser } = useDoc<User>(userDocRef, liveCurrentUser);
   
   useEffect(() => {
-    // This effect ensures that the internal state is updated if the initial props change
-    // after the component has already mounted (e.g., due to async data fetching in parent).
+    // This effect synchronizes the initial prop data with the local state.
     setLandTiles(initialLandTiles);
   }, [initialLandTiles]);
 
 
   useEffect(() => {
-    // CRITICAL FIX: Do not process if mapEvents is null, undefined, or empty.
     if (!mapEvents || mapEvents.length === 0) {
       return;
     }
 
     setLandTiles(currentTiles => {
-      const newTiles = [...currentTiles];
-      let changed = false;
+      const tileMap = new Map(currentTiles.map(t => [t.id, t]));
+      
       for (const event of mapEvents) {
         if (!event.tileId) continue;
-          const tileIndex = newTiles.findIndex(t => t.id === event.tileId);
-          const eventData = {
-              ownerId: event.newOwnerId,
-              hasWall: event.newHasWall,
-              ownerNickname: event.newOwnerNickname,
-              countryId: event.newCountryId,
-              countryName: event.newCountryName,
-              countryColor: event.newCountryColor,
-          }
+        
+        const eventData = {
+          ownerId: event.newOwnerId,
+          hasWall: event.newHasWall,
+          ownerNickname: event.newOwnerNickname,
+          countryId: event.newCountryId,
+          countryName: event.newCountryName,
+          countryColor: event.newCountryColor,
+        };
 
-          if (tileIndex !== -1) {
-              if (newTiles[tileIndex].ownerId !== event.newOwnerId || newTiles[tileIndex].hasWall !== event.newHasWall) {
-                  newTiles[tileIndex] = { ...newTiles[tileIndex], ...eventData };
-                  changed = true;
-              }
-          } else {
-               newTiles.push({ id: event.tileId, x: event.x, y: event.y, ...eventData });
-               changed = true;
-          }
+        const existingTile = tileMap.get(event.tileId);
+        if (existingTile) {
+          tileMap.set(event.tileId, { ...existingTile, ...eventData });
+        } else {
+          tileMap.set(event.tileId, { id: event.tileId, x: event.x, y: event.y, ...eventData });
+        }
       }
-      return changed ? newTiles : currentTiles;
+      return Array.from(tileMap.values());
     });
   }, [mapEvents]);
 
@@ -220,7 +213,7 @@ export default function GameBoard({
             description: `상대 국가의 마지막 영토를 점령하여 정복했습니다!`,
             duration: 5000,
         });
-      } catch (e) {
+      } catch (e: any) {
           console.error("국가 정복 트랜잭션 실패:", e);
       }
     }
@@ -506,6 +499,8 @@ export default function GameBoard({
         problemAttempts={problemAttempts}
         isBuildingWall={isBuildingWall}
         onToggleWallBuilding={handleToggleWallBuilding}
+        allUsers={allUsers}
+        countries={countries}
       />
       <div className="relative h-full w-full max-w-7xl flex-grow">
         <WorldMap 

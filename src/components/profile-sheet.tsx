@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { useMemo, useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { LogOut, BookOpen, ChevronsUpDown, Check, Crown, Handshake, Flag, Swords, Pencil, UserPlus, ShieldCheck, X, RefreshCw } from "lucide-react";
-import { useAuth, useFirestore, useDoc, useMemoFirebase, errorEmitter, FirestorePermissionError } from "@/firebase";
+import { useAuth, useFirestore, useDoc, useMemoFirebase, errorEmitter, FirestorePermissionError, useCollection } from "@/firebase";
 import { signOut } from "firebase/auth";
 import ProblemModal from "./problem-modal";
 import { deleteWrongAnswer } from "@/firebase/firestore/data";
@@ -28,18 +28,15 @@ import { Skeleton } from "./ui/skeleton";
 
 interface ProfileSheetProps {
   currentUser: User;
+  allUsers: User[];
+  allCountries: Country[];
+  landTiles: ClientTile[];
+  problemAttempts: ProblemAttempt[];
+  wrongAnswers: WrongAnswer[];
   onOpenChange: (open: boolean) => void;
 }
 
 interface ProfileData {
-    userCountry?: Country;
-    problemAttempts: ProblemAttempt[];
-    wrongAnswers: WrongAnswer[];
-    landTiles: ClientTile[];
-    allUsers: User[];
-    allCountries: Country[];
-    userRank?: RankedUser;
-    countryRank?: RankedCountry;
     joinRequests: JoinRequest[];
     allianceRequests: AllianceRequest[];
 }
@@ -77,17 +74,11 @@ const areaLabels: Record<ProblemSubType, string> = {
   'diagram': '도형 문제',
 };
 
-export default function ProfileSheet({ currentUser: initialUser, onOpenChange }: ProfileSheetProps) {
+export default function ProfileSheet({ currentUser, allUsers, allCountries, landTiles, problemAttempts, wrongAnswers, onOpenChange }: ProfileSheetProps) {
   const auth = useAuth();
   const firestore = useFirestore();
   const { toast } = useToast();
-
-  const userDocRef = useMemoFirebase(() => (firestore && auth.currentUser) ? doc(firestore, 'users', auth.currentUser.uid) : null, [firestore, auth.currentUser]);
-  const { data: currentUser } = useDoc<User>(userDocRef, initialUser);
   
-  const [isLoading, setIsLoading] = useState(true);
-  const [profileData, setProfileData] = useState<ProfileData | null>(null);
-
   const [isReviewModalOpen, setReviewModalOpen] = useState(false);
   const [selectedReviewProblem, setSelectedReviewProblem] = useState<WrongAnswer | null>(null);
   const [isWrongAnswerComboboxOpen, setWrongAnswerComboboxOpen] = useState(false);
@@ -97,74 +88,12 @@ export default function ProfileSheet({ currentUser: initialUser, onOpenChange }:
   const [isProcessing, setIsProcessing] = useState(false);
   const [isFlagEditorOpen, setFlagEditorOpen] = useState(false);
 
-  const fetchProfileData = async () => {
-    if (!firestore || !currentUser) return;
-    setIsLoading(true);
-    try {
-        const [
-            allUsersSnapshot, 
-            allCountriesSnapshot, 
-            landTilesSnapshot,
-            problemAttemptsSnapshot,
-            wrongAnswersSnapshot,
-            joinRequestsSnapshot,
-            allianceRequestsSnapshot,
-        ] = await Promise.all([
-            getDocs(collection(firestore, "users")),
-            getDocs(collection(firestore, "countries")),
-            getDocs(collection(firestore, "land_tiles")),
-            getDocs(query(collection(firestore, 'problem_attempts', currentUser.id, 'attempts'))),
-            getDocs(collection(firestore, "users", currentUser.id, "wrong_answers")),
-            getDocs(query(collection(firestore, "join_requests"), where("targetCountryId", "==", currentUser.countryId), where("status", "==", "pending"))),
-            getDocs(query(collection(firestore, "alliance_requests"), where("targetCountryId", "==", currentUser.countryId), where("status", "==", "pending")))
-        ]);
+  // --- Real-time data for requests ---
+  const joinRequestsQuery = useMemoFirebase(() => (firestore && currentUser.countryId) ? query(collection(firestore, "join_requests"), where("targetCountryId", "==", currentUser.countryId), where("status", "==", "pending")) : null, [firestore, currentUser.countryId]);
+  const { data: joinRequests, isLoading: isLoadingJoinRequests } = useCollection<JoinRequest>(joinRequestsQuery);
 
-        const allUsers = allUsersSnapshot.docs.map(doc => ({...doc.data(), id: doc.id})) as User[];
-        const allCountries = allCountriesSnapshot.docs.map(doc => ({...doc.data(), id: doc.id})) as Country[];
-        const landTiles = landTilesSnapshot.docs.map(doc => ({...doc.data(), id: doc.id})) as ClientTile[];
-
-        // Rankings
-        const userTileCount = allUsers.reduce((acc, user) => ({ ...acc, [user.id]: 0 }), {} as Record<string, number>);
-        landTiles.forEach(tile => {
-            if (tile.ownerId && userTileCount[tile.ownerId] !== undefined) userTileCount[tile.ownerId]++;
-        });
-        const sortedUsers = Object.entries(userTileCount).map(([id, count]) => ({ id, count })).sort((a, b) => b.count - a.count);
-        const userRankIndex = sortedUsers.findIndex(u => u.id === currentUser.id);
-
-        const countryTileCount = allCountries.reduce((acc, c) => ({ ...acc, [c.id]: 0 }), {} as Record<string, number>);
-        const userToCountryMap = new Map(allUsers.map(u => [u.id, u.countryId]));
-        landTiles.forEach(tile => {
-            if (tile.ownerId) {
-                const countryId = userToCountryMap.get(tile.ownerId);
-                if (countryId && countryTileCount[countryId] !== undefined) countryTileCount[countryId]++;
-            }
-        });
-        const sortedCountries = Object.entries(countryTileCount).map(([id, count]) => ({ id, count })).sort((a, b) => b.count - a.count);
-        const countryRankIndex = sortedCountries.findIndex(c => c.id === currentUser.countryId);
-
-        setProfileData({
-            userCountry: allCountries.find(c => c.id === currentUser.countryId),
-            problemAttempts: problemAttemptsSnapshot.docs.map(doc => ({...doc.data(), id: doc.id})) as ProblemAttempt[],
-            wrongAnswers: wrongAnswersSnapshot.docs.map(doc => ({...doc.data(), id: doc.id})) as WrongAnswer[],
-            landTiles,
-            allUsers,
-            allCountries,
-            userRank: { rank: userRankIndex + 1, id: currentUser.id, nickname: currentUser.nickname, tileCount: userTileCount[currentUser.id] || 0 },
-            countryRank: { rank: countryRankIndex + 1, id: currentUser.countryId, name: allCountries.find(c => c.id === currentUser.countryId)?.name || '', color: '', tileCount: countryTileCount[currentUser.countryId] || 0},
-            joinRequests: joinRequestsSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as JoinRequest[],
-            allianceRequests: allianceRequestsSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as AllianceRequest[],
-        });
-    } catch (error) {
-        console.error("Error fetching profile data:", error);
-        toast({ variant: 'destructive', title: '데이터 로딩 실패' });
-    } finally {
-        setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchProfileData();
-  }, [currentUser]); // Refetch when currentUser data changes from the hook.
+  const allianceRequestsQuery = useMemoFirebase(() => (firestore && currentUser.countryId) ? query(collection(firestore, "alliance_requests"), where("targetCountryId", "==", currentUser.countryId), where("status", "==", "pending")) : null, [firestore, currentUser.countryId]);
+  const { data: allianceRequests, isLoading: isLoadingAllianceRequests } = useCollection<AllianceRequest>(allianceRequestsQuery);
 
 
   const handleLogout = () => {
@@ -183,100 +112,103 @@ export default function ProfileSheet({ currentUser: initialUser, onOpenChange }:
     const userRef = doc(firestore, "users", currentUser.id);
     await updateDoc(userRef, { tokens: increment(1) });
     setSelectedReviewProblem(null);
-    fetchProfileData(); // Re-fetch data to update UI
   };
 
   const handleWrongReview = async () => {
     if (!selectedReviewProblem || !firestore || !currentUser) return;
     await deleteWrongAnswer(firestore, currentUser.id, selectedReviewProblem.id);
     setSelectedReviewProblem(null);
-    fetchProfileData(); // Re-fetch data to update UI
   };
 
-  const { unitStats, areaStats } = useMemo(() => {
-    if (!profileData) return { unitStats: [], areaStats: [] };
+  const userCountry = useMemo(() => allCountries.find(c => c.id === currentUser.countryId), [allCountries, currentUser.countryId]);
+
+  const { unitStats, areaStats, userRank, countryRank } = useMemo(() => {
+    if (!problemAttempts || !allUsers || !allCountries || !landTiles) return { unitStats: [], areaStats: [], userRank: null, countryRank: null };
     
+    // Unit & Area Stats
     const stats = {
       unit: { decimal: { total: 0, correct: 0 }, fraction: { total: 0, correct: 0 }, conversion: { total: 0, correct: 0 } },
       area: {} as Record<string, { total: number, correct: number, subType: ProblemSubType }>
     };
-
-    profileData.problemAttempts.forEach(attempt => {
+    problemAttempts.forEach(attempt => {
       if (!stats.unit[attempt.unit]) stats.unit[attempt.unit] = { total: 0, correct: 0 };
       stats.unit[attempt.unit].total++;
       if (attempt.correct) stats.unit[attempt.unit].correct++;
-
       if (attempt.area) {
         if (!stats.area[attempt.area]) stats.area[attempt.area] = { total: 0, correct: 0, subType: attempt.area as ProblemSubType };
         stats.area[attempt.area].total++;
         if (attempt.correct) stats.area[attempt.area].correct++;
       }
     });
+    const unitStats = Object.entries(stats.unit).map(([key, value]) => ({ name: { decimal: '소수', fraction: '분수', conversion: '변환' }[key] || key, ...value, accuracy: value.total > 0 ? (value.correct / value.total) * 100 : 0 }));
+    const areaStats = Object.values(stats.area).map(data => ({ name: areaLabels[data.subType] || data.subType, subType: data.subType, total: data.total, correct: data.correct, accuracy: data.total > 0 ? (data.correct / data.total) * 100 : 0, })).sort((a,b) => b.total - a.total);
 
-    const unitStats = Object.entries(stats.unit).map(([key, value]) => ({
-      name: { decimal: '소수', fraction: '분수', conversion: '변환' }[key] || key,
-      ...value,
-      accuracy: value.total > 0 ? (value.correct / value.total) * 100 : 0
-    }));
+    // Rankings
+    const userTileCount = allUsers.reduce((acc, user) => ({ ...acc, [user.id]: 0 }), {} as Record<string, number>);
+    landTiles.forEach(tile => { if (tile.ownerId && userTileCount[tile.ownerId] !== undefined) userTileCount[tile.ownerId]++; });
+    const sortedUsers = Object.entries(userTileCount).map(([id, count]) => ({ id, count })).sort((a, b) => b.count - a.count);
+    const userRankIndex = sortedUsers.findIndex(u => u.id === currentUser.id);
 
-    const areaStats = Object.values(stats.area).map(data => ({
-      name: areaLabels[data.subType] || data.subType,
-      subType: data.subType,
-      total: data.total,
-      correct: data.correct,
-      accuracy: data.total > 0 ? (data.correct / data.total) * 100 : 0,
-    })).sort((a,b) => b.total - a.total);
+    const countryTileCount = allCountries.reduce((acc, c) => ({ ...acc, [c.id]: 0 }), {} as Record<string, number>);
+    const userToCountryMap = new Map(allUsers.map(u => [u.id, u.countryId]));
+    landTiles.forEach(tile => { if (tile.ownerId) { const countryId = userToCountryMap.get(tile.ownerId); if (countryId && countryTileCount[countryId] !== undefined) countryTileCount[countryId]++; } });
+    const sortedCountries = Object.entries(countryTileCount).map(([id, count]) => ({ id, count })).sort((a, b) => b.count - a.count);
+    const countryRankIndex = sortedCountries.findIndex(c => c.id === currentUser.countryId);
 
-    return { unitStats, areaStats };
-  }, [profileData]);
+    const userRank = { rank: userRankIndex !== -1 ? userRankIndex + 1 : 0, id: currentUser.id, nickname: currentUser.nickname, tileCount: userTileCount[currentUser.id] || 0 };
+    const countryRank = userCountry ? { rank: countryRankIndex !== -1 ? countryRankIndex + 1 : 0, id: currentUser.countryId, name: userCountry.name, color: '', tileCount: countryTileCount[currentUser.countryId] || 0} : null;
+
+    return { unitStats, areaStats, userRank, countryRank };
+  }, [problemAttempts, allUsers, allCountries, landTiles, currentUser, userCountry]);
+
   
   const conqueredCountryNames = useMemo(() => {
-    if (!currentUser?.conqueredCountries || !profileData?.allCountries) return [];
+    if (!currentUser?.conqueredCountries || !allCountries) return [];
     return currentUser.conqueredCountries.map(id => {
-      const country = profileData.allCountries.find(c => c.id === id);
+      const country = allCountries.find(c => c.id === id);
       return country ? country.name : null;
     }).filter(name => name !== null);
-  }, [currentUser, profileData]);
+  }, [currentUser, allCountries]);
 
   const countryMembers = useMemo(() => {
-    if (!profileData?.userCountry || !profileData?.allUsers) return [];
-    return profileData.allUsers.filter(u => u.countryId === profileData.userCountry?.id);
-  }, [profileData]);
+    if (!userCountry || !allUsers) return [];
+    return allUsers.filter(u => u.countryId === userCountry?.id);
+  }, [userCountry, allUsers]);
 
 
   const adjacentCountries = useMemo(() => {
-    if (!currentUser || !profileData) return [];
-    const myTiles = profileData.landTiles.filter(t => t.ownerId === currentUser.id);
+    if (!currentUser || !landTiles || !allUsers || !allCountries) return [];
+    const myTiles = landTiles.filter(t => t.ownerId === currentUser.id);
     const adjacentCountryIds = new Set<string>();
 
     for (const tile of myTiles) {
       [[0, -1], [0, 1], [-1, 0], [1, 0]].forEach(([dx, dy]) => {
-        const neighbor = profileData.landTiles.find(t => t.x === tile.x + dx && t.y === tile.y + dy);
+        const neighbor = landTiles.find(t => t.x === tile.x + dx && t.y === tile.y + dy);
         if (neighbor && neighbor.ownerId && neighbor.ownerId !== currentUser.id) {
-          const neighborUser = profileData.allUsers.find(u => u.id === neighbor.ownerId);
+          const neighborUser = allUsers.find(u => u.id === neighbor.ownerId);
           if (neighborUser && neighborUser.countryId !== currentUser.countryId) {
             adjacentCountryIds.add(neighborUser.countryId);
           }
         }
       });
     }
-    return profileData.allCountries.filter(c => adjacentCountryIds.has(c.id));
-  }, [profileData, currentUser]);
+    return allCountries.filter(c => adjacentCountryIds.has(c.id));
+  }, [landTiles, allUsers, allCountries, currentUser]);
   
   const handleRequestAlliance = async (targetCountryId: string) => {
-    if (!firestore || !currentUser || !profileData?.userCountry) return;
+    if (!firestore || !currentUser || !userCountry) return;
     setIsProcessing(true);
     try {
-        const existingRequestQuery = query(collection(firestore, "alliance_requests"), where("requestingCountryId", "==", profileData.userCountry.id), where("targetCountryId", "==", targetCountryId), where("status", "==", "pending"));
+        const existingRequestQuery = query(collection(firestore, "alliance_requests"), where("requestingCountryId", "==", userCountry.id), where("targetCountryId", "==", targetCountryId), where("status", "==", "pending"));
         if (!(await getDocs(existingRequestQuery)).empty) {
             toast({ variant: "default", title: "요청 중복", description: "이미 해당 국가에 동맹을 요청했습니다." });
             return;
         }
-        await addDoc(collection(firestore, 'alliance_requests'), { requestingCountryId: profileData.userCountry.id, requestingCountryName: profileData.userCountry.name, targetCountryId, status: 'pending', createdAt: serverTimestamp() });
+        await addDoc(collection(firestore, 'alliance_requests'), { requestingCountryId: userCountry.id, requestingCountryName: userCountry.name, targetCountryId, status: 'pending', createdAt: serverTimestamp() });
         toast({ title: "동맹 요청 완료!", description: `동맹 요청을 보냈습니다.` });
         setAllianceComboboxOpen(false);
     } catch (e: any) { 
-        toast({ variant: "destructive", title: "오류", description: e.message }); 
+        toast({ variant: "destructive", title: "오류", description: e.message || '동맹 요청 중 오류가 발생했습니다.' }); 
     } finally { 
         setIsProcessing(false); 
     }
@@ -314,7 +246,6 @@ export default function ProfileSheet({ currentUser: initialUser, onOpenChange }:
         toast({ title: "독립 선언!", description: `새로운 국가 '${newCountryName}'를 건국했습니다!` });
         setNewCountryName("");
         setIndependenceAlertOpen(false);
-        fetchProfileData(); // Refresh data
     } catch (e: any) {
         console.error("독립 선언 오류:", e);
         toast({ variant: "destructive", title: "오류", description: e.message || "독립을 선언하는 중 오류가 발생했습니다." }); 
@@ -324,7 +255,7 @@ export default function ProfileSheet({ currentUser: initialUser, onOpenChange }:
   };
   
   const handleRequestResponse = async (request: JoinRequest | AllianceRequest, type: 'join' | 'alliance', action: 'approve' | 'reject') => {
-    if (!firestore || !profileData?.userCountry || !currentUser) return;
+    if (!firestore || !userCountry || !currentUser) return;
     setIsProcessing(true);
   
     const requestRef = doc(firestore, `${type}_requests`, request.id);
@@ -367,8 +298,6 @@ export default function ProfileSheet({ currentUser: initialUser, onOpenChange }:
         await updateDoc(requestRef, { status: "rejected" });
         toast({ title: "요청 거절", description: `요청을 거절했습니다.` });
       }
-  
-      fetchProfileData(); // Refresh data
     } catch (e: any) {
       // The specific error is already emitted, this is a fallback.
       if (!(e instanceof FirestorePermissionError)) {
@@ -381,7 +310,7 @@ export default function ProfileSheet({ currentUser: initialUser, onOpenChange }:
   };
 
 
-  if (isLoading || !profileData || !currentUser) {
+  if (!currentUser) {
     return (
         <div className="mt-6 space-y-6">
             <Card><CardHeader><Skeleton className="h-24 w-full" /></CardHeader></Card>
@@ -391,18 +320,10 @@ export default function ProfileSheet({ currentUser: initialUser, onOpenChange }:
     );
   }
 
-  const { userCountry, wrongAnswers } = profileData;
-
   return (
     <>
       <div className="mt-6 flex h-[calc(100%-3rem)] flex-col justify-between">
         <div className="space-y-8 overflow-y-auto pr-4">
-            <div className="flex justify-end">
-                <Button variant="ghost" size="sm" onClick={fetchProfileData} disabled={isLoading}>
-                    <RefreshCw className={cn("mr-2 h-4 w-4", isLoading && "animate-spin")} />
-                    새로고침
-                </Button>
-            </div>
           <div>
             <Card>
               <CardHeader><CardTitle>기본 정보</CardTitle></CardHeader>
@@ -423,8 +344,8 @@ export default function ProfileSheet({ currentUser: initialUser, onOpenChange }:
                  <div className="flex justify-between"><span className="font-medium text-muted-foreground">보유 토큰</span><span className="font-semibold">{currentUser.tokens}개</span></div>
                  <div className="flex justify-between"><span className="font-medium text-muted-foreground">보유 성벽</span><span className="font-semibold">{currentUser.walls ?? 0}개</span></div>
                  <div className="flex justify-between"><span className="font-medium text-muted-foreground">게임 포인트</span><span className="font-semibold">{currentUser.gamePoints ?? 0} 포인트</span></div>
-                 <div className="flex justify-between"><span className="font-medium text-muted-foreground">개인 순위</span><span className="font-semibold">{profileData.userRank ? `${profileData.userRank.rank}위` : '순위 없음'}</span></div>
-                 <div className="flex justify-between"><span className="font-medium text-muted-foreground">국가 순위</span><span className="font-semibold">{profileData.countryRank ? `${profileData.countryRank.rank}위` : '순위 없음'}</span></div>
+                 <div className="flex justify-between"><span className="font-medium text-muted-foreground">개인 순위</span><span className="font-semibold">{userRank ? `${userRank.rank}위` : '순위 없음'}</span></div>
+                 <div className="flex justify-between"><span className="font-medium text-muted-foreground">국가 순위</span><span className="font-semibold">{countryRank ? `${countryRank.rank}위` : '순위 없음'}</span></div>
               </CardContent>
             </Card>
           </div>
@@ -473,12 +394,12 @@ export default function ProfileSheet({ currentUser: initialUser, onOpenChange }:
               <CardContent className="pt-6 space-y-4">
                 {currentUser.isCountryOwner && (
                     <div>
-                        {(profileData.joinRequests.length > 0 || profileData.allianceRequests.length > 0) ? (
+                        {(joinRequests && joinRequests.length > 0) || (allianceRequests && allianceRequests.length > 0) ? (
                             <>
-                                {profileData.joinRequests.length > 0 && (
+                                {joinRequests && joinRequests.length > 0 && (
                                     <div className="space-y-2">
                                         <h4 className="font-semibold">가입 요청</h4>
-                                        {profileData.joinRequests.map(req => (
+                                        {joinRequests.map(req => (
                                             <div key={req.id} className="flex items-center justify-between p-2 rounded-md bg-muted">
                                                 <span>{req.requesterNickname}</span>
                                                 <div className="space-x-1"><Button size="icon" variant="ghost" onClick={() => handleRequestResponse(req, 'join', 'approve')}><Check className="h-4 w-4 text-green-500"/></Button><Button size="icon" variant="ghost" onClick={() => handleRequestResponse(req, 'join', 'reject')}><X className="h-4 w-4 text-red-500"/></Button></div>
@@ -486,10 +407,10 @@ export default function ProfileSheet({ currentUser: initialUser, onOpenChange }:
                                         ))}
                                     </div>
                                 )}
-                                {profileData.allianceRequests.length > 0 && (
+                                {allianceRequests && allianceRequests.length > 0 && (
                                     <div className="space-y-2 mt-4">
                                         <h4 className="font-semibold">동맹 요청 (상대 국가가 우리 국가로 합병됩니다)</h4>
-                                        {profileData.allianceRequests.map(req => (
+                                        {allianceRequests.map(req => (
                                             <div key={req.id} className="flex items-center justify-between p-2 rounded-md bg-muted">
                                                 <span>{req.requestingCountryName}</span>
                                                 <div className="space-x-1"><Button size="icon" variant="ghost" onClick={() => handleRequestResponse(req, 'alliance', 'approve')}><Check className="h-4 w-4 text-green-500"/></Button><Button size="icon" variant="ghost" onClick={() => handleRequestResponse(req, 'alliance', 'reject')}><X className="h-4 w-4 text-red-500"/></Button></div>
@@ -542,7 +463,7 @@ export default function ProfileSheet({ currentUser: initialUser, onOpenChange }:
             <h3 className="text-lg font-semibold tracking-tight">오답노트</h3>
             <Card>
               <CardContent className="pt-4">
-                {wrongAnswers.length > 0 ? (
+                {wrongAnswers && wrongAnswers.length > 0 ? (
                   <Popover open={isWrongAnswerComboboxOpen} onOpenChange={setWrongAnswerComboboxOpen}>
                     <PopoverTrigger asChild><Button variant="outline" role="combobox" className="w-full justify-between">다시 풀 문제 선택하기...<ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" /></Button></PopoverTrigger>
                     <PopoverContent className="w-[--radix-popover-trigger-width] p-0">

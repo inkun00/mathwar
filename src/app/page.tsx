@@ -5,7 +5,7 @@ import GameBoard from "@/components/game-board";
 import Login from "@/components/login";
 import SignUpDetails from "@/components/signup-details";
 import { useUser, useFirestore, useDoc, useCollection, useMemoFirebase } from "@/firebase";
-import { doc, collection, getDocs, query, orderBy, limit } from "firebase/firestore";
+import { doc, collection, query, orderBy, limit } from "firebase/firestore";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { User, Country, ClientTile, ProblemAttempt, WrongAnswer, MapEvent } from "@/lib/types";
 
@@ -13,75 +13,52 @@ export default function Home() {
   const { user: authUser, isUserLoading: isAuthUserLoading } = useUser();
   const firestore = useFirestore();
 
-  // --- Data Fetching ---
+  // --- Real-time Data Fetching ---
   const userDocRef = useMemoFirebase(() => (firestore && authUser) ? doc(firestore, 'users', authUser.uid) : null, [firestore, authUser]);
-  const mapEventsQuery = useMemoFirebase(() => (firestore && authUser) ? query(collection(firestore, 'map_events'), orderBy('timestamp', 'desc'), limit(50)) : null, [firestore, authUser]);
+  const countriesQuery = useMemoFirebase(() => firestore ? collection(firestore, 'countries') : null, [firestore]);
+  const usersQuery = useMemoFirebase(() => firestore ? collection(firestore, 'users') : null, [firestore]);
+  const landTilesQuery = useMemoFirebase(() => firestore ? collection(firestore, 'land_tiles') : null, [firestore]);
+  const wrongAnswersQuery = useMemoFirebase(() => (firestore && authUser) ? collection(firestore, 'users', authUser.uid, 'wrong_answers') : null, [firestore, authUser]);
   const problemAttemptsQuery = useMemoFirebase(() => (firestore && authUser) ? query(collection(firestore, 'problem_attempts', authUser.uid, 'attempts'), orderBy('timestamp', 'desc')) : null, [firestore, authUser]);
+  const mapEventsQuery = useMemoFirebase(() => (firestore && authUser) ? query(collection(firestore, 'map_events'), orderBy('timestamp', 'desc'), limit(100)) : null, [firestore, authUser]);
 
   const { data: userProfile, isLoading: isUserProfileLoading } = useDoc<User>(userDocRef);
-  const { data: mapEvents, isLoading: isMapEventsLoading } = useCollection<MapEvent>(mapEventsQuery);
+  const { data: countries, isLoading: isCountriesLoading } = useCollection<Country>(countriesQuery);
+  const { data: allUsers, isLoading: isAllUsersLoading } = useCollection<User>(usersQuery);
+  const { data: landTiles, isLoading: isLandTilesLoading } = useCollection<ClientTile>(landTilesQuery);
+  const { data: wrongAnswers, isLoading: isWrongAnswersLoading } = useCollection<WrongAnswer>(wrongAnswersQuery);
   const { data: problemAttempts, isLoading: isProblemAttemptsLoading } = useCollection<ProblemAttempt>(problemAttemptsQuery);
-  
+  const { data: mapEvents, isLoading: isMapEventsLoading } = useCollection<MapEvent>(mapEventsQuery);
 
-  const [initialLandTiles, setInitialLandTiles] = useState<ClientTile[]>([]);
-  const [initialCountries, setInitialCountries] = useState<Country[]>([]);
-  const [initialAllUsers, setInitialAllUsers] = useState<User[]>([]);
-  const [wrongAnswers, setWrongAnswers] = useState<WrongAnswer[]>([]);
-  const [isInitialDataLoading, setIsInitialDataLoading] = useState(true);
+  const [enrichedTiles, setEnrichedTiles] = useState<ClientTile[]>([]);
 
   useEffect(() => {
-    const fetchInitialData = async () => {
-      if (!firestore || !authUser) return;
-
-      try {
-        setIsInitialDataLoading(true);
-        
-        const [tilesSnapshot, countriesSnapshot, usersSnapshot, wrongsSnapshot] = await Promise.all([
-          getDocs(collection(firestore, "land_tiles")),
-          getDocs(collection(firestore, "countries")),
-          getDocs(collection(firestore, "users")),
-          getDocs(collection(firestore, 'users', authUser.uid, 'wrong_answers'))
-        ]);
-
-        const rawTiles = tilesSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as (Omit<ClientTile, 'ownerNickname' | 'countryId' | 'countryName' | 'countryColor'> & { id: string });
-        const countriesData = countriesSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as Country[];
-        const usersData = usersSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as User[];
-        const wrongsData = wrongsSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as WrongAnswer[];
-
-        const userMap = new Map(usersData.map(user => [user.id, user]));
-        const countryMap = new Map(countriesData.map(country => [country.id, country]));
-
-        const enrichedTiles = rawTiles.map(tile => {
-            const owner = tile.ownerId ? userMap.get(tile.ownerId) : null;
-            const country = owner?.countryId ? countryMap.get(owner.countryId) : null;
-            
-            return {
-                ...tile,
-                ownerNickname: owner?.nickname || null,
-                countryId: owner?.countryId || null,
-                countryName: country?.name || null,
-                countryColor: country?.color || null,
-            };
-        }) as ClientTile[];
-
-        setInitialLandTiles(enrichedTiles);
-        setInitialCountries(countriesData);
-        setInitialAllUsers(usersData);
-        setWrongAnswers(wrongsData);
-
-      } catch (error) {
-        console.error("Error fetching initial game data: ", error);
-      } finally {
-        setIsInitialDataLoading(false);
-      }
-    };
-    
-    if (authUser && firestore) {
-      fetchInitialData();
+    if (!landTiles || !allUsers || !countries) {
+      setEnrichedTiles([]);
+      return;
     }
-  }, [firestore, authUser]);
 
-  const isCoreDataLoading = isUserProfileLoading || isInitialDataLoading || isProblemAttemptsLoading;
+    const userMap = new Map(allUsers.map(user => [user.id, user]));
+    const countryMap = new Map(countries.map(country => [country.id, country]));
+
+    const newEnrichedTiles = landTiles.map(tile => {
+      const owner = tile.ownerId ? userMap.get(tile.ownerId) : null;
+      const country = owner?.countryId ? countryMap.get(owner.countryId) : null;
+      return {
+        ...tile,
+        ownerNickname: owner?.nickname || null,
+        countryId: owner?.countryId || null,
+        countryName: country?.name || null,
+        countryColor: country?.color || null,
+      };
+    });
+
+    setEnrichedTiles(newEnrichedTiles);
+
+  }, [landTiles, allUsers, countries]);
+
+
+  const isCoreDataLoading = isUserProfileLoading || isCountriesLoading || isAllUsersLoading || isLandTilesLoading || isProblemAttemptsLoading || isWrongAnswersLoading;
 
   if (isAuthUserLoading) {
     return (
@@ -98,7 +75,7 @@ export default function Home() {
     return <Login />;
   }
 
-  if (authUser && !userProfile && !isUserProfileLoading && !isInitialDataLoading) {
+  if (authUser && !userProfile && !isUserProfileLoading && !isCoreDataLoading) {
     return <SignUpDetails />;
   }
   
@@ -113,23 +90,23 @@ export default function Home() {
     );
   }
 
-  if (userProfile && initialLandTiles.length > 0 && problemAttempts) {
+  if (userProfile && enrichedTiles && problemAttempts && countries && allUsers && wrongAnswers) {
     return (
       <div className="relative flex h-screen w-full flex-col items-center bg-background p-4 sm:p-6 md:p-8">
         <GameBoard 
           currentUser={userProfile}
-          initialCountries={initialCountries}
-          initialLandTiles={initialLandTiles}
+          countries={countries}
+          landTiles={enrichedTiles}
           problemAttempts={problemAttempts}
-          initialWrongAnswers={wrongAnswers}
-          initialAllUsers={initialAllUsers}
+          wrongAnswers={wrongAnswers}
+          allUsers={allUsers}
           mapEvents={mapEvents || []}
         />
       </div>
     );
   }
 
-  // Fallback for any other state, including when initialLandTiles is empty after loading.
+  // Fallback for any other state
   return (
     <div className="flex h-screen w-full items-center justify-center bg-background">
        <div className="flex flex-col items-center gap-4">
