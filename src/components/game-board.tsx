@@ -6,7 +6,7 @@ import { generateMathProblem, isAdjacent, canConquer as canConquerLogic } from "
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { ZoomIn, ZoomOut } from "lucide-react";
-import { useFirestore, useUser, errorEmitter, FirestorePermissionError, useCollection, useMemoFirebase } from "@/firebase";
+import { useFirestore, useUser, errorEmitter, FirestorePermissionError } from "@/firebase";
 import { doc, updateDoc, writeBatch, increment, collection, arrayUnion, runTransaction, getDocs, addDoc, query, where, documentId, getDoc, serverTimestamp } from "firebase/firestore";
 import { addWrongAnswer } from "@/firebase/firestore/data";
 
