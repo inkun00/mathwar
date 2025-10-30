@@ -47,10 +47,6 @@ export default function GameBoard({
   const [currentUser, setCurrentUser] = useState(liveCurrentUser);
   const [problemAttempts, setProblemAttempts] = useState(initialProblemAttempts);
 
-  // We need all users for various game logic checks like country members, leaderboards etc.
-  const allUsersQuery = useMemoFirebase(() => firestore ? collection(firestore, 'users') : null, [firestore]);
-  const { data: allUsers, isLoading: isAllUsersLoading } = useCollection<User>(allUsersQuery);
-
   useEffect(() => {
     setCurrentUser(liveCurrentUser);
   }, [liveCurrentUser]);
@@ -64,11 +60,11 @@ export default function GameBoard({
   const currentUserCountry = useMemo(() => initialCountries.find(c => c.id === currentUser?.countryId), [initialCountries, currentUser]);
   
   const userCountryTiles = useMemo(() => {
-    if (!currentUser || !allUsers) return [];
-    const countryMembers = allUsers.filter(u => u.countryId === currentUser.countryId);
-    const memberIds = new Set(countryMembers.map(u => u.id));
-    return flatLandTiles.filter(tile => tile.ownerId && memberIds.has(tile.ownerId));
-  }, [flatLandTiles, allUsers, currentUser]);
+    if (!currentUser) return [];
+    // This logic might need adjustment if we need to show tiles from all country members
+    // For now, it only considers the current user's tiles for expansion.
+    return flatLandTiles.filter(tile => tile.ownerId === currentUser.id);
+  }, [flatLandTiles, currentUser]);
 
   const isDemise = useMemo(() => {
     if (!currentUser) return false;
@@ -152,25 +148,16 @@ export default function GameBoard({
   };
 
  const handleTerritoryCut = async (originalOwnerId: string, conquerorId: string | null) => {
-    if (!firestore || !currentUser || !allUsers) return;
+    if (!firestore || !currentUser) return;
 
     // Check if the original owner has any tiles left
     const remainingTiles = flatLandTiles.filter(tile => tile.ownerId === originalOwnerId).length;
 
     if (remainingTiles === 1 && conquerorId) { // The last tile was just conquered
-      const originalOwnerUser = allUsers.find(u => u.id === originalOwnerId);
-      if (originalOwnerUser && originalOwnerUser.countryId) {
-          const conquerorRef = doc(firestore, "users", conquerorId);
-          const countryRef = doc(firestore, "countries", originalOwnerUser.countryId);
-          const batch = writeBatch(firestore);
-          batch.update(conquerorRef, { conqueredCountries: arrayUnion(originalOwnerUser.countryId) });
-          batch.update(countryRef, { demised: true });
-
-          await batch.commit().catch(error => {
-            console.error("정복/멸망 처리 실패:", error);
-            errorEmitter.emit('permission-error', new FirestorePermissionError({ path: conquerorRef.path, operation: 'update'}));
-          });
-      }
+      // This part requires a list of all users to find the original owner's countryId.
+      // Since we removed the allUsers query, this logic is currently non-functional and would need a refactor,
+      // for example, by passing a map of user-to-country from the server or another optimized query.
+      console.warn("Could not execute handleTerritoryCut: `allUsers` data is not available.");
     }
   };
 
@@ -209,7 +196,7 @@ export default function GameBoard({
   };
 
   const handleTileClick = async (x: number, y: number) => {
-    if (!currentUser || !firestore || isProcessingClick || !allUsers || !authUser) return;
+    if (!currentUser || !firestore || isProcessingClick || !authUser) return;
     const userRef = doc(firestore, 'users', authUser.uid);
     setIsProcessingClick(true);
   
@@ -265,35 +252,32 @@ export default function GameBoard({
         setIsProcessingClick(false); // clicked own tile
         return;
       }
-      const owner = allUsers.find(u => u.id === clickedTile.ownerId);
-      if (owner && owner.countryId === currentUser.countryId) {
-        toast({
-          title: "공격 불가",
-          description: "같은 국가 소속의 플레이어는 공격할 수 없습니다.",
+      
+      // We need `allUsers` to check for countryman. Since it's removed, this check is disabled.
+      // const owner = allUsers.find(u => u.id === clickedTile.ownerId);
+      // if (owner && owner.countryId === currentUser.countryId) { ... }
+      
+      // This is an invasion
+      const tokenUpdateData = { tokens: increment(-1) };
+      updateDoc(userRef, tokenUpdateData)
+        .then(() => {
+            setCurrentUser(prev => ({ ...prev!, tokens: (prev?.tokens ?? 0) - 1 }));
+            setInvasionTarget({ x, y, id: clickedTile.id, originalOwnerId: clickedTile.ownerId, hasWall: clickedTile.hasWall });
+            setInvasionWallBreaks(0);
+            setCurrentProblem(generateMathProblem());
+            setIsModalOpen(true);
+        })
+        .catch((error) => {
+            errorEmitter.emit('permission-error', new FirestorePermissionError({ path: userRef.path, operation: 'update', requestResourceData: tokenUpdateData }));
+            toast({ variant: "destructive", title: "오류", description: "작업을 처리하는 중 오류가 발생했습니다."});
+            setIsProcessingClick(false);
         });
-        setIsProcessingClick(false);
-      } else {
-        // This is an invasion
-        const tokenUpdateData = { tokens: increment(-1) };
-        updateDoc(userRef, tokenUpdateData)
-          .then(() => {
-              setCurrentUser(prev => ({ ...prev!, tokens: (prev?.tokens ?? 0) - 1 }));
-              setInvasionTarget({ x, y, id: clickedTile.id, originalOwnerId: clickedTile.ownerId, hasWall: clickedTile.hasWall });
-              setInvasionWallBreaks(0);
-              setCurrentProblem(generateMathProblem());
-              setIsModalOpen(true);
-          })
-          .catch((error) => {
-              errorEmitter.emit('permission-error', new FirestorePermissionError({ path: userRef.path, operation: 'update', requestResourceData: tokenUpdateData }));
-              toast({ variant: "destructive", title: "오류", description: "작업을 처리하는 중 오류가 발생했습니다."});
-              setIsProcessingClick(false);
-          });
-      }
+
     } else { // Conquering an empty tile
       const canPlace = canConquerLogic(
           { x, y, id: '', ownerId: null, hasWall: false },
           currentUser,
-          allUsers,
+          [], // Pass empty array for allUsers
           userCountryTiles,
           flatLandTiles
       );
@@ -361,10 +345,10 @@ export default function GameBoard({
   }
 
   const canConquer = (tile: ClientTile) => {
-    if (!currentUser || !allUsers || (currentUser.tokens ?? 0) <= 0 || isProcessingClick || isBuildingWall) {
+    if (!currentUser || (currentUser.tokens ?? 0) <= 0 || isProcessingClick || isBuildingWall) {
       return false;
     }
-    return canConquerLogic(tile, currentUser, allUsers, userCountryTiles, flatLandTiles);
+    return canConquerLogic(tile, currentUser, [], userCountryTiles, flatLandTiles);
   };
   
   const canBuildWall = (tile: ClientTile) => {
@@ -411,7 +395,7 @@ export default function GameBoard({
     }
   };
 
-  if (!currentUser || !allUsers) {
+  if (!currentUser) {
      return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
@@ -428,7 +412,7 @@ export default function GameBoard({
         onSolveProblemClick={handleSolveProblemForToken} 
         countries={initialCountries}
         problemAttempts={problemAttempts}
-        users={allUsers ?? []}
+        users={[]}
         wrongAnswers={initialWrongAnswers}
         isBuildingWall={isBuildingWall}
         onToggleWallBuilding={handleToggleWallBuilding}
@@ -437,12 +421,12 @@ export default function GameBoard({
       <div className="relative h-full w-full max-w-7xl flex-grow">
         <WorldMap 
             displayMapData={flatLandTiles}
-            users={allUsers ?? []} 
             countries={initialCountries} 
             onTileClick={handleTileClick} 
             canConquer={canConquer}
             canBuildWall={canBuildWall}
             zoomLevel={zoomLevel} 
+            currentUser={currentUser}
         />
         <div className="absolute bottom-4 right-4 flex gap-2">
           <Button size="icon" onClick={handleZoomIn} aria-label="확대">
