@@ -58,35 +58,42 @@ export default function GameBoard({
   const { data: currentUser } = useDoc<User>(userDocRef, liveCurrentUser);
 
   useEffect(() => {
-    if (mapEvents && mapEvents.length > 0) {
-      setLandTiles(currentTiles => {
-        const newTiles = [...currentTiles];
-        let changed = false;
-        for (const event of mapEvents) {
-          if (!event.tileId) continue;
-            const tileIndex = newTiles.findIndex(t => t.id === event.tileId);
-            const eventData = {
-                ownerId: event.newOwnerId,
-                hasWall: event.newHasWall,
-                ownerNickname: event.newOwnerNickname,
-                countryId: event.newCountryId,
-                countryName: event.newCountryName,
-                countryColor: event.newCountryColor,
-            }
-
-            if (tileIndex !== -1) {
-                if (newTiles[tileIndex].ownerId !== event.newOwnerId || newTiles[tileIndex].hasWall !== event.newHasWall) {
-                    newTiles[tileIndex] = { ...newTiles[tileIndex], ...eventData };
-                    changed = true;
-                }
-            } else {
-                 newTiles.push({ id: event.tileId, x: event.x, y: event.y, ...eventData });
-                 changed = true;
-            }
-        }
-        return changed ? newTiles : currentTiles;
-      });
+    //
+    // CRITICAL FIX: Do not process if mapEvents is null, undefined, or empty.
+    // This prevents the initial landTiles state from being overwritten by an empty
+    // array on the first render.
+    //
+    if (!mapEvents || mapEvents.length === 0) {
+      return;
     }
+
+    setLandTiles(currentTiles => {
+      const newTiles = [...currentTiles];
+      let changed = false;
+      for (const event of mapEvents) {
+        if (!event.tileId) continue;
+          const tileIndex = newTiles.findIndex(t => t.id === event.tileId);
+          const eventData = {
+              ownerId: event.newOwnerId,
+              hasWall: event.newHasWall,
+              ownerNickname: event.newOwnerNickname,
+              countryId: event.newCountryId,
+              countryName: event.newCountryName,
+              countryColor: event.newCountryColor,
+          }
+
+          if (tileIndex !== -1) {
+              if (newTiles[tileIndex].ownerId !== event.newOwnerId || newTiles[tileIndex].hasWall !== event.newHasWall) {
+                  newTiles[tileIndex] = { ...newTiles[tileIndex], ...eventData };
+                  changed = true;
+              }
+          } else {
+               newTiles.push({ id: event.tileId, x: event.x, y: event.y, ...eventData });
+               changed = true;
+          }
+      }
+      return changed ? newTiles : currentTiles;
+    });
   }, [mapEvents]);
 
   const currentUserCountry = useMemo(() => countries.find(c => c.id === currentUser?.countryId), [countries, currentUser]);
