@@ -56,15 +56,14 @@ const Fraction = ({
   className,
 }: FractionProps) => {
 
-  const numElement = <span className="text-xl leading-none">{numerator}</span>;
-  const denElement = <span className="text-xl leading-none">{denominator}</span>;
+  const numElement = <span className="pb-1 text-xl leading-none">{numerator}</span>;
+  const denElement = <span className="pt-1 text-xl leading-none">{denominator}</span>;
 
   return (
     <span
       className={cn('inline-flex flex-col items-center align-middle mx-1', className)}
     >
-      {numElement}
-      <span className="w-full h-px bg-current"></span>
+      <span className="border-b border-current px-1">{numElement}</span>
       {denElement}
     </span>
   );
