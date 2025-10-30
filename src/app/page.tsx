@@ -14,14 +14,12 @@ export default function Home() {
   const firestore = useFirestore();
 
   // --- Data Fetching ---
-  // 1. Real-time listeners for critical data
   const userDocRef = useMemoFirebase(() => (firestore && authUser) ? doc(firestore, 'users', authUser.uid) : null, [firestore, authUser]);
   const mapEventsQuery = useMemoFirebase(() => (firestore && authUser) ? query(collection(firestore, 'map_events'), orderBy('timestamp', 'desc'), limit(50)) : null, [firestore, authUser]);
 
   const { data: userProfile, isLoading: isUserProfileLoading } = useDoc<User>(userDocRef);
   const { data: mapEvents, isLoading: isMapEventsLoading } = useCollection<MapEvent>(mapEventsQuery);
 
-  // 2. One-time fetches for less critical or larger datasets on initial load
   const [initialLandTiles, setInitialLandTiles] = useState<ClientTile[]>([]);
   const [initialCountries, setInitialCountries] = useState<Country[]>([]);
   const [initialAllUsers, setInitialAllUsers] = useState<User[]>([]);
@@ -31,7 +29,7 @@ export default function Home() {
 
   useEffect(() => {
     const fetchInitialData = async () => {
-      if (!firestore || !authUser) return; // Wait for authentication
+      if (!firestore || !authUser) return; // Wait for authentication and firestore
 
       try {
         setIsInitialDataLoading(true);
@@ -58,11 +56,13 @@ export default function Home() {
         setIsInitialDataLoading(false);
       }
     };
-    fetchInitialData();
+    
+    if (authUser && firestore) {
+      fetchInitialData();
+    }
   }, [firestore, authUser]);
 
-  // Derived loading state
-  const isCoreDataLoading = isUserProfileLoading || isInitialDataLoading || isMapEventsLoading;
+  const isCoreDataLoading = isUserProfileLoading || isInitialDataLoading;
 
   if (isAuthUserLoading) {
     return (
@@ -79,14 +79,13 @@ export default function Home() {
     return <Login />;
   }
 
-  // user is logged in, but has not completed signup
   if (authUser && !userProfile && !isUserProfileLoading && !isInitialDataLoading) {
     return <SignUpDetails />;
   }
   
-  if (isCoreDataLoading) {
+  if (isCoreDataLoading || isMapEventsLoading) {
       return (
-      <div className="flex h-screen w-full items-center justify-center bg-background">
+      <div className="flex h-screen w_full items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
             <h2 className="text-xl font-semibold">게임 데이터를 불러오는 중...</h2>
             <p className="text-muted-foreground">잠시만 기다려주세요.</p>
@@ -95,8 +94,7 @@ export default function Home() {
     );
   }
 
-  // user is logged in, has a profile, and all data is loaded
-  if (userProfile && mapEvents !== undefined) {
+  if (userProfile && initialLandTiles.length > 0) {
     return (
       <div className="relative flex h-screen w-full flex-col items-center bg-background p-4 sm:p-6 md:p-8">
         <GameBoard 
@@ -112,7 +110,7 @@ export default function Home() {
     );
   }
 
-  // Fallback for any other state
+  // Fallback for any other state, including when initialLandTiles is empty after loading.
   return (
     <div className="flex h-screen w-full items-center justify-center bg-background">
        <div className="flex flex-col items-center gap-4">
