@@ -152,7 +152,7 @@ export default function ProfileSheet({ currentUser: initialUser, onOpenChange }:
             userRank: { rank: userRankIndex + 1, id: currentUser.id, nickname: currentUser.nickname, tileCount: userTileCount[currentUser.id] || 0 },
             countryRank: { rank: countryRankIndex + 1, id: currentUser.countryId, name: allCountries.find(c => c.id === currentUser.countryId)?.name || '', color: '', tileCount: countryTileCount[currentUser.countryId] || 0},
             joinRequests: joinRequestsSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as JoinRequest[],
-            allianceRequests: allianceRequestsSnapshot.docs.map(doc => ({...doc.data(), id: doc.id})) as AllianceRequest[],
+            allianceRequests: allianceRequestsSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as AllianceRequest[],
         });
     } catch (error) {
         console.error("Error fetching profile data:", error);
@@ -237,6 +237,12 @@ export default function ProfileSheet({ currentUser: initialUser, onOpenChange }:
       return country ? country.name : null;
     }).filter(name => name !== null);
   }, [currentUser, profileData]);
+
+  const countryMembers = useMemo(() => {
+    if (!profileData?.userCountry || !profileData?.allUsers) return [];
+    return profileData.allUsers.filter(u => u.countryId === profileData.userCountry?.id);
+  }, [profileData]);
+
 
   const adjacentCountries = useMemo(() => {
     if (!currentUser || !profileData) return [];
@@ -419,6 +425,37 @@ export default function ProfileSheet({ currentUser: initialUser, onOpenChange }:
             </Card>
           </div>
           
+           {userCountry && (
+             <div className="space-y-4">
+                <h3 className="text-lg font-semibold tracking-tight">국가 구성원</h3>
+                <Card>
+                    <CardContent className="pt-6 space-y-2">
+                        {countryMembers.length > 0 ? (
+                            countryMembers.map(member => (
+                                <div key={member.id} className="flex items-center justify-between p-2 rounded-md bg-muted/50">
+                                    <span className="font-medium">{member.nickname}</span>
+                                    {member.isCountryOwner && (
+                                      <TooltipProvider>
+                                        <Tooltip>
+                                          <TooltipTrigger>
+                                            <Crown className="h-5 w-5 text-yellow-500" />
+                                          </TooltipTrigger>
+                                          <TooltipContent>
+                                            <p>국가 주인</p>
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      </TooltipProvider>
+                                    )}
+                                </div>
+                            ))
+                        ) : (
+                            <p className="text-sm text-muted-foreground text-center">구성원이 없습니다.</p>
+                        )}
+                    </CardContent>
+                </Card>
+            </div>
+           )}
+
            {conqueredCountryNames.length > 0 && (
             <div className="space-y-4">
               <h3 className="text-lg font-semibold tracking-tight">정복 기록</h3>
