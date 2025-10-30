@@ -120,7 +120,7 @@ export default function WorldMap({ landTiles, onTileClick, canConquer, canBuildW
             <TileComponent
               key={index}
               tile={tile}
-              onClick={() => onTileClick(x, y)}
+              onClick={() => tile && onTileClick(x, y)}
               isConquerable={tile ? canConquer(tile) : false}
               isWallBuildable={tile ? canBuildWall(tile) : false}
               isLandTile={isLandTile}
