@@ -15,8 +15,6 @@ import { useToast } from '@/hooks/use-toast';
 import type { MathProblem, StorableProblem, ProblemAttempt } from '@/lib/types';
 import { useState, type FormEvent, useEffect, useMemo } from 'react';
 import { CheckCircle, XCircle, Swords, Shield } from 'lucide-react';
-import { useFirestore } from '@/firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import {
   generateProblemFromData,
   problemNodeToString,
@@ -37,7 +35,7 @@ interface ProblemModalProps {
   reviewProblem?: StorableProblem | null;
   hasWall?: boolean;
   invasionWallBreaks?: number;
-  onAttempt?: (attempt: Omit<ProblemAttempt, 'id'>) => void;
+  onAttempt?: (attempt: Omit<ProblemAttempt, 'id' | 'timestamp'>) => void;
 }
 
 export default function ProblemModal({
@@ -56,7 +54,6 @@ export default function ProblemModal({
 }: ProblemModalProps) {
   const [answers, setAnswers] = useState<string[]>([]);
   const { toast } = useToast();
-  const firestore = useFirestore();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
 
@@ -72,32 +69,17 @@ export default function ProblemModal({
     return problem.answer.length;
   }, [problem]);
 
-  const recordAttempt = async (correctStatus: boolean) => {
-    if (!userId || !firestore || !problem || isReview) return;
+  const recordAttempt = (correctStatus: boolean) => {
+    if (!userId || !problem || isReview || !onAttempt) return;
     const attemptData = {
       userId: userId,
       unit: problem.type,
       area: problem.subType,
       correct: correctStatus,
-      timestamp: new Date().toISOString(), // Use client-side timestamp for immediate UI update
       isReview: isReview,
       problem: problemNodeToString(problem.problem),
     };
-
-    // Update local state immediately
-    if (onAttempt) {
-      onAttempt(attemptData);
-    }
-    
-    // Then, save to Firestore with server timestamp
-    try {
-      await addDoc(
-        collection(firestore, 'problem_attempts', userId, 'attempts'),
-        { ...attemptData, timestamp: serverTimestamp() }
-      );
-    } catch (error) {
-      console.error('문제 풀이 기록 오류:', error);
-    }
+    onAttempt(attemptData);
   };
 
   useEffect(() => {
@@ -163,7 +145,7 @@ export default function ProblemModal({
       const correct = isAnswerCorrect(answers, problem.answer);
 
       if (!isReview) {
-        await recordAttempt(correct);
+        recordAttempt(correct);
       }
 
       if (correct) {

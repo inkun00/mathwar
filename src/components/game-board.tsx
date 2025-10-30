@@ -313,7 +313,11 @@ export default function GameBoard({
             transaction.set(newTileRef, tileData);
             transaction.update(userRef, { tokens: increment(-1) });
         });
+        // Optimistically update the user's token count on the client
         setCurrentUser(prev => ({ ...prev!, tokens: (prev?.tokens ?? 0) - 1 }));
+        // IMPORTANT: We do NOT optimistically update the tile state here.
+        // We wait for the `useCollection` hook to bring in the new tile from the server.
+        // This prevents the race condition.
       } catch (e: any) {
           console.error("타일 클릭 트랜잭션 실패:", e);
           const permissionError = new FirestorePermissionError({
@@ -417,7 +421,18 @@ export default function GameBoard({
   };
   
   const addProblemAttempt = (newAttempt: Omit<ProblemAttempt, 'id'>) => {
-     setProblemAttempts(prev => [...prev, { ...newAttempt, id: Math.random().toString() }]);
+     if (!firestore || !authUser) return;
+    const attemptData = {
+      ...newAttempt,
+      timestamp: serverTimestamp(),
+    };
+     addDoc(collection(firestore, 'problem_attempts', authUser.uid, 'attempts'), attemptData).catch(
+      (error) => {
+        console.error('문제 풀이 기록 오류:', error);
+      }
+    );
+     // Optimistically update local state
+     setProblemAttempts(prev => [...prev, { ...newAttempt, id: Math.random().toString(), timestamp: new Date().toISOString() }]);
   }
 
   if (!currentUser) {
