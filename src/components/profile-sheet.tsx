@@ -11,7 +11,7 @@ import { useAuth, useFirestore, useDoc, useMemoFirebase } from "@/firebase";
 import { signOut } from "firebase/auth";
 import ProblemModal from "./problem-modal";
 import { deleteWrongAnswer } from "@/firebase/firestore/data";
-import { doc, updateDoc, increment, collection, addDoc, writeBatch, serverTimestamp, deleteDoc, query, where, getDocs } from "firebase/firestore";
+import { doc, updateDoc, increment, collection, addDoc, writeBatch, serverTimestamp, deleteDoc, query, where, getDocs, runTransaction } from "firebase/firestore";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "./ui/command";
 import { cn } from "@/lib/utils";
@@ -281,15 +281,36 @@ export default function ProfileSheet({ currentUser: initialUser, onOpenChange }:
     try {
         const nameModeration = await moderateText(newCountryName);
         if (!nameModeration.isAppropriate) {
-            toast({ variant: 'destructive', title: '부적절한 국가 이름', description: nameModeration.reason || '사용할 수 없는 이름입니다.' }); return;
+            toast({ variant: 'destructive', title: '부적절한 국가 이름', description: nameModeration.reason || '사용할 수 없는 이름입니다.' }); 
+            setIsProcessing(false);
+            return;
         }
-        const countryRef = await addDoc(collection(firestore, 'countries'), { name: newCountryName, createdBy: currentUser.id, color: `hsl(${Math.random() * 360}, 60%, 70%)`, demised: false, flag: Array(32 * 20).fill("#ffffff") });
-        await updateDoc(doc(firestore, 'users', currentUser.id), { countryId: countryRef.id, isCountryOwner: true });
+        
+        await runTransaction(firestore, async (transaction) => {
+            const newCountryRef = doc(collection(firestore, 'countries'));
+            const userRef = doc(firestore, 'users', currentUser.id);
+
+            transaction.set(newCountryRef, {
+                name: newCountryName,
+                createdBy: currentUser.id,
+                color: `hsl(${Math.random() * 360}, 60%, 70%)`,
+                demised: false,
+                flag: Array(32 * 20).fill("#ffffff")
+            });
+
+            transaction.update(userRef, { countryId: newCountryRef.id, isCountryOwner: true });
+        });
+
         toast({ title: "독립 선언!", description: `새로운 국가 '${newCountryName}'를 건국했습니다!` });
         setNewCountryName("");
         setIndependenceAlertOpen(false);
         fetchProfileData(); // Refresh data
-    } catch (e) { toast({ variant: "destructive", title: "오류" }); } finally { setIsProcessing(false); }
+    } catch (e) {
+        console.error("독립 선언 오류:", e);
+        toast({ variant: "destructive", title: "오류", description: "독립을 선언하는 중 오류가 발생했습니다." }); 
+    } finally { 
+        setIsProcessing(false); 
+    }
   };
   
   const handleRequestResponse = async (request: JoinRequest | AllianceRequest, type: 'join' | 'alliance', action: 'approve' | 'reject') => {
