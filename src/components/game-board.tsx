@@ -22,14 +22,16 @@ interface GameBoardProps {
   initialLandTiles: ClientTile[];
   initialProblemAttempts: ProblemAttempt[];
   initialWrongAnswers: WrongAnswer[];
+  initialAllUsers: User[];
 }
 
 export default function GameBoard({ 
-  currentUser, 
+  currentUser: liveCurrentUser, 
   initialCountries, 
   initialLandTiles,
   initialProblemAttempts,
   initialWrongAnswers,
+  initialAllUsers,
 }: GameBoardProps) {
   const firestore = useFirestore();
   const { user: authUser } = useUser();
@@ -43,20 +45,29 @@ export default function GameBoard({
   const [zoomLevel, setZoomLevel] = useState(1);
   const [isProcessingClick, setIsProcessingClick] = useState(false);
   const [isBuildingWall, setIsBuildingWall] = useState(false);
+  
+  const [currentUser, setCurrentUser] = useState(liveCurrentUser);
+  const [problemAttempts, setProblemAttempts] = useState(initialProblemAttempts);
+  
+  useEffect(() => {
+    setCurrentUser(liveCurrentUser);
+  }, [liveCurrentUser]);
+
+  useEffect(() => {
+    setProblemAttempts(initialProblemAttempts);
+  }, [initialProblemAttempts]);
+
 
   const flatLandTiles = initialLandTiles;
 
   const currentUserCountry = useMemo(() => initialCountries.find(c => c.id === currentUser?.countryId), [initialCountries, currentUser]);
-
-  const allUsersQuery = useMemoFirebase(() => firestore ? collection(firestore, 'users') : null, [firestore]);
-  const { data: allUsers, isLoading: isAllUsersLoading } = useCollection<User>(allUsersQuery);
   
   const userCountryTiles = useMemo(() => {
-    if (!currentUser || !allUsers) return [];
-    const countryMembers = allUsers.filter(u => u.countryId === currentUser.countryId);
+    if (!currentUser || !initialAllUsers) return [];
+    const countryMembers = initialAllUsers.filter(u => u.countryId === currentUser.countryId);
     const memberIds = new Set(countryMembers.map(u => u.id));
     return flatLandTiles.filter(tile => tile.ownerId && memberIds.has(tile.ownerId));
-  }, [flatLandTiles, allUsers, currentUser]);
+  }, [flatLandTiles, initialAllUsers, currentUser]);
 
   const isDemise = useMemo(() => {
     if (!currentUser) return false;
@@ -115,6 +126,20 @@ export default function GameBoard({
     const userRef = doc(firestore, "users", authUser.uid);
     const updateData = { tokens: increment(1) };
     updateDoc(userRef, updateData)
+     .then(() => {
+        // Optimistically update local state
+        setCurrentUser(prev => ({ ...prev, tokens: prev.tokens + 1 }));
+        setProblemAttempts(prev => [...prev, {
+            id: Math.random().toString(),
+            userId: authUser.uid,
+            unit: 'decimal',
+            area: 'decimal-add',
+            correct: true,
+            timestamp: new Date().toISOString(),
+            isReview: false,
+            problem: 'optimistic-update'
+        }]);
+      })
       .catch(error => {
         const permissionError = new FirestorePermissionError({
             path: userRef.path,
@@ -126,13 +151,13 @@ export default function GameBoard({
   };
 
  const handleTerritoryCut = async (originalOwnerId: string, conquerorId: string | null) => {
-    if (!firestore || !currentUser || !allUsers) return;
+    if (!firestore || !currentUser || !initialAllUsers) return;
 
     // Check if the original owner has any tiles left
     const remainingTiles = flatLandTiles.filter(tile => tile.ownerId === originalOwnerId).length;
 
     if (remainingTiles === 1 && conquerorId) { // The last tile was just conquered
-      const originalOwnerUser = allUsers.find(u => u.id === originalOwnerId);
+      const originalOwnerUser = initialAllUsers.find(u => u.id === originalOwnerId);
       if (originalOwnerUser && originalOwnerUser.countryId) {
           const conquerorRef = doc(firestore, "users", conquerorId);
           const countryRef = doc(firestore, "countries", originalOwnerUser.countryId);
@@ -169,13 +194,23 @@ export default function GameBoard({
   
     setInvasionWallBreaks(0);
     const originalOwnerId = invasionTarget.originalOwnerId;
-    const updateData = { ownerId: currentUser.id };
+    const updateData = { ownerId: currentUser.id, hasWall: invasionTarget.hasWall && invasionWallBreaks < 1 };
   
     updateDoc(tileRef, updateData)
       .then(async () => {
         if (originalOwnerId) {
           await handleTerritoryCut(originalOwnerId, currentUser.id);
         }
+        setProblemAttempts(prev => [...prev, {
+            id: Math.random().toString(),
+            userId: authUser.uid,
+            unit: 'decimal',
+            area: 'decimal-add',
+            correct: true,
+            timestamp: new Date().toISOString(),
+            isReview: false,
+            problem: 'optimistic-invasion-update'
+        }]);
       })
       .catch((error) => {
         const permissionError = new FirestorePermissionError({
@@ -193,7 +228,7 @@ export default function GameBoard({
   };
 
   const handleTileClick = async (x: number, y: number) => {
-    if (!currentUser || !firestore || isProcessingClick || !allUsers || !authUser) return;
+    if (!currentUser || !firestore || isProcessingClick || !initialAllUsers || !authUser) return;
     const userRef = doc(firestore, 'users', authUser.uid);
     setIsProcessingClick(true);
   
@@ -222,6 +257,7 @@ export default function GameBoard({
       wallBatch.commit()
           .then(() => {
               toast({ title: "성벽 건설 완료!", description: "영토의 방어도가 상승했습니다."});
+              setCurrentUser(prev => ({...prev, walls: (prev.walls ?? 0) -1 }));
           })
           .catch((error) => {
               errorEmitter.emit('permission-error', new FirestorePermissionError({ path: tileRef.path, operation: 'update', requestResourceData: tileUpdateData }));
@@ -247,7 +283,7 @@ export default function GameBoard({
     
     if (clickedTile) { // Conquering an existing tile
       if (clickedTile.ownerId !== currentUser.id) {
-        const owner = allUsers.find(u => u.id === clickedTile.ownerId);
+        const owner = initialAllUsers.find(u => u.id === clickedTile.ownerId);
         if (owner && owner.countryId === currentUser.countryId) {
           toast({
             title: "공격 불가",
@@ -259,6 +295,7 @@ export default function GameBoard({
           const tokenUpdateData = { tokens: increment(-1) };
           updateDoc(userRef, tokenUpdateData)
             .then(() => {
+                setCurrentUser(prev => ({ ...prev, tokens: prev.tokens - 1 }));
                 setInvasionTarget({ x, y, id: clickedTile.id, originalOwnerId: clickedTile.ownerId, hasWall: clickedTile.hasWall });
                 setInvasionWallBreaks(0);
                 setCurrentProblem(generateMathProblem());
@@ -277,7 +314,7 @@ export default function GameBoard({
       const canPlace = canConquerLogic(
           { x, y, ownerId: null, hasWall: false },
           currentUser,
-          allUsers,
+          initialAllUsers,
           userCountryTiles,
           flatLandTiles
       );
@@ -293,6 +330,7 @@ export default function GameBoard({
           transaction.update(userRef, { tokens: increment(-1) });
       }).then(() => {
           toast({ title: "영토 확장!", description: "새로운 땅을 정복했습니다." });
+          setCurrentUser(prev => ({ ...prev, tokens: prev.tokens - 1 }));
       }).catch((error) => {
           console.error("타일 클릭 트랜잭션 실패:", error);
           toast({ variant: "destructive", title: "오류", description: "작업을 처리하는 중 오류가 발생했습니다."});
@@ -309,6 +347,9 @@ export default function GameBoard({
     const updateData = { tokens: 1 };
   
     updateDoc(userRef, updateData)
+      .then(() => {
+        setCurrentUser(prev => ({ ...prev, tokens: 1 }));
+      })
       .catch(error => {
         errorEmitter.emit('permission-error', new FirestorePermissionError({ path: userRef.path, operation: 'update', requestResourceData: updateData }));
       });
@@ -330,10 +371,10 @@ export default function GameBoard({
   }
 
   const canConquer = (tile: ClientTile) => {
-    if (!currentUser || !allUsers || (currentUser.tokens ?? 0) <= 0 || isProcessingClick || isBuildingWall) {
+    if (!currentUser || !initialAllUsers || (currentUser.tokens ?? 0) <= 0 || isProcessingClick || isBuildingWall) {
       return false;
     }
-    return canConquerLogic(tile, currentUser, allUsers, userCountryTiles, flatLandTiles);
+    return canConquerLogic(tile, currentUser, initialAllUsers, userCountryTiles, flatLandTiles);
   };
   
   const canBuildWall = (tile: ClientTile) => {
@@ -350,6 +391,9 @@ export default function GameBoard({
             const userRef = doc(firestore, 'users', authUser.uid);
             const refundData = { tokens: increment(1) };
             updateDoc(userRef, refundData)
+              .then(() => {
+                setCurrentUser(prev => ({ ...prev, tokens: prev.tokens + 1 }));
+              })
               .catch(error => {
                 errorEmitter.emit('permission-error', new FirestorePermissionError({ path: userRef.path, operation: 'update', requestResourceData: refundData }));
               });
@@ -377,7 +421,7 @@ export default function GameBoard({
     }
   };
 
-  if (!allUsers) {
+  if (!currentUser) {
      return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
@@ -393,8 +437,8 @@ export default function GameBoard({
         currentUser={currentUser} 
         onSolveProblemClick={handleSolveProblemForToken} 
         countries={initialCountries}
-        problemAttempts={initialProblemAttempts}
-        users={allUsers}
+        problemAttempts={problemAttempts}
+        users={initialAllUsers}
         wrongAnswers={initialWrongAnswers}
         isBuildingWall={isBuildingWall}
         onToggleWallBuilding={handleToggleWallBuilding}
@@ -403,7 +447,7 @@ export default function GameBoard({
       <div className="relative h-full w-full max-w-7xl flex-grow">
         <WorldMap 
             displayMapData={flatLandTiles}
-            users={allUsers} 
+            users={initialAllUsers} 
             countries={initialCountries} 
             onTileClick={handleTileClick} 
             canConquer={canConquer}
