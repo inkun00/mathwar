@@ -4,82 +4,41 @@ import { useEffect, useState } from "react";
 import GameBoard from "@/components/game-board";
 import Login from "@/components/login";
 import SignUpDetails from "@/components/signup-details";
-import { useUser, useFirestore, useCollection, useMemoFirebase } from "@/firebase";
+import { useUser, useFirestore, useDoc, useCollection, useMemoFirebase } from "@/firebase";
 import { doc, getDoc, collection, getDocs, query } from "firebase/firestore";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { User, Country, ClientTile, ProblemAttempt, WrongAnswer } from "@/lib/types";
+import type { User, Country, ClientTile, ProblemAttempt, WrongAnswer, MapAggregate } from "@/lib/types";
 
 export default function Home() {
   const { user: authUser, isUserLoading: isAuthUserLoading } = useUser();
   const firestore = useFirestore();
 
-  const [isLoading, setIsLoading] = useState(true);
-  const [userProfile, setUserProfile] = useState<User | null>(null);
-  const [countries, setCountries] = useState<Country[]>([]);
-  const [allUsers, setAllUsers] = useState<User[]>([]);
-  const [landTiles, setLandTiles] = useState<ClientTile[]>([]);
-  const [wrongAnswers, setWrongAnswers] = useState<WrongAnswer[]>([]);
-  
+  // Data fetching hooks
+  const userDocRef = useMemoFirebase(() => (firestore && authUser) ? doc(firestore, 'users', authUser.uid) : null, [firestore, authUser]);
+  const countriesQuery = useMemoFirebase(() => firestore ? collection(firestore, 'countries') : null, [firestore]);
+  const allUsersQuery = useMemoFirebase(() => firestore ? collection(firestore, 'users') : null, [firestore]);
+  const mapDocRef = useMemoFirebase(() => firestore ? doc(firestore, 'map_aggregates', 'latest') : null, [firestore]);
   const attemptsQuery = useMemoFirebase(() => {
     if (!authUser || !firestore) return null;
     return collection(firestore, 'problem_attempts', authUser.uid, 'attempts');
   }, [authUser, firestore]);
+   const wrongAnswersQuery = useMemoFirebase(() => {
+    if (!authUser || !firestore) return null;
+    return collection(firestore, 'users', authUser.uid, 'wrong_answers');
+  }, [authUser, firestore]);
 
-  const { data: problemAttempts, isLoading: attemptsLoading } = useCollection<ProblemAttempt>(attemptsQuery);
 
-
-  useEffect(() => {
-    if (isAuthUserLoading || !firestore) return;
-    
-    // Defer data fetching until auth state is resolved.
-    if (!authUser) {
-      setIsLoading(false);
-      return;
-    }
-
-    setIsLoading(true);
-    const fetchData = async () => {
-      try {
-        const userDocRef = doc(firestore, 'users', authUser.uid);
-        const countriesQuery = collection(firestore, "countries");
-        const usersQuery = collection(firestore, "users");
-        const landTilesQuery = collection(firestore, "land_tiles");
-        const wrongAnswersQuery = collection(firestore, 'users', authUser.uid, 'wrong_answers');
-
-        const [userDocSnap, countriesSnap, usersSnap, landTilesSnap, wrongAnswersSnap] = await Promise.all([
-          getDoc(userDocRef),
-          getDocs(countriesQuery),
-          getDocs(usersQuery),
-          getDocs(landTilesQuery),
-          getDocs(wrongAnswersQuery),
-        ]);
-
-        if (userDocSnap.exists()) {
-          setUserProfile({ ...userDocSnap.data(), id: userDocSnap.id } as User);
-        } else {
-          setUserProfile(null);
-        }
-        
-        setCountries(countriesSnap.docs.map(doc => ({ ...doc.data(), id: doc.id } as Country)));
-        setAllUsers(usersSnap.docs.map(doc => ({ ...doc.data(), id: doc.id } as User)));
-        setLandTiles(landTilesSnap.docs.map(doc => ({ ...doc.data(), id: doc.id } as ClientTile)));
-        setWrongAnswers(wrongAnswersSnap.docs.map(d => ({...d.data(), id: d.id} as WrongAnswer)));
-
-      } catch (error) {
-        console.error("Error fetching initial data:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchData();
-
-  }, [authUser, firestore, isAuthUserLoading]);
+  const { data: userProfile, isLoading: isUserProfileLoading } = useDoc<User>(userDocRef);
+  const { data: countries, isLoading: isCountriesLoading } = useCollection<Country>(countriesQuery);
+  const { data: allUsers, isLoading: isUsersLoading } = useCollection<User>(allUsersQuery);
+  const { data: gameMap, isLoading: isMapLoading } = useDoc<MapAggregate>(mapDocRef);
+  const { data: problemAttempts, isLoading: isAttemptsLoading } = useCollection<ProblemAttempt>(attemptsQuery);
+  const { data: wrongAnswers, isLoading: isWrongAnswersLoading } = useCollection<WrongAnswer>(wrongAnswersQuery);
 
   // Combined loading state
-  const isCoreDataLoading = isAuthUserLoading || isLoading || attemptsLoading;
-
-  if (isCoreDataLoading && authUser) { // Only show skeleton if logged in and loading
+  const isLoading = isAuthUserLoading || isUserProfileLoading || isCountriesLoading || isUsersLoading || isMapLoading || isAttemptsLoading || isWrongAnswersLoading;
+  
+  if (isAuthUserLoading || (authUser && isLoading)) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
@@ -94,18 +53,20 @@ export default function Home() {
     return <Login />;
   }
 
-  if (authUser && !userProfile) {
+  // user is logged in, but has not completed signup
+  if (authUser && !userProfile && !isUserProfileLoading) {
     return <SignUpDetails />;
   }
-  
-  if (userProfile && problemAttempts) {
+
+  // user is logged in, has a profile, and all data is loaded
+  if (authUser && userProfile && countries && allUsers && gameMap && problemAttempts && wrongAnswers) {
     return (
       <div className="relative flex h-screen w-full flex-col items-center bg-background p-4 sm:p-6 md:p-8">
         <GameBoard 
           currentUser={userProfile}
           initialCountries={countries}
           initialAllUsers={allUsers}
-          initialLandTiles={landTiles}
+          initialGameMap={gameMap}
           initialProblemAttempts={problemAttempts}
           initialWrongAnswers={wrongAnswers}
         />

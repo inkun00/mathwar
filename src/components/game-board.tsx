@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect } from "react";
-import type { ClientTile, MathProblem, Country, User, ProblemAttempt, InvasionTarget, WrongAnswer } from "@/lib/types";
+import type { ClientTile, MathProblem, Country, User, ProblemAttempt, InvasionTarget, WrongAnswer, MapAggregate } from "@/lib/types";
 import { generateMathProblem, isAdjacent, canConquer as canConquerLogic } from "@/lib/game-logic";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -16,29 +16,41 @@ import ProblemModal from "./problem-modal";
 import DemiseScreen from "./demise-screen";
 import { Skeleton } from "./ui/skeleton";
 import { MAP_WIDTH, MAP_HEIGHT } from "@/lib/world-map-shape";
+import { functions } from "firebase/app";
+import { getFunctions, httpsCallable } from "firebase/functions";
 
 
-// Helper to construct the client-side 2D map array from the flat list of tile documents
-const constructMapFromTiles = (tiles: ClientTile[]): ClientTile[][] => {
-  const map: ClientTile[][] = Array.from({ length: MAP_HEIGHT }, (_, y) =>
-    Array.from({ length: MAP_WIDTH }, (__, x) => ({
-      x, y, ownerId: null, hasWall: false,
-    }))
-  );
+const UID_LENGTH = 32;
+const EMPTY_TILE_UID = '_'.repeat(UID_LENGTH);
 
-  for (const tile of tiles) {
-    if (tile.y >= 0 && tile.y < MAP_HEIGHT && tile.x >= 0 && tile.x < MAP_WIDTH) {
-      map[tile.y][tile.x] = tile;
+const constructMapFromAggregate = (gameMap: MapAggregate): ClientTile[][] => {
+    const map: ClientTile[][] = Array.from({ length: MAP_HEIGHT }, () => Array(MAP_WIDTH).fill(null));
+    const mapData = gameMap.mapData || '';
+
+    for (let y = 0; y < MAP_HEIGHT; y++) {
+        for (let x = 0; x < MAP_WIDTH; x++) {
+            const i = y * MAP_WIDTH + x;
+            const start = i * UID_LENGTH;
+            const end = start + UID_LENGTH;
+            let ownerId: string | null = mapData.substring(start, end);
+
+            if (ownerId === EMPTY_TILE_UID || ownerId.trim() === '') {
+                ownerId = null;
+            }
+            
+            // For now, walls are not in the aggregate, so we default to false.
+            // This would need to be added to the aggregate model if walls are persisted.
+            map[y][x] = { x, y, ownerId, hasWall: false };
+        }
     }
-  }
-  return map;
+    return map;
 };
 
 interface GameBoardProps {
   currentUser: User;
   initialCountries: Country[];
   initialAllUsers: User[];
-  initialLandTiles: ClientTile[];
+  initialGameMap: MapAggregate;
   initialProblemAttempts: ProblemAttempt[];
   initialWrongAnswers: WrongAnswer[];
 }
@@ -47,27 +59,15 @@ export default function GameBoard({
   currentUser, 
   initialCountries, 
   initialAllUsers, 
-  initialLandTiles,
+  initialGameMap,
   initialProblemAttempts,
   initialWrongAnswers,
 }: GameBoardProps) {
   const firestore = useFirestore();
+  const functions = getFunctions();
   const { user: authUser } = useUser();
   const { toast } = useToast();
   
-  // --- Live data using state, updated from parent ---
-  const [allUsers, setAllUsers] = useState<User[]>(initialAllUsers);
-  const [countries, setCountries] = useState<Country[]>(initialCountries);
-  const [landTiles, setLandTiles] = useState<ClientTile[]>(initialLandTiles);
-  
-  // These props from parent are already real-time via `useCollection` in `page.tsx`
-  const problemAttempts = initialProblemAttempts; 
-  const wrongAnswers = initialWrongAnswers;
-
-  // Since allUsers is now passed from page.tsx and updated via its state,
-  // we can derive the liveCurrentUser directly.
-  const liveCurrentUser = useMemo(() => allUsers.find(u => u.id === currentUser.id) || currentUser, [allUsers, currentUser]);
-
   // --- Component State ---
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentProblem, setCurrentProblem] = useState<MathProblem | null>(null);
@@ -78,80 +78,25 @@ export default function GameBoard({
   const [isBuildingWall, setIsBuildingWall] = useState(false);
 
   // --- Memoized Derived State ---
-  const displayMapData = useMemo(() => constructMapFromTiles(landTiles), [landTiles]);
-  const currentUserCountry = useMemo(() => countries.find(c => c.id === liveCurrentUser?.countryId), [countries, liveCurrentUser]);
+  // The map data is now derived from the single aggregate document.
+  const displayMapData = useMemo(() => constructMapFromAggregate(initialGameMap), [initialGameMap]);
+  const flatLandTiles = useMemo(() => displayMapData.flat(), [displayMapData]);
+
+  const liveCurrentUser = useMemo(() => initialAllUsers.find(u => u.id === currentUser.id) || currentUser, [initialAllUsers, currentUser]);
+  const currentUserCountry = useMemo(() => initialCountries.find(c => c.id === liveCurrentUser?.countryId), [initialCountries, liveCurrentUser]);
   
   const userCountryTiles = useMemo(() => {
-    if (!liveCurrentUser || !allUsers) return [];
-    const countryMembers = allUsers.filter(u => u.countryId === liveCurrentUser.countryId);
+    if (!liveCurrentUser || !initialAllUsers) return [];
+    const countryMembers = initialAllUsers.filter(u => u.countryId === liveCurrentUser.countryId);
     const memberIds = new Set(countryMembers.map(u => u.id));
-    return landTiles.filter(tile => tile.ownerId && memberIds.has(tile.ownerId));
-  }, [landTiles, allUsers, liveCurrentUser]);
+    return flatLandTiles.filter(tile => tile.ownerId && memberIds.has(tile.ownerId));
+  }, [flatLandTiles, initialAllUsers, liveCurrentUser]);
   
   const isDemise = useMemo(() => {
     if (!liveCurrentUser) return false;
-    const hasLand = landTiles.some(tile => tile.ownerId === liveCurrentUser.id);
+    const hasLand = flatLandTiles.some(tile => tile.ownerId === liveCurrentUser.id);
     return !hasLand && (liveCurrentUser.tokens ?? 0) <= 0;
-  }, [landTiles, liveCurrentUser]);
-
-  // --- Negative Token Penalty Logic ---
-  useEffect(() => {
-    if (!liveCurrentUser || !firestore || (liveCurrentUser.tokens ?? 0) >= 0) {
-      return;
-    }
-
-    const handleNegativeTokens = async () => {
-      const negativeTokens = Math.abs(liveCurrentUser.tokens);
-      const userTiles = landTiles.filter(tile => tile.ownerId === liveCurrentUser.id);
-
-      if (userTiles.length === 0) {
-        // No tiles to remove, just reset tokens
-        const userRef = doc(firestore, 'users', liveCurrentUser.id);
-        await updateDoc(userRef, { tokens: 0 });
-        return;
-      }
-      
-      const tilesToRemoveCount = Math.min(negativeTokens, userTiles.length);
-      if (tilesToRemoveCount === 0) return;
-
-      // Select random tiles to remove
-      const shuffledTiles = userTiles.sort(() => 0.5 - Math.random());
-      const tilesToRemove = shuffledTiles.slice(0, tilesToRemoveCount);
-
-      try {
-        const batch = writeBatch(firestore);
-        
-        // Neutralize tiles
-        tilesToRemove.forEach(tile => {
-          const tileRef = doc(firestore, 'land_tiles', tile.id!);
-          batch.update(tileRef, { ownerId: null, hasWall: false });
-        });
-
-        // Reset user tokens
-        const userRef = doc(firestore, 'users', liveCurrentUser.id);
-        batch.update(userRef, { tokens: 0 });
-
-        await batch.commit();
-
-        toast({
-          variant: "destructive",
-          title: "부적절한 확장 페널티",
-          description: `부적절한 방법으로 확장한 영토 ${tilesToRemoveCount}개가 회수되었습니다.`,
-        });
-
-      } catch (error) {
-        console.error("영토 페널티 처리 실패:", error);
-        toast({
-          variant: "destructive",
-          title: "오류",
-          description: "페널티를 처리하는 중 오류가 발생했습니다.",
-        });
-      }
-    };
-
-    handleNegativeTokens();
-
-  }, [liveCurrentUser, firestore, landTiles, toast]);
+  }, [flatLandTiles, liveCurrentUser]);
 
 
   // --- Event Handlers & Logic ---
@@ -179,95 +124,37 @@ export default function GameBoard({
   };
 
   const handleTerritoryCut = async (originalOwnerId: string, conquerorId: string | null) => {
-    if (!firestore || !liveCurrentUser || !allUsers || !landTiles) return;
-  
-    try {
-        const ownedTiles = landTiles.filter(tile => tile.ownerId === originalOwnerId);
-  
-      if (ownedTiles.length === 0) {
-        if (conquerorId) {
-          const originalOwnerUser = allUsers.find(u => u.id === originalOwnerId);
-          if (originalOwnerUser && originalOwnerUser.countryId) {
-            const conquerorRef = doc(firestore, "users", conquerorId);
-            const countryRef = doc(firestore, "countries", originalOwnerUser.countryId);
-            const batch = writeBatch(firestore);
-            batch.update(conquerorRef, { conqueredCountries: arrayUnion(originalOwnerUser.countryId) });
-            batch.update(countryRef, { demised: true });
-  
-            await batch.commit().catch(error => {
-              console.error("정복/멸망 처리 실패:", error);
-              errorEmitter.emit('permission-error', new FirestorePermissionError({ path: conquerorRef.path, operation: 'update'}));
-            });
-          }
-        }
-        return; // No tiles to neutralize
-      }
-  
-      const visited = new Set<string>();
-      const territories: ClientTile[][] = [];
-  
-      for (const tile of ownedTiles) {
-        const tileId = `${tile.x},${tile.y}`;
-        if (!visited.has(tileId)) {
-          const newTerritory: ClientTile[] = [];
-          const queue: ClientTile[] = [tile];
-          visited.add(tileId);
-  
-          while (queue.length > 0) {
-            const current = queue.shift()!;
-            newTerritory.push(current);
-            const neighbors = [
-              { x: current.x, y: current.y - 1 }, { x: current.x, y: current.y + 1 },
-              { x: current.x - 1, y: current.y }, { x: current.x + 1, y: current.y }
-            ];
-            for (const n of neighbors) {
-              const neighborId = `${n.x},${n.y}`;
-              if (!visited.has(neighborId)) {
-                const neighborTile = ownedTiles.find(t => t.x === n.x && t.y === n.y);
-                if (neighborTile) {
-                  visited.add(neighborId);
-                  queue.push(neighborTile);
-                }
-              }
-            }
-          }
-          territories.push(newTerritory);
-        }
-      }
-  
-      if (territories.length > 1) {
-        territories.sort((a, b) => b.length - a.length);
-        const tilesToNeutralize = territories.slice(1).flat();
-        
-        if (tilesToNeutralize.length > 0) {
-          const batch = writeBatch(firestore);
-          tilesToNeutralize.forEach(tile => {
-            const tileRef = doc(firestore, 'land_tiles', tile.id!);
-            batch.update(tileRef, { ownerId: null, hasWall: false });
-          });
-          await batch.commit();
+    // This function needs to be adapted to the new aggregate model.
+    // For now, we will disable its more complex parts as they rely on individual tile documents.
+    // The core logic of checking for demise can remain.
+    if (!firestore || !liveCurrentUser || !initialAllUsers) return;
 
-          const ownerIsCurrentUser = originalOwnerId === liveCurrentUser.id;
-          const originalOwner = allUsers.find(u => u.id === originalOwnerId);
-          const ownerName = originalOwner?.nickname || '상대방';
-  
-          toast({
-            variant: ownerIsCurrentUser ? "destructive" : "default",
-            title: ownerIsCurrentUser ? "영토 분단!" : `공격 성공! (${ownerName})`,
-            description: `영토가 분단되어 타일 ${tilesToNeutralize.length}개를 잃었습니다.`,
+    // Check if the original owner has any tiles left
+    const remainingTiles = flatLandTiles.filter(tile => tile.ownerId === originalOwnerId).length;
+
+    if (remainingTiles === 0 && conquerorId) {
+      const originalOwnerUser = initialAllUsers.find(u => u.id === originalOwnerId);
+      if (originalOwnerUser && originalOwnerUser.countryId) {
+          const conquerorRef = doc(firestore, "users", conquerorId);
+          const countryRef = doc(firestore, "countries", originalOwnerUser.countryId);
+          const batch = writeBatch(firestore);
+          batch.update(conquerorRef, { conqueredCountries: arrayUnion(originalOwnerUser.countryId) });
+          batch.update(countryRef, { demised: true });
+
+          await batch.commit().catch(error => {
+            console.error("정복/멸망 처리 실패:", error);
+            errorEmitter.emit('permission-error', new FirestorePermissionError({ path: conquerorRef.path, operation: 'update'}));
           });
-        }
       }
-    } catch(error) {
-      console.error("An error occurred in handleTerritoryCut:", error);
     }
   };
 
 
   const handleInvasionSuccess = async () => {
     if (!liveCurrentUser || !firestore || !invasionTarget || !authUser) return;
-    const userRef = doc(firestore, 'users', authUser.uid);
-    const tileRef = doc(firestore, 'land_tiles', invasionTarget.id!);
+    
+    // Instead of updating the tile doc, we call a Cloud Function
+    const updateTileOwner = httpsCallable(functions, 'updateTileOwner');
 
     if (invasionTarget.hasWall && invasionWallBreaks < 1) {
       setInvasionWallBreaks(1);
@@ -281,23 +168,24 @@ export default function GameBoard({
     }
     
     setInvasionWallBreaks(0);
-
     const originalOwnerId = invasionTarget.originalOwnerId;
     
     try {
-        const updateData = {
-          ownerId: liveCurrentUser.id,
-          hasWall: false, // Wall is always destroyed on capture
-        };
-        await updateDoc(tileRef, updateData);
+        await updateTileOwner({ 
+            x: invasionTarget.x, 
+            y: invasionTarget.y, 
+            newOwnerId: liveCurrentUser.id 
+        });
 
         if (originalOwnerId) {
+            // After a successful invasion, we might need to re-evaluate territories.
+            // For now, we'll keep this simple. A full implementation might need a cloud function
+            // to recalculate separated territories.
             await handleTerritoryCut(originalOwnerId, liveCurrentUser.id);
         }
         
     } catch (error) {
         console.error("침략 업데이트 실패:", error);
-        errorEmitter.emit('permission-error', new FirestorePermissionError({ path: tileRef.path, operation: 'update', requestResourceData: { ownerId: liveCurrentUser.id } }));
         toast({ variant: "destructive", title: "오류", description: "영토를 점령하는 중 오류가 발생했습니다."});
     } finally {
         setInvasionTarget(null);
@@ -305,39 +193,27 @@ export default function GameBoard({
   };
 
   const handleTileClick = async (x: number, y: number) => {
-    if (!liveCurrentUser || !firestore || isProcessingClick || !allUsers || !authUser) return;
+    if (!liveCurrentUser || !firestore || isProcessingClick || !initialAllUsers || !authUser) return;
     const userRef = doc(firestore, 'users', authUser.uid);
-
     setIsProcessingClick(true);
-    const clickedTile = landTiles.find(t => t.x === x && t.y === y);
-
+  
+    const clickedTile = flatLandTiles.find(t => t.x === x && t.y === y);
+    const updateTileOwner = httpsCallable(functions, 'updateTileOwner');
+  
     try {
       if (isBuildingWall) {
-        if (clickedTile && clickedTile.ownerId === liveCurrentUser.id && !clickedTile.hasWall) {
-          const tileRef = doc(firestore, 'land_tiles', clickedTile.id!);
-          
-          await runTransaction(firestore, async (transaction) => {
-            transaction.update(tileRef, { hasWall: true });
-            transaction.update(userRef, { walls: increment(-1) });
-          });
-
-          toast({ title: "성벽 건설!", description: "영토에 성벽을 성공적으로 건설했습니다." });
-          setIsBuildingWall(false);
-
-        } else {
-          toast({
-              variant: "destructive",
-              title: "건설 불가",
-              description: !clickedTile || clickedTile.ownerId !== liveCurrentUser.id 
-                  ? "자신의 영토에만 성벽을 건설할 수 있습니다." 
-                  : "이미 성벽이 건설된 곳입니다.",
-          });
-        }
+        // Wall building logic would also need a cloud function to update the wall state,
+        // which is not part of the current aggregate model. Disabling for now.
+        toast({
+          variant: "destructive",
+          title: "건설 불가",
+          description: "성벽 건설 기능은 현재 지원되지 않습니다.",
+        });
+        setIsBuildingWall(false);
         setIsProcessingClick(false);
-        return; // Exit after handling wall building
+        return;
       }
-
-      // Not building a wall, proceed with conquest
+  
       if ((liveCurrentUser.tokens ?? 0) <= 0) {
         toast({
           variant: "destructive",
@@ -348,51 +224,46 @@ export default function GameBoard({
         return;
       }
       
-      if (clickedTile) {
-          // Invade another player's tile or do nothing if it's ours
-          if(clickedTile.ownerId !== liveCurrentUser.id) {
-              const owner = allUsers.find(u => u.id === clickedTile.ownerId);
-              if (owner && owner.countryId === liveCurrentUser.countryId) {
-                  toast({
-                      variant: "default",
-                      title: "공격 불가",
-                      description: "같은 국가 소속의 플레이어는 공격할 수 없습니다.",
-                  });
-              } else {
-                  // This is an invasion
-                  await updateDoc(userRef, { tokens: increment(-1) });
-                  setInvasionTarget({ x, y, id: clickedTile.id, originalOwnerId: clickedTile.ownerId, hasWall: clickedTile.hasWall });
-                  setInvasionWallBreaks(0);
-                  setCurrentProblem(generateMathProblem());
-                  setIsModalOpen(true);
-              }
+      if (clickedTile && clickedTile.ownerId) {
+        // Invade another player's tile or do nothing if it's ours
+        if (clickedTile.ownerId !== liveCurrentUser.id) {
+          const owner = initialAllUsers.find(u => u.id === clickedTile.ownerId);
+          if (owner && owner.countryId === liveCurrentUser.countryId) {
+            toast({
+              title: "공격 불가",
+              description: "같은 국가 소속의 플레이어는 공격할 수 없습니다.",
+            });
+          } else {
+            // This is an invasion
+            await updateDoc(userRef, { tokens: increment(-1) });
+            setInvasionTarget({ x, y, id: clickedTile.id, originalOwnerId: clickedTile.ownerId, hasWall: clickedTile.hasWall });
+            setInvasionWallBreaks(0);
+setCurrentProblem(generateMathProblem());
+            setIsModalOpen(true);
           }
-          // If tile owner is current user, do nothing for now.
+        }
+        // If tile owner is current user, do nothing.
       } else {
-          // Conquer empty tile
-          const tileData = { x, y, ownerId: liveCurrentUser.id, hasWall: false };
-
-          await runTransaction(firestore, async (transaction) => {
-             const newTileRef = doc(collection(firestore, "land_tiles"));
-             transaction.set(newTileRef, tileData);
-             transaction.update(userRef, { tokens: increment(-1) });
-          });
-          
-          toast({ title: "영토 확장!", description: "새로운 땅을 정복했습니다." });
+        // Conquer empty tile
+        await runTransaction(firestore, async (transaction) => {
+          transaction.update(userRef, { tokens: increment(-1) });
+        });
+        
+        await updateTileOwner({ x, y, newOwnerId: liveCurrentUser.id });
+  
+        toast({ title: "영토 확장!", description: "새로운 땅을 정복했습니다." });
       }
     } catch (error) {
-        console.error("타일 클릭 트랜잭션 실패:", error);
-        toast({ variant: "destructive", title: "오류", description: "작업을 처리하는 중 오류가 발생했습니다."});
-        // If token was spent for invasion, refund it on transaction failure
-        if (invasionTarget) {
-            updateDoc(userRef, { tokens: increment(1) });
-            setInvasionTarget(null);
-        }
+      console.error("타일 클릭 트랜잭션 실패:", error);
+      toast({ variant: "destructive", title: "오류", description: "작업을 처리하는 중 오류가 발생했습니다."});
+      if (invasionTarget) {
+        updateDoc(userRef, { tokens: increment(1) });
+        setInvasionTarget(null);
+      }
     } finally {
-        // isModalOpen will set this to false, otherwise if no modal, set it now.
-        if (!isModalOpen) {
-          setIsProcessingClick(false);
-        }
+      if (!isModalOpen) {
+        setIsProcessingClick(false);
+      }
     }
   };
   
@@ -425,10 +296,11 @@ export default function GameBoard({
   }
 
   const canConquer = (tile: ClientTile) => {
-    if (!liveCurrentUser || !allUsers || (liveCurrentUser.tokens ?? 0) <= 0 || isProcessingClick || isBuildingWall) {
+    if (!liveCurrentUser || !initialAllUsers || (liveCurrentUser.tokens ?? 0) <= 0 || isProcessingClick || isBuildingWall) {
       return false;
     }
-    return canConquerLogic(tile, liveCurrentUser, allUsers, userCountryTiles, landTiles);
+    // With the aggregate model, we use the derived `userCountryTiles` and `flatLandTiles`.
+    return canConquerLogic(tile, liveCurrentUser, initialAllUsers, userCountryTiles, flatLandTiles);
   };
   
   const canBuildWall = (tile: ClientTile) => {
@@ -474,19 +346,19 @@ export default function GameBoard({
       <Header 
         currentUser={liveCurrentUser} 
         onSolveProblemClick={handleSolveProblemForToken} 
-        countries={countries}
-        problemAttempts={problemAttempts}
-        users={allUsers}
-        wrongAnswers={wrongAnswers}
+        countries={initialCountries}
+        problemAttempts={initialProblemAttempts}
+        users={initialAllUsers}
+        wrongAnswers={initialWrongAnswers}
         isBuildingWall={isBuildingWall}
         onToggleWallBuilding={handleToggleWallBuilding}
-        landTiles={landTiles}
+        landTiles={flatLandTiles}
       />
       <div className="relative h-full w-full max-w-7xl flex-grow">
         <WorldMap 
             displayMapData={displayMapData} 
-            users={allUsers} 
-            countries={countries} 
+            users={initialAllUsers} 
+            countries={initialCountries} 
             onTileClick={handleTileClick} 
             canConquer={canConquer}
             canBuildWall={canBuildWall}

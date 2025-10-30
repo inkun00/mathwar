@@ -167,7 +167,7 @@ export default function ProfileSheet({ currentUser, userCountry, problemAttempts
             };
         })
         .sort((a, b) => b.tileCount - a.tileCount)
-        .map((c, index) => ({ ...c, rank: index + 1 }));
+        .map((item, index) => ({ ...item, rank: index + 1 }));
 
     return { userRankings: sortedUsers, countryRankings: sortedCountries };
 }, [users, countries, landTiles]);

@@ -6,8 +6,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from './ui/badge';
 import { MAP_HEIGHT, MAP_WIDTH } from '@/lib/world-map-shape';
-import { useCollection, useMemoFirebase } from '@/firebase';
-import { collection } from 'firebase/firestore';
 
 interface LeaderboardSheetProps {
   users: User[];
@@ -99,14 +97,14 @@ export default function LeaderboardSheet({ users, countries, landTiles }: Leader
     const sortedCountries: RankedCountry[] = Object.entries(countryTileCount)
       .map(([id, count]) => ({ id, count }))
       .sort((a, b) => b.count - a.count)
-      .map((c, index) => {
-        const country = countries.find(co => co.id === c.id);
+      .map((item, index) => {
+        const country = countries.find(co => co.id === item.id);
         return {
           rank: index + 1,
-          id: c.id,
+          id: item.id,
           name: country?.name || '알 수 없는 국가',
           color: country?.color || '#888',
-          tileCount: c.count,
+          tileCount: item.count,
         };
       });
 

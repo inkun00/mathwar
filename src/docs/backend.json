@@ -35,33 +35,19 @@
       },
       "required": ["id", "name", "createdBy", "color"]
     },
-    "GameMap": {
+    "MapAggregate": {
         "$schema": "http://json-schema.org/draft-07/schema#",
-        "title": "GameMap",
+        "title": "MapAggregate",
         "type": "object",
-        "description": "A single document storing the entire state of the game map.",
+        "description": "A single document storing the entire game map state as a string.",
         "properties": {
-            "tileOwners": {
-                "type": "array",
-                "description": "A 2D array (120x144) where each element is the owner's user ID (string) or null.",
-                "items": {
-                    "type": "array",
-                    "items": {
-                        "type": ["string", "null"]
-                    }
-                }
-            },
-            "walls": {
-                "type": "array",
-                "description": "A 2D array (120x144) indicating if a wall exists on a tile.",
-                "items": {
-                    "type": "array",
-                    "items": { "type": "boolean" }
-                }
+            "mapData": {
+                "type": "string",
+                "description": "A string representing the entire map. Each tile owner is represented by a 32-character UID string. Empty tiles are 32 underscores."
             },
             "lastUpdated": { "type": "string", "format": "date-time" }
         },
-        "required": ["tileOwners", "walls"]
+        "required": ["mapData", "lastUpdated"]
     },
     "ProblemAttempt": {
       "$schema": "http://json-schema.org/draft-07/schema#",
@@ -133,9 +119,16 @@
         "path": "/countries/{countryId}",
         "definition": { "entityName": "country", "schema": { "$ref": "#/backend/entities/Country" }, "description": "Stores all countries.", "allow": ["list", "get", "create", "update"] }
       },
-      {
-        "path": "/maps/{mapId}",
-        "definition": { "entityName": "gameMap", "schema": { "$ref": "#/backend/entities/GameMap" }, "description": "Stores the entire game map state in a single document.", "allow": ["get", "update"] }
+       {
+        "path": "/map_aggregates/latest",
+        "definition": {
+          "entityName": "mapAggregate",
+          "schema": {
+            "$ref": "#/backend/entities/MapAggregate"
+          },
+          "description": "Stores the entire game map state in a single document for efficient loading.",
+           "allow": ["get"]
+        }
       },
       {
         "path": "/problem_attempts/{userId}/attempts/{attemptId}",
