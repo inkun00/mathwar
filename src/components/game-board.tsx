@@ -6,8 +6,8 @@ import { generateMathProblem, isAdjacent, canConquer as canConquerLogic } from "
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { ZoomIn, ZoomOut } from "lucide-react";
-import { useFirestore, useUser, errorEmitter, FirestorePermissionError, useCollection, useMemoFirebase } from "@/firebase";
-import { doc, updateDoc, writeBatch, increment, collection, arrayUnion, runTransaction, serverTimestamp, getDocs, addDoc, query, where, documentId, getDoc } from "firebase/firestore";
+import { useFirestore, useUser, errorEmitter, FirestorePermissionError } from "@/firebase";
+import { doc, updateDoc, writeBatch, increment, collection, arrayUnion, runTransaction, getDocs, addDoc, query, where, documentId, getDoc } from "firebase/firestore";
 import { addWrongAnswer } from "@/firebase/firestore/data";
 
 import Header from "./header";
@@ -55,29 +55,17 @@ export default function GameBoard({
   const { user: authUser } = useUser();
   const { toast } = useToast();
   
-  // --- Real-time data hooks ---
-  const usersQuery = useMemoFirebase(() => firestore ? collection(firestore, 'users') : null, [firestore]);
-  const countriesQuery = useMemoFirebase(() => firestore ? collection(firestore, 'countries') : null, [firestore]);
-  const landTilesQuery = useMemoFirebase(() => firestore ? collection(firestore, 'land_tiles') : null, [firestore]);
-  const wrongAnswersQuery = useMemoFirebase(() => authUser ? collection(firestore, 'users', authUser.uid, 'wrong_answers') : null, [authUser, firestore]);
+  // --- Live data using state, updated from parent ---
+  const [allUsers, setAllUsers] = useState<User[]>(initialAllUsers);
+  const [countries, setCountries] = useState<Country[]>(initialCountries);
+  const [landTiles, setLandTiles] = useState<ClientTile[]>(initialLandTiles);
   
-  const attemptsQuery = useMemoFirebase(() => {
-    if (!authUser || !firestore) return null;
-    return collection(firestore, 'problem_attempts', authUser.uid, 'attempts');
-  }, [authUser, firestore]);
+  // These props from parent are already real-time via `useCollection` in `page.tsx`
+  const problemAttempts = initialProblemAttempts; 
+  const wrongAnswers = initialWrongAnswers;
 
-  const { data: liveAllUsers, isLoading: usersLoading } = useCollection<User>(usersQuery);
-  const { data: liveCountries, isLoading: countriesLoading } = useCollection<Country>(countriesQuery);
-  const { data: liveLandTiles, isLoading: landTilesLoading } = useCollection<ClientTile>(landTilesQuery);
-  const { data: liveWrongAnswers, isLoading: wrongAnswersLoading } = useCollection<WrongAnswer>(wrongAnswersQuery);
-  const { data: liveProblemAttempts, isLoading: attemptsLoading } = useCollection<ProblemAttempt>(attemptsQuery);
+  const liveCurrentUser = useMemo(() => allUsers.find(u => u.id === currentUser.id) || currentUser, [allUsers, currentUser]);
 
-
-  const liveCurrentUser = useMemo(() => liveAllUsers?.find(u => u.id === currentUser.id) || currentUser, [liveAllUsers, currentUser]);
-
-  const problemAttempts = useMemo(() => liveProblemAttempts ?? initialProblemAttempts, [liveProblemAttempts, initialProblemAttempts]);
-  const wrongAnswers = useMemo(() => liveWrongAnswers ?? initialWrongAnswers, [liveWrongAnswers, initialWrongAnswers]);
-  
   // --- Component State ---
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentProblem, setCurrentProblem] = useState<MathProblem | null>(null);
@@ -88,23 +76,21 @@ export default function GameBoard({
   const [isBuildingWall, setIsBuildingWall] = useState(false);
 
   // --- Memoized Derived State ---
-  const displayMapData = useMemo(() => constructMapFromTiles(liveLandTiles ?? initialLandTiles), [liveLandTiles, initialLandTiles]);
-  const currentUserCountry = useMemo(() => (liveCountries ?? initialCountries).find(c => c.id === liveCurrentUser?.countryId), [liveCountries, initialCountries, liveCurrentUser]);
+  const displayMapData = useMemo(() => constructMapFromTiles(landTiles), [landTiles]);
+  const currentUserCountry = useMemo(() => countries.find(c => c.id === liveCurrentUser?.countryId), [countries, liveCurrentUser]);
   
-  const allUsers = useMemo(() => liveAllUsers ?? initialAllUsers, [liveAllUsers, initialAllUsers]);
-
   const userCountryTiles = useMemo(() => {
     if (!liveCurrentUser || !allUsers) return [];
     const countryMembers = allUsers.filter(u => u.countryId === liveCurrentUser.countryId);
     const memberIds = new Set(countryMembers.map(u => u.id));
-    return (liveLandTiles ?? initialLandTiles).filter(tile => tile.ownerId && memberIds.has(tile.ownerId));
-  }, [liveLandTiles, initialLandTiles, allUsers, liveCurrentUser]);
+    return landTiles.filter(tile => tile.ownerId && memberIds.has(tile.ownerId));
+  }, [landTiles, allUsers, liveCurrentUser]);
   
   const isDemise = useMemo(() => {
     if (!liveCurrentUser) return false;
-    const hasLand = (liveLandTiles ?? initialLandTiles).some(tile => tile.ownerId === liveCurrentUser.id);
+    const hasLand = landTiles.some(tile => tile.ownerId === liveCurrentUser.id);
     return !hasLand && (liveCurrentUser.tokens ?? 0) <= 0;
-  }, [liveLandTiles, initialLandTiles, liveCurrentUser]);
+  }, [landTiles, liveCurrentUser]);
 
   // --- Negative Token Penalty Logic ---
   useEffect(() => {
@@ -114,7 +100,7 @@ export default function GameBoard({
 
     const handleNegativeTokens = async () => {
       const negativeTokens = Math.abs(liveCurrentUser.tokens);
-      const userTiles = (liveLandTiles ?? initialLandTiles).filter(tile => tile.ownerId === liveCurrentUser.id);
+      const userTiles = landTiles.filter(tile => tile.ownerId === liveCurrentUser.id);
 
       if (userTiles.length === 0) {
         // No tiles to remove, just reset tokens
@@ -163,7 +149,7 @@ export default function GameBoard({
 
     handleNegativeTokens();
 
-  }, [liveCurrentUser, firestore, liveLandTiles, initialLandTiles, toast]);
+  }, [liveCurrentUser, firestore, landTiles, toast]);
 
 
   // --- Event Handlers & Logic ---
@@ -191,10 +177,10 @@ export default function GameBoard({
   };
 
   const handleTerritoryCut = async (originalOwnerId: string, conquerorId: string | null) => {
-    if (!firestore || !liveCurrentUser || !allUsers || !liveLandTiles) return;
+    if (!firestore || !liveCurrentUser || !allUsers || !landTiles) return;
   
     try {
-        const ownedTiles = liveLandTiles.filter(tile => tile.ownerId === originalOwnerId);
+        const ownedTiles = landTiles.filter(tile => tile.ownerId === originalOwnerId);
   
       if (ownedTiles.length === 0) {
         if (conquerorId) {
@@ -321,7 +307,7 @@ export default function GameBoard({
     const userRef = doc(firestore, 'users', authUser.uid);
 
     setIsProcessingClick(true);
-    const clickedTile = (liveLandTiles ?? initialLandTiles).find(t => t.x === x && t.y === y);
+    const clickedTile = landTiles.find(t => t.x === x && t.y === y);
 
     try {
       if (isBuildingWall) {
@@ -442,7 +428,7 @@ export default function GameBoard({
     if (!liveCurrentUser || !allUsers || (liveCurrentUser.tokens ?? 0) <= 0 || isProcessingClick || isBuildingWall) {
       return false;
     }
-    return canConquerLogic(tile, liveCurrentUser, allUsers, userCountryTiles, (liveLandTiles ?? initialLandTiles));
+    return canConquerLogic(tile, liveCurrentUser, allUsers, userCountryTiles, landTiles);
   };
   
   const canBuildWall = (tile: ClientTile) => {
@@ -481,16 +467,6 @@ export default function GameBoard({
       addWrongAnswer(firestore, authUser.uid, problem);
     }
   };
-  
-  const isLoading = usersLoading || countriesLoading || landTilesLoading || wrongAnswersLoading || attemptsLoading;
-
-  if (isLoading) {
-     return (
-      <div className="flex h-full w-full items-center justify-center bg-background">
-        <Skeleton className="h-[80vh] w-[90vw] max-w-7xl" />
-      </div>
-    );
-  }
 
 
   return (
@@ -498,19 +474,19 @@ export default function GameBoard({
       <Header 
         currentUser={liveCurrentUser} 
         onSolveProblemClick={handleSolveProblemForToken} 
-        countries={liveCountries ?? initialCountries}
+        countries={countries}
         problemAttempts={problemAttempts}
         users={allUsers}
         wrongAnswers={wrongAnswers}
         isBuildingWall={isBuildingWall}
         onToggleWallBuilding={handleToggleWallBuilding}
-        landTiles={liveLandTiles ?? initialLandTiles}
+        landTiles={landTiles}
       />
       <div className="relative h-full w-full max-w-7xl flex-grow">
         <WorldMap 
             displayMapData={displayMapData} 
             users={allUsers} 
-            countries={liveCountries ?? initialCountries} 
+            countries={countries} 
             onTileClick={handleTileClick} 
             canConquer={canConquer}
             canBuildWall={canBuildWall}

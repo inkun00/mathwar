@@ -150,70 +150,72 @@ export default function ProblemModal({
     setIsSubmitting(true);
 
     try {
-        const correct = isAnswerCorrect(answers, problem.answer);
+      const correct = isAnswerCorrect(answers, problem.answer);
 
-        if (!isReview) {
-            await recordAttempt(correct);
+      if (!isReview) {
+        await recordAttempt(correct);
+      }
+
+      if (correct) {
+        let toastTitle = '정답입니다!';
+        let toastDescription = '확장 토큰을 획득했습니다.';
+        let shouldCloseModal = true;
+
+        if (isInvasion) {
+          if (hasWall && invasionWallBreaks < 1) {
+            toastTitle = '성벽 돌파!';
+            toastDescription = '첫 번째 방어를 뚫었습니다! 한 문제 더 남았습니다.';
+            shouldCloseModal = false; // Don't close, wait for the next problem
+          } else {
+            toastTitle = '침략 성공!';
+            toastDescription = '적의 영토를 획득했습니다.';
+          }
         }
 
-        if (correct) {
-            let toastTitle = '정답입니다!';
-            let toastDescription = '확장 토큰을 획득했습니다.';
-            let shouldCloseModal = true;
-
-            if (isInvasion) {
-                if (hasWall && invasionWallBreaks < 1) {
-                    toastTitle = '성벽 돌파!';
-                    toastDescription = '첫 번째 방어를 뚫었습니다! 한 문제 더 남았습니다.';
-                    shouldCloseModal = false; // Don't close, wait for the next problem
-                } else {
-                    toastTitle = '침략 성공!';
-                    toastDescription = '적의 영토를 획득했습니다.';
-                }
-            }
-
-            toast({
-                title: toastTitle,
-                description: toastDescription,
-                className:
-                'border-green-500 bg-green-50 text-green-700 dark:bg-green-900/50 dark:text-green-300 dark:border-green-700',
-                action: <CheckCircle className="text-green-500" />,
-            });
-            
-            await onCorrectAnswer(problem);
-
-            if (shouldCloseModal) {
-                onOpenChange(false);
-            }
-
-        } else {
-            toast({
-                variant: 'destructive',
-                title: '오답입니다',
-                description: (
-                <div>
-                    <p>입력: [{answers.join(', ')}]</p>
-                    <p>정답: [{problem.answer.join(', ')}]</p>
-                </div>
-                ),
-                action: <XCircle className="text-white" />,
-            });
-            if (onWrongAnswer) {
-                await onWrongAnswer(problem);
-            }
-            onOpenChange(false);
-        }
-
-    } catch(error) {
-        console.error("Error submitting answer:", error);
         toast({
-            variant: "destructive",
-            title: "오류",
-            description: "답변을 제출하는 중 오류가 발생했습니다.",
+          title: toastTitle,
+          description: toastDescription,
+          className:
+            'border-green-500 bg-green-50 text-green-700 dark:bg-green-900/50 dark:text-green-300 dark:border-green-700',
+          action: <CheckCircle className="text-green-500" />,
         });
-        onOpenChange(false); // Close modal on error as well
+        
+        await onCorrectAnswer(problem);
+
+        if (shouldCloseModal) {
+          onOpenChange(false);
+        } else {
+          // If not closing (e.g. wall break), reset for the next problem but keep submitting state
+          setAnswers(Array(numInputs).fill('')); 
+        }
+
+      } else {
+        toast({
+          variant: 'destructive',
+          title: '오답입니다',
+          description: (
+            <div>
+              <p>입력: [{answers.join(', ')}]</p>
+              <p>정답: [{problem.answer.join(', ')}]</p>
+            </div>
+          ),
+          action: <XCircle className="text-white" />,
+        });
+        if (onWrongAnswer) {
+          await onWrongAnswer(problem);
+        }
+        onOpenChange(false);
+      }
+    } catch(error) {
+      console.error("Error submitting answer:", error);
+      toast({
+        variant: "destructive",
+        title: "오류",
+        description: "답변을 제출하는 중 오류가 발생했습니다.",
+      });
+      onOpenChange(false); // Close modal on error as well
     } finally {
-       // For wall break scenario, we keep submitting state until the next problem is ready
+      // Re-enable the button only if the modal is not expecting another problem
        if (!(isInvasion && hasWall && isAnswerCorrect(answers, problem.answer))) {
          setIsSubmitting(false);
        }
