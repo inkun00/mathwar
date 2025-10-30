@@ -6,7 +6,7 @@ import { generateMathProblem, isAdjacent, canConquer as canConquerLogic } from "
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { ZoomIn, ZoomOut } from "lucide-react";
-import { useFirestore, useUser, errorEmitter, FirestorePermissionError } from "@/firebase";
+import { useFirestore, useUser, errorEmitter, FirestorePermissionError, useCollection, useMemoFirebase } from "@/firebase";
 import { doc, updateDoc, writeBatch, increment, collection, arrayUnion, runTransaction, getDocs, addDoc, query, where, documentId, getDoc, serverTimestamp } from "firebase/firestore";
 import { addWrongAnswer } from "@/firebase/firestore/data";
 
@@ -22,7 +22,6 @@ interface GameBoardProps {
   initialLandTiles: ClientTile[];
   initialProblemAttempts: ProblemAttempt[];
   initialWrongAnswers: WrongAnswer[];
-  allUsers: User[];
 }
 
 export default function GameBoard({ 
@@ -31,7 +30,6 @@ export default function GameBoard({
   initialLandTiles,
   initialProblemAttempts,
   initialWrongAnswers,
-  allUsers,
 }: GameBoardProps) {
   const firestore = useFirestore();
   const { user: authUser } = useUser();
@@ -49,6 +47,9 @@ export default function GameBoard({
   const flatLandTiles = initialLandTiles;
 
   const currentUserCountry = useMemo(() => initialCountries.find(c => c.id === currentUser?.countryId), [initialCountries, currentUser]);
+
+  const allUsersQuery = useMemoFirebase(() => firestore ? collection(firestore, 'users') : null, [firestore]);
+  const { data: allUsers, isLoading: isAllUsersLoading } = useCollection<User>(allUsersQuery);
   
   const userCountryTiles = useMemo(() => {
     if (!currentUser || !allUsers) return [];

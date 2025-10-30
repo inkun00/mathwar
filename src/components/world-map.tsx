@@ -92,11 +92,14 @@ export default function WorldMap({ displayMapData, users, countries, onTileClick
   const getTooltipContent = (tile: ClientTile): React.ReactNode => {
     if (!isLand(tile.x, tile.y)) return null;
     if (!tile.ownerId) return <p className="text-lg">미개척지</p>;
-    const owner = users.find(u => u.id === tile.ownerId);
-    if (!owner) return <p className="text-lg">알 수 없는 플레이어</p>;
-    const country = countries.find(c => c.id === owner.countryId);
     
-    let content = `${country?.name || '소속 없음'} (${owner.nickname})`;
+    const owner = users.find(u => u.id === tile.ownerId);
+    const country = owner ? countries.find(c => c.id === owner.countryId) : null;
+    
+    let content = country?.name || '소속 없음';
+    if(owner) {
+      content = `${country?.name || '소속 없음'} (${owner.nickname})`;
+    }
     if (tile.hasWall) {
       content += ' - 성벽';
     }
