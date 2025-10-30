@@ -136,17 +136,13 @@
         "definition": {
           "entityName": "user",
           "schema": { "$ref": "#/entities/User" },
-          "description": "Stores user profiles. Users can update their own profiles. Country owners can update the countryId of users who have requested to join their country.",
+          "description": "Stores user profiles. Users can only update their own profile.",
           "allow": ["get", "list", "create"],
           "rules": {
             "update": [
               {
                 "description": "A user can update their own document.",
                 "condition": "request.auth.uid == userId"
-              },
-              {
-                "description": "A country owner can update the countryId of a user who has a pending join request to their country.",
-                "condition": "resource.data.isCountryOwner == true && request.resource.data.keys().hasOnly(['countryId']) && exists(/databases/$(database)/documents/join_requests/{someId}) && get(/databases/$(database)/documents/join_requests/{someId}).data.requesterId == userId && get(/databases/$(database)/documents/join_requests/{someId}).data.targetCountryId == resource.data.countryId"
               }
             ]
           }
@@ -190,5 +186,3 @@
     ]
   }
 }
-
-    
