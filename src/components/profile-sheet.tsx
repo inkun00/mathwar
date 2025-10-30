@@ -275,7 +275,11 @@ export default function ProfileSheet({ currentUser: initialUser, onOpenChange }:
         await addDoc(collection(firestore, 'alliance_requests'), { requestingCountryId: profileData.userCountry.id, requestingCountryName: profileData.userCountry.name, targetCountryId, status: 'pending', createdAt: serverTimestamp() });
         toast({ title: "동맹 요청 완료!", description: `동맹 요청을 보냈습니다.` });
         setAllianceComboboxOpen(false);
-    } catch (e) { toast({ variant: "destructive", title: "오류" }); } finally { setIsProcessing(false); }
+    } catch (e: any) { 
+        toast({ variant: "destructive", title: "오류", description: e.message }); 
+    } finally { 
+        setIsProcessing(false); 
+    }
   };
 
   const handleDeclareIndependence = async () => {
@@ -311,9 +315,9 @@ export default function ProfileSheet({ currentUser: initialUser, onOpenChange }:
         setNewCountryName("");
         setIndependenceAlertOpen(false);
         fetchProfileData(); // Refresh data
-    } catch (e) {
+    } catch (e: any) {
         console.error("독립 선언 오류:", e);
-        toast({ variant: "destructive", title: "오류", description: "독립을 선언하는 중 오류가 발생했습니다." }); 
+        toast({ variant: "destructive", title: "오류", description: e.message || "독립을 선언하는 중 오류가 발생했습니다." }); 
     } finally { 
         setIsProcessing(false); 
     }
@@ -324,7 +328,6 @@ export default function ProfileSheet({ currentUser: initialUser, onOpenChange }:
     setIsProcessing(true);
   
     const requestRef = doc(firestore, `${type}_requests`, request.id);
-    const updateData: { [key: string]: any } = { status: action === 'approve' ? 'approved' : 'rejected' };
     
     try {
       if (action === 'approve') {
@@ -336,6 +339,7 @@ export default function ProfileSheet({ currentUser: initialUser, onOpenChange }:
           const userToUpdateRef = doc(firestore, "users", joinReq.requesterId);
           const userUpdateData = { countryId: joinReq.targetCountryId };
           batch.update(userToUpdateRef, userUpdateData);
+          
           await batch.commit().catch(err => {
               const permissionError = new FirestorePermissionError({
                   path: userToUpdateRef.path,
@@ -365,11 +369,11 @@ export default function ProfileSheet({ currentUser: initialUser, onOpenChange }:
       }
   
       fetchProfileData(); // Refresh data
-    } catch (e) {
+    } catch (e: any) {
       // The specific error is already emitted, this is a fallback.
       if (!(e instanceof FirestorePermissionError)) {
           console.error(`Error processing ${type} request:`, e);
-          toast({ variant: "destructive", title: "처리 오류", description: "요청을 처리하는 중 오류가 발생했습니다." });
+          toast({ variant: "destructive", title: "처리 오류", description: e.message || "요청을 처리하는 중 오류가 발생했습니다." });
       }
     } finally {
       setIsProcessing(false);
