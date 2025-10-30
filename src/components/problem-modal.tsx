@@ -98,40 +98,67 @@ export default function ProblemModal({
   const renderProblemWithInputs = (node: React.ReactNode): React.ReactNode => {
     let inputIndex = 0;
 
-    const processChildren = (children: React.ReactNode): React.ReactNode[] => {
-      return React.Children.map(children, child => {
-        if (!React.isValidElement(child)) {
-          return child;
-        }
+    const transformNode = (currentNode: React.ReactNode): React.ReactNode => {
+      if (!React.isValidElement(currentNode)) {
+        return currentNode;
+      }
 
-        if (child.type === AnswerInput) {
-          const currentIndex = inputIndex++;
-          return (
-            <Input
-              type="text"
-              value={answers[currentIndex] || ''}
-              onChange={e => handleAnswerChange(currentIndex, e.target.value)}
-              className="inline-block w-20 h-8 text-center mx-1"
-              aria-label={`정답 입력 ${currentIndex + 1}`}
-              required
-              autoFocus={currentIndex === 0}
-              disabled={isSubmitting}
-            />
-          );
-        }
+      // 1. Handle the <AnswerInput /> case directly
+      if (currentNode.type === AnswerInput) {
+        const currentIndex = inputIndex++;
+        return (
+          <Input
+            type="text"
+            value={answers[currentIndex] || ''}
+            onChange={(e) => handleAnswerChange(currentIndex, e.target.value)}
+            className="inline-block w-20 h-8 text-center mx-1"
+            aria-label={`정답 입력 ${currentIndex + 1}`}
+            required
+            autoFocus={currentIndex === 0}
+            disabled={isSubmitting}
+            key={`input-${currentIndex}`}
+          />
+        );
+      }
 
-        if (child.props.children) {
-          return React.cloneElement(child, {
-            ...child.props,
-            children: processChildren(child.props.children),
-          });
-        }
+      // 2. Recursively transform props
+      const newProps: { [key: string]: any } = {};
+      let hasChanged = false;
 
-        return child;
-      });
+      for (const propName in currentNode.props) {
+        const propValue = currentNode.props[propName];
+        
+        if (propName === 'children') continue; // Handle children separately
+        
+        if (React.isValidElement(propValue)) {
+            newProps[propName] = transformNode(propValue);
+            if (newProps[propName] !== propValue) hasChanged = true;
+        } else if (Array.isArray(propValue)) {
+            newProps[propName] = propValue.map(item => React.isValidElement(item) ? transformNode(item) : item);
+            // Simple array comparison might not be perfect but good enough here
+            if (newProps[propName].length !== propValue.length) hasChanged = true;
+        } else {
+            newProps[propName] = propValue;
+        }
+      }
+
+      // 3. Recursively transform children
+      const originalChildren = currentNode.props.children;
+      const newChildren = React.Children.map(originalChildren, child => transformNode(child));
+      
+      if (newChildren !== originalChildren) {
+          hasChanged = true;
+      }
+
+      // 4. Return new element only if something changed
+      if (hasChanged) {
+        return React.cloneElement(currentNode, newProps, newChildren);
+      }
+      
+      return currentNode;
     };
-    
-    return processChildren(node);
+
+    return transformNode(node);
   };
 
 
@@ -192,13 +219,13 @@ export default function ProblemModal({
         description: "답변을 제출하는 중 오류가 발생했습니다.",
       });
     } finally {
-        setIsSubmitting(false); // Ensure this is always called
-        if (isSubmitting) {
-          // Additional safety check in case of race conditions
-          // This might not be strictly necessary with `finally`, but adds robustness
-        } else {
+        // This ensures the modal closes even if there's an error in the logic after submission
+        if (isOpen) {
           onOpenChange(false);
         }
+        // It is important to reset submitting state *after* potentially closing the modal
+        // to avoid UI flicker.
+        setIsSubmitting(false);
     }
   };
   
