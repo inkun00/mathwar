@@ -120,7 +120,7 @@ export default function Home() {
           currentUser={userProfile}
           initialCountries={initialCountries}
           initialLandTiles={initialLandTiles}
-          initialProblemAttempts={problemAttempts}
+          problemAttempts={problemAttempts}
           initialWrongAnswers={wrongAnswers}
           initialAllUsers={initialAllUsers}
           mapEvents={mapEvents || []}

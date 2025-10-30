@@ -37,11 +37,12 @@ export default function Header({
   const [isProfileOpen, setIsProfileOpen] = useState(false);
 
   const remainingProblems = useMemo(() => {
+    if (!problemAttempts) return 10;
     const twentyFourHoursAgo = Date.now() - 24 * 60 * 60 * 1000;
     const recentAttempts = problemAttempts.filter(
       (attempt) =>
         attempt.timestamp &&
-        new Date(attempt.timestamp).getTime() > twentyFourHoursAgo &&
+        new Date(attempt.timestamp.toDate()).getTime() > twentyFourHoursAgo &&
         !attempt.isReview
     );
     return 10 - recentAttempts.length;

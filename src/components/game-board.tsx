@@ -20,7 +20,7 @@ interface GameBoardProps {
   currentUser: User;
   initialCountries: Country[];
   initialLandTiles: ClientTile[];
-  initialProblemAttempts: ProblemAttempt[];
+  problemAttempts: ProblemAttempt[];
   initialWrongAnswers: WrongAnswer[];
   initialAllUsers: User[];
   mapEvents: MapEvent[];
@@ -30,7 +30,7 @@ export default function GameBoard({
   currentUser: liveCurrentUser, 
   initialCountries, 
   initialLandTiles,
-  initialProblemAttempts,
+  problemAttempts,
   initialWrongAnswers,
   initialAllUsers,
   mapEvents,
@@ -503,7 +503,7 @@ export default function GameBoard({
       <Header 
         currentUser={currentUser} 
         onSolveProblemClick={handleSolveProblemForToken} 
-        problemAttempts={initialProblemAttempts}
+        problemAttempts={problemAttempts}
         isBuildingWall={isBuildingWall}
         onToggleWallBuilding={handleToggleWallBuilding}
       />
