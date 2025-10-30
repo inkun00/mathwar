@@ -6,7 +6,7 @@ import { generateMathProblem, isAdjacent, canConquer as canConquerLogic } from "
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { ZoomIn, ZoomOut } from "lucide-react";
-import { useFirestore, useUser, errorEmitter, FirestorePermissionError } from "@/firebase";
+import { useFirestore, useUser, errorEmitter, FirestorePermissionError, useCollection, useMemoFirebase } from "@/firebase";
 import { doc, updateDoc, writeBatch, increment, collection, arrayUnion, runTransaction, getDocs, addDoc, query, where, documentId, getDoc, serverTimestamp } from "firebase/firestore";
 import { addWrongAnswer } from "@/firebase/firestore/data";
 
@@ -45,6 +45,7 @@ export default function GameBoard({
   const [zoomLevel, setZoomLevel] = useState(1);
   const [isProcessingClick, setIsProcessingClick] = useState(false);
   const [isBuildingWall, setIsBuildingWall] = useState(false);
+  const [isRestarting, setIsRestarting] = useState(false);
   
   const [currentUser, setCurrentUser] = useState(liveCurrentUser);
   const [problemAttempts, setProblemAttempts] = useState(initialProblemAttempts);
@@ -62,11 +63,10 @@ export default function GameBoard({
   const currentUserCountry = useMemo(() => initialCountries.find(c => c.id === currentUser?.countryId), [initialCountries, currentUser]);
   
   const userCountryTiles = useMemo(() => {
-    if (!currentUser) return [];
-    // This logic might need adjustment if we need to show tiles from all country members
-    // For now, it only considers the current user's tiles for expansion.
-    return flatLandTiles.filter(tile => tile.ownerId === currentUser.id);
-  }, [flatLandTiles, currentUser]);
+    if (!currentUserCountry) return [];
+    const countryMemberIds = initialAllUsers.filter(u => u.countryId === currentUserCountry.id).map(u => u.id);
+    return flatLandTiles.filter(tile => tile.ownerId && countryMemberIds.includes(tile.ownerId));
+  }, [flatLandTiles, currentUserCountry, initialAllUsers]);
 
   const isDemise = useMemo(() => {
     if (!currentUser) return false;
@@ -77,7 +77,8 @@ export default function GameBoard({
 
   useEffect(() => {
     const handleTokenPenalty = async () => {
-      if (!firestore || !currentUser || !currentUser.tokens || currentUser.tokens >= 0) return;
+      // Do not run penalty logic if a restart is in progress.
+      if (!firestore || !currentUser || isRestarting || !currentUser.tokens || currentUser.tokens >= 0) return;
 
       const penalty = Math.abs(currentUser.tokens);
       toast({
@@ -86,8 +87,8 @@ export default function GameBoard({
           description: `부적절한 방법으로 확장한 영토 ${penalty}개가 회수되고 토큰이 0으로 조정됩니다.`,
       });
 
-      const userTiles = flatLandTiles.filter(t => t.ownerId === currentUser.id);
-      const tilesToRemove = userTiles.sort(() => 0.5 - Math.random()).slice(0, penalty);
+      const userOwnedTiles = flatLandTiles.filter(t => t.ownerId === currentUser.id);
+      const tilesToRemove = userOwnedTiles.sort(() => 0.5 - Math.random()).slice(0, penalty);
       
       const batch = writeBatch(firestore);
 
@@ -110,7 +111,7 @@ export default function GameBoard({
       }
     };
     handleTokenPenalty();
-  }, [currentUser?.tokens, firestore, currentUser, flatLandTiles, toast]);
+  }, [currentUser?.tokens, firestore, currentUser, flatLandTiles, toast, isRestarting]);
 
   // --- Event Handlers & Logic ---
   const handleSolveProblemForToken = () => {
@@ -313,7 +314,7 @@ export default function GameBoard({
            return;
       }
 
-      const tileRef = doc(collection(firestore, 'land_tiles'));
+      const tileData = { x, y, ownerId: currentUser.id, hasWall: false };
       const userRef = doc(firestore, 'users', currentUser.id);
 
       try {
@@ -322,16 +323,17 @@ export default function GameBoard({
             if (!userDoc.exists() || (userDoc.data().tokens ?? 0) <= 0) {
                 throw new Error("토큰이 부족합니다.");
             }
-            transaction.set(tileRef, { x, y, ownerId: currentUser.id, hasWall: false });
+            const newTileRef = doc(collection(firestore, 'land_tiles'));
+            transaction.set(newTileRef, tileData);
             transaction.update(userRef, { tokens: increment(-1) });
         });
 
       } catch (e) {
           console.error("타일 클릭 트랜잭션 실패:", e);
           const permissionError = new FirestorePermissionError({
-            path: tileRef.path,
+            path: `land_tiles/`, // Path is dynamic, so we just indicate collection
             operation: 'create',
-            requestResourceData: { x, y, ownerId: currentUser.id, hasWall: false },
+            requestResourceData: tileData,
           });
           errorEmitter.emit('permission-error', permissionError);
       } finally {
@@ -340,18 +342,24 @@ export default function GameBoard({
     }
   };
   
-  const handleRestart = () => {
+  const handleRestart = async () => {
     if (!currentUser || !firestore || !authUser) return;
+    setIsRestarting(true); // Signal that a restart is in progress
     const userRef = doc(firestore, 'users', authUser.uid);
   
     const updateData = { tokens: 1 };
   
     updateDoc(userRef, updateData)
       .then(() => {
+        // Optimistically update the state
         setCurrentUser(prev => ({ ...prev!, tokens: 1 }));
       })
       .catch(error => {
         errorEmitter.emit('permission-error', new FirestorePermissionError({ path: userRef.path, operation: 'update', requestResourceData: updateData }));
+      })
+      .finally(() => {
+        // Reset the flag after a short delay to allow state to propagate
+        setTimeout(() => setIsRestarting(false), 500); 
       });
   };
 

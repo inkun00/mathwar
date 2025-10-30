@@ -586,11 +586,14 @@ export const canConquer = (tile: ClientTile, currentUser: User, allUsers: User[]
         return false;
       }
       
-      // Check distance from all other players' tiles.
-      const otherPlayersTiles = landTiles.filter(t => t.ownerId !== null && t.ownerId !== currentUser.id);
-      if (otherPlayersTiles.length === 0) {
-        return true; // No other players, can place anywhere.
+      const allOwnedTiles = landTiles.filter(t => t.ownerId !== null);
+
+      if (allOwnedTiles.length === 0) {
+          return true; // No tiles owned by anyone, can place anywhere.
       }
+
+      // Check distance from all other players' tiles.
+      const otherPlayersTiles = allOwnedTiles.filter(t => t.ownerId !== currentUser.id);
 
       for (const otherTile of otherPlayersTiles) {
         const distance = Math.abs(tile.x - otherTile.x) + Math.abs(tile.y - otherTile.y);
