@@ -84,6 +84,7 @@
         "type": "object",
         "description": "A user's request to join a country.",
         "properties": {
+            "id": { "type": "string" },
             "requesterId": { "type": "string" },
             "requesterNickname": { "type": "string" },
             "targetCountryId": { "type": "string" },
@@ -98,6 +99,7 @@
         "type": "object",
         "description": "A country's request to form an alliance with another.",
         "properties": {
+            "id": { "type": "string" },
             "requestingCountryId": { "type": "string" },
             "requestingCountryName": { "type": "string" },
             "targetCountryId": { "type": "string" },
@@ -131,22 +133,39 @@
     "structure": [
       {
         "path": "/users/{userId}",
-        "definition": { "entityName": "user", "schema": { "$ref": "#/backend/entities/User" }, "description": "Stores user profiles.", "allow": ["get", "list", "create", "update"] }
+        "definition": {
+          "entityName": "user",
+          "schema": { "$ref": "#/entities/User" },
+          "description": "Stores user profiles. Users can update their own profiles. Country owners can update the countryId of users who have requested to join their country.",
+          "allow": ["get", "list", "create"],
+          "rules": {
+            "update": [
+              {
+                "description": "A user can update their own document.",
+                "condition": "request.auth.uid == userId"
+              },
+              {
+                "description": "A country owner can update the countryId of a user who has a pending join request to their country.",
+                "condition": "resource.data.isCountryOwner == true && request.resource.data.keys().hasOnly(['countryId']) && exists(/databases/$(database)/documents/join_requests/{someId}) && get(/databases/$(database)/documents/join_requests/{someId}).data.requesterId == userId && get(/databases/$(database)/documents/join_requests/{someId}).data.targetCountryId == resource.data.countryId"
+              }
+            ]
+          }
+        }
       },
       {
         "path": "/users/{userId}/wrong_answers/{wrongAnswerId}",
-        "definition": { "entityName": "wrongAnswer", "schema": { "$ref": "#/backend/entities/WrongAnswer" }, "description": "Stores incorrect problems for a user.", "allow": ["list", "get", "create", "update", "delete"] }
+        "definition": { "entityName": "wrongAnswer", "schema": { "$ref": "#/entities/WrongAnswer" }, "description": "Stores incorrect problems for a user.", "allow": ["list", "get", "create", "update", "delete"] }
       },
       {
         "path": "/countries/{countryId}",
-        "definition": { "entityName": "country", "schema": { "$ref": "#/backend/entities/Country" }, "description": "Stores all countries.", "allow": ["list", "get", "create", "update"] }
+        "definition": { "entityName": "country", "schema": { "$ref": "#/entities/Country" }, "description": "Stores all countries.", "allow": ["list", "get", "create", "update"] }
       },
        {
         "path": "/land_tiles/{landTileId}",
         "definition": {
           "entityName": "landTile",
           "schema": {
-            "$ref": "#/backend/entities/LandTile"
+            "$ref": "#/entities/LandTile"
           },
           "description": "Stores all land tiles on the game map. Accessible to all authenticated users for gameplay.",
            "allow": ["list", "get", "write"]
@@ -154,20 +173,22 @@
       },
       {
         "path": "/problem_attempts/{userId}/attempts/{attemptId}",
-        "definition": { "entityName": "problemAttempt", "schema": { "$ref": "#/backend/entities/ProblemAttempt" }, "description": "Stores user problem attempts.", "allow": ["list", "get", "create"] }
+        "definition": { "entityName": "problemAttempt", "schema": { "$ref": "#/entities/ProblemAttempt" }, "description": "Stores user problem attempts.", "allow": ["list", "get", "create"] }
       },
       {
           "path": "/join_requests/{requestId}",
-          "definition": { "entityName": "joinRequest", "schema": { "$ref": "#/backend/entities/JoinRequest" }, "description": "Requests from users to join a country.", "allow": ["list", "get", "create", "update"] }
+          "definition": { "entityName": "joinRequest", "schema": { "$ref": "#/entities/JoinRequest" }, "description": "Requests from users to join a country.", "allow": ["list", "get", "create", "update", "delete"] }
       },
       {
           "path": "/alliance_requests/{requestId}",
-          "definition": { "entityName": "allianceRequest", "schema": { "$ref": "#/backend/entities/AllianceRequest" }, "description": "Requests from countries to form an alliance.", "allow": ["list", "get", "create", "update"] }
+          "definition": { "entityName": "allianceRequest", "schema": { "$ref": "#/entities/AllianceRequest" }, "description": "Requests from countries to form an alliance.", "allow": ["list", "get", "create", "update", "delete"] }
       },
       {
         "path": "/map_events/{eventId}",
-        "definition": { "entityName": "mapEvent", "schema": { "$ref": "#/backend/entities/MapEvent" }, "description": "A collection of transient map change events for delta updates. Enable TTL.", "allow": ["list", "create"] }
+        "definition": { "entityName": "mapEvent", "schema": { "$ref": "#/entities/MapEvent" }, "description": "A collection of transient map change events for delta updates. Enable TTL.", "allow": ["list", "create"] }
       }
     ]
   }
 }
+
+    
