@@ -6,8 +6,8 @@ import { generateMathProblem, isAdjacent, canConquer as canConquerLogic } from "
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { ZoomIn, ZoomOut } from "lucide-react";
-import { useFirestore, useUser, errorEmitter, FirestorePermissionError, useCollection, useMemoFirebase } from "@/firebase";
-import { doc, updateDoc, writeBatch, increment, collection, arrayUnion, runTransaction, getDocs, addDoc, query, where, documentId, getDoc, serverTimestamp } from "firebase/firestore";
+import { useFirestore, useUser, errorEmitter, FirestorePermissionError, useDoc, useMemoFirebase } from "@/firebase";
+import { doc, updateDoc, writeBatch, increment, collection, arrayUnion, runTransaction, addDoc, serverTimestamp } from "firebase/firestore";
 import { addWrongAnswer } from "@/firebase/firestore/data";
 
 import Header from "./header";
@@ -49,56 +49,53 @@ export default function GameBoard({
   const [isBuildingWall, setIsBuildingWall] = useState(false);
   const [isRestarting, setIsRestarting] = useState(false);
   
-  const [currentUser, setCurrentUser] = useState(liveCurrentUser);
-  const [problemAttempts, setProblemAttempts] = useState(initialProblemAttempts);
   const [landTiles, setLandTiles] = useState(initialLandTiles);
+  const [countries, setCountries] = useState(initialCountries);
+  const [allUsers, setAllUsers] = useState(initialAllUsers);
+  const [problemAttempts, setProblemAttempts] = useState(initialProblemAttempts);
+  
+  const userDocRef = useMemoFirebase(() => (firestore && authUser) ? doc(firestore, 'users', authUser.uid) : null, [firestore, authUser]);
+  const { data: currentUser } = useDoc<User>(userDocRef, liveCurrentUser);
 
   useEffect(() => {
-    setCurrentUser(liveCurrentUser);
-  }, [liveCurrentUser]);
-  
-  useEffect(() => {
-    // Apply delta updates from map events
     if (mapEvents && mapEvents.length > 0) {
       setLandTiles(currentTiles => {
-        const tilesCopy = [...currentTiles];
+        const newTiles = [...currentTiles];
         let changed = false;
         for (const event of mapEvents) {
-            const tileIndex = tilesCopy.findIndex(t => t.id === event.tileId);
+          if (!event.tileId) continue;
+            const tileIndex = newTiles.findIndex(t => t.id === event.tileId);
+            const eventData = {
+                ownerId: event.newOwnerId,
+                hasWall: event.newHasWall,
+                ownerNickname: event.newOwnerNickname,
+                countryId: event.newCountryId,
+                countryName: event.newCountryName,
+                countryColor: event.newCountryColor,
+            }
+
             if (tileIndex !== -1) {
-                // Check if the update is actually new
-                if (tilesCopy[tileIndex].ownerId !== event.newOwnerId || tilesCopy[tileIndex].hasWall !== event.newHasWall) {
-                    tilesCopy[tileIndex] = {
-                        ...tilesCopy[tileIndex],
-                        ownerId: event.newOwnerId,
-                        hasWall: event.newHasWall,
-                    };
+                if (newTiles[tileIndex].ownerId !== event.newOwnerId || newTiles[tileIndex].hasWall !== event.newHasWall) {
+                    newTiles[tileIndex] = { ...newTiles[tileIndex], ...eventData };
                     changed = true;
                 }
             } else {
-                 // The tile doesn't exist locally, so add it
-                 tilesCopy.push({
-                     id: event.tileId,
-                     x: event.x,
-                     y: event.y,
-                     ownerId: event.newOwnerId,
-                     hasWall: event.newHasWall
-                 });
+                 newTiles.push({ id: event.tileId, x: event.x, y: event.y, ...eventData });
                  changed = true;
             }
         }
-        return changed ? tilesCopy : currentTiles;
+        return changed ? newTiles : currentTiles;
       });
     }
   }, [mapEvents]);
 
-  const currentUserCountry = useMemo(() => initialCountries.find(c => c.id === currentUser?.countryId), [initialCountries, currentUser]);
+  const currentUserCountry = useMemo(() => countries.find(c => c.id === currentUser?.countryId), [countries, currentUser]);
   
   const userCountryTiles = useMemo(() => {
     if (!currentUserCountry) return [];
-    const countryMemberIds = initialAllUsers.filter(u => u.countryId === currentUserCountry.id).map(u => u.id);
+    const countryMemberIds = allUsers.filter(u => u.countryId === currentUserCountry.id).map(u => u.id);
     return landTiles.filter(tile => tile.ownerId && countryMemberIds.includes(tile.ownerId));
-  }, [landTiles, currentUserCountry, initialAllUsers]);
+  }, [landTiles, currentUserCountry, allUsers]);
 
   const isDemise = useMemo(() => {
     if (!currentUser) return false;
@@ -109,7 +106,6 @@ export default function GameBoard({
 
   useEffect(() => {
     const handleTokenPenalty = async () => {
-      // Do not run penalty logic if a restart is in progress or if tokens are undefined/non-negative
       if (!firestore || !currentUser || isRestarting || currentUser.tokens === undefined || currentUser.tokens >= 0) return;
 
       const penalty = Math.abs(currentUser.tokens);
@@ -123,21 +119,30 @@ export default function GameBoard({
       const tilesToRemove = userOwnedTiles.sort(() => 0.5 - Math.random()).slice(0, penalty);
       
       const batch = writeBatch(firestore);
-
-      // Reset tiles
-      tilesToRemove.forEach(tile => {
-        if (tile.id) {
-          const tileRef = doc(firestore, 'land_tiles', tile.id);
-          batch.update(tileRef, { ownerId: null });
-        }
-      });
       
-      // Reset user tokens
       const userRef = doc(firestore, 'users', currentUser.id);
       batch.update(userRef, { tokens: 0 });
 
+      tilesToRemove.forEach(tile => {
+        if (tile.id) {
+          const tileRef = doc(firestore, 'land_tiles', tile.id);
+          batch.update(tileRef, { ownerId: null, ownerNickname: null, countryId: null, countryName: null, countryColor: null });
+        }
+      });
+      
       try {
         await batch.commit();
+         // Manually broadcast events for removed tiles after penalty
+        for (const tile of tilesToRemove) {
+             await addDoc(collection(firestore, 'map_events'), {
+                tileId: tile.id,
+                x: tile.x,
+                y: tile.y,
+                newOwnerId: null, newHasWall: tile.hasWall,
+                newOwnerNickname: null, newCountryId: null, newCountryName: null, newCountryColor: null,
+                timestamp: serverTimestamp(),
+            });
+        }
       } catch (error) {
         console.error("페널티 적용 실패:", error);
       }
@@ -145,7 +150,6 @@ export default function GameBoard({
     handleTokenPenalty();
   }, [currentUser?.tokens, firestore, currentUser, landTiles, toast, isRestarting]);
 
-  // --- Event Handlers & Logic ---
   const handleSolveProblemForToken = () => {
     setIsBuildingWall(false);
     setInvasionTarget(null);
@@ -156,13 +160,12 @@ export default function GameBoard({
   const handleGainToken = () => {
     if (!currentUser || !firestore || !authUser) return;
     const userRef = doc(firestore, "users", authUser.uid);
-    const updateData = { tokens: increment(1) };
-    updateDoc(userRef, updateData)
+    updateDoc(userRef, { tokens: increment(1) })
       .catch(error => {
         const permissionError = new FirestorePermissionError({
             path: userRef.path,
             operation: 'update',
-            requestResourceData: updateData,
+            requestResourceData: { tokens: increment(1) },
         });
         errorEmitter.emit('permission-error', permissionError);
     });
@@ -174,13 +177,13 @@ export default function GameBoard({
     const remainingTiles = landTiles.filter(tile => tile.ownerId === originalOwnerId).length;
 
     if (remainingTiles === 1 && conquerorId) {
-      const originalOwner = initialAllUsers.find(u => u.id === originalOwnerId);
+      const originalOwner = allUsers.find(u => u.id === originalOwnerId);
       if (!originalOwner) return;
 
-      const conqueror = initialAllUsers.find(u => u.id === conquerorId);
+      const conqueror = allUsers.find(u => u.id === conquerorId);
       if (!conqueror || !conqueror.countryId) return;
 
-      const conquerorCountry = initialCountries.find(c => c.id === conqueror.countryId);
+      const conquerorCountry = countries.find(c => c.id === conqueror.countryId);
       if (!conquerorCountry) return;
 
       const countryRef = doc(firestore, "countries", originalOwner.countryId);
@@ -204,7 +207,7 @@ export default function GameBoard({
 
 
   const handleInvasionSuccess = async () => {
-    if (!currentUser || !firestore || !invasionTarget || !authUser) return;
+    if (!currentUser || !firestore || !invasionTarget || !authUser || !currentUserCountry) return;
   
     setIsProcessingClick(true);
     
@@ -216,28 +219,26 @@ export default function GameBoard({
         const updateData = { 
             ownerId: currentUser.id, 
             hasWall: shouldBreakWall ? false : hasWall,
+            ownerNickname: currentUser.nickname,
+            countryId: currentUser.countryId,
+            countryName: currentUserCountry.name,
+            countryColor: currentUserCountry.color,
         };
         
         updateDoc(tileRef, updateData)
             .then(() => {
                 handleTerritoryCut(invasionTarget.originalOwnerId!, currentUser.id);
 
-                // Broadcast map event
                 addDoc(collection(firestore, 'map_events'), {
-                    tileId: invasionTarget.id,
-                    x: invasionTarget.x,
-                    y: invasionTarget.y,
-                    newOwnerId: currentUser.id,
-                    newHasWall: updateData.hasWall,
+                    tileId: invasionTarget.id, x: invasionTarget.x, y: invasionTarget.y,
+                    newOwnerId: currentUser.id, newHasWall: updateData.hasWall,
+                    newOwnerNickname: currentUser.nickname, newCountryId: currentUser.countryId,
+                    newCountryName: currentUserCountry.name, newCountryColor: currentUserCountry.color,
                     timestamp: serverTimestamp(),
                 });
             })
             .catch(error => {
-                 const permissionError = new FirestorePermissionError({
-                    path: tileRef.path,
-                    operation: 'update',
-                    requestResourceData: updateData,
-                });
+                 const permissionError = new FirestorePermissionError({ path: tileRef.path, operation: 'update', requestResourceData: updateData });
                 errorEmitter.emit('permission-error', permissionError);
             })
             .finally(() => {
@@ -253,7 +254,7 @@ export default function GameBoard({
   };
 
   const handleTileClick = async (x: number, y: number) => {
-    if (!currentUser || !firestore || isProcessingClick || !authUser) return;
+    if (!currentUser || !firestore || isProcessingClick || !authUser || !currentUserCountry) return;
     
     if ((currentUser.tokens ?? 0) <= 0 && !isBuildingWall) {
       toast({
@@ -288,22 +289,15 @@ export default function GameBoard({
       batch.commit().then(() => {
         toast({ title: "성벽 건설 완료!", description: "영토에 성벽이 건설되었습니다." });
         setIsBuildingWall(false);
-         // Broadcast map event
         addDoc(collection(firestore, 'map_events'), {
-            tileId: clickedTile.id,
-            x: clickedTile.x,
-            y: clickedTile.y,
-            newOwnerId: clickedTile.ownerId,
-            newHasWall: true,
+            tileId: clickedTile.id, x: clickedTile.x, y: clickedTile.y,
+            newOwnerId: clickedTile.ownerId, newHasWall: true,
+            newOwnerNickname: currentUser.nickname, newCountryId: currentUser.countryId,
+            newCountryName: currentUserCountry.name, newCountryColor: currentUserCountry.color,
             timestamp: serverTimestamp(),
         });
-
       }).catch(error => {
-        const permissionError = new FirestorePermissionError({
-            path: tileRef.path,
-            operation: 'update',
-            requestResourceData: { hasWall: true },
-        });
+        const permissionError = new FirestorePermissionError({ path: tileRef.path, operation: 'update', requestResourceData: { hasWall: true } });
         errorEmitter.emit('permission-error', permissionError);
         toast({ variant: "destructive", title: "오류", description: "성벽을 건설하는 중 오류가 발생했습니다."});
       }).finally(() => {
@@ -312,23 +306,21 @@ export default function GameBoard({
       return;
     }
   
-    if (clickedTile && clickedTile.ownerId !== null) { // Conquering an existing, owned tile
+    if (clickedTile && clickedTile.ownerId !== null) { 
       if (clickedTile.ownerId === currentUser.id) {
-        setIsProcessingClick(false); // clicked own tile
+        setIsProcessingClick(false);
         return;
       }
       
-      const owner = initialAllUsers.find(u => u.id === clickedTile.ownerId);
+      const owner = allUsers.find(u => u.id === clickedTile.ownerId);
       if (owner && owner.countryId === currentUser.countryId) {
         toast({ variant: "destructive", title: "공격 불가", description: "같은 국가의 영토는 공격할 수 없습니다." });
         setIsProcessingClick(false);
         return;
       }
       
-      // This is an invasion
       const userRef = doc(firestore, 'users', authUser.uid);
-      const tokenUpdateData = { tokens: increment(-1) };
-      updateDoc(userRef, tokenUpdateData)
+      updateDoc(userRef, { tokens: increment(-1) })
         .then(() => {
             setInvasionTarget({ x, y, id: clickedTile.id, originalOwnerId: clickedTile.ownerId, hasWall: clickedTile.hasWall });
             setInvasionWallBreaks(0);
@@ -336,7 +328,7 @@ export default function GameBoard({
             setIsModalOpen(true);
         })
         .catch((error) => {
-            errorEmitter.emit('permission-error', new FirestorePermissionError({ path: userRef.path, operation: 'update', requestResourceData: tokenUpdateData }));
+            errorEmitter.emit('permission-error', new FirestorePermissionError({ path: userRef.path, operation: 'update', requestResourceData: { tokens: increment(-1) } }));
             toast({ variant: "destructive", title: "오류", description: "작업을 처리하는 중 오류가 발생했습니다."});
             setIsProcessingClick(false);
         });
@@ -345,7 +337,7 @@ export default function GameBoard({
       const canPlace = canConquerLogic(
           { x, y, id: '', ownerId: null, hasWall: false },
           currentUser,
-          initialAllUsers, 
+          allUsers, 
           userCountryTiles,
           landTiles
       );
@@ -355,7 +347,14 @@ export default function GameBoard({
            return;
       }
 
-      const tileData = { x, y, ownerId: currentUser.id, hasWall: false };
+      const tileData = { 
+          x, y, hasWall: false,
+          ownerId: currentUser.id, 
+          ownerNickname: currentUser.nickname,
+          countryId: currentUser.countryId,
+          countryName: currentUserCountry.name,
+          countryColor: currentUserCountry.color,
+      };
       const userRef = doc(firestore, 'users', currentUser.id);
 
       try {
@@ -371,52 +370,36 @@ export default function GameBoard({
             transaction.update(userRef, { tokens: increment(-1) });
         });
 
-        // Broadcast map event after successful transaction
         if (newTileId) {
             await addDoc(collection(firestore, 'map_events'), {
-                tileId: newTileId,
-                x: x,
-                y: y,
-                newOwnerId: currentUser.id,
-                newHasWall: false,
+                tileId: newTileId, x: x, y: y,
+                newOwnerId: currentUser.id, newHasWall: false,
+                newOwnerNickname: currentUser.nickname, newCountryId: currentUser.countryId,
+                newCountryName: currentUserCountry.name, newCountryColor: currentUserCountry.color,
                 timestamp: serverTimestamp(),
             });
         }
         
       } catch (e: any) {
-          console.error("타일 클릭 트랜잭션 실패:", e);
-          const permissionError = new FirestorePermissionError({
-            path: `land_tiles/`, // Path is dynamic, so we just indicate collection
-            operation: 'create',
-            requestResourceData: tileData,
-          });
+          const permissionError = new FirestorePermissionError({ path: `land_tiles/`, operation: 'create', requestResourceData: tileData });
           errorEmitter.emit('permission-error', permissionError);
           toast({ variant: "destructive", title: "확장 오류", description: e.message || "영토를 확장하는 중 오류가 발생했습니다." });
       } finally {
-        // We do not set isProcessingClick to false here for empty tiles.
-        // It will be handled by the useEffect that listens to mapEvents.
-        // This prevents the user from clicking again before the UI is updated.
+        setIsProcessingClick(false);
       }
     }
   };
   
   const handleRestart = async () => {
     if (!currentUser || !firestore || !authUser) return;
-    setIsRestarting(true); // Signal that a restart is in progress
+    setIsRestarting(true);
     const userRef = doc(firestore, 'users', authUser.uid);
   
-    const updateData = { tokens: 1 };
-  
-    updateDoc(userRef, updateData)
-      .then(() => {
-        // Optimistically update the state
-        setCurrentUser(prev => ({ ...prev!, tokens: 1 }));
-      })
+    updateDoc(userRef, { tokens: 1 })
       .catch(error => {
-        errorEmitter.emit('permission-error', new FirestorePermissionError({ path: userRef.path, operation: 'update', requestResourceData: updateData }));
+        errorEmitter.emit('permission-error', new FirestorePermissionError({ path: userRef.path, operation: 'update', requestResourceData: { tokens: 1 } }));
       })
       .finally(() => {
-        // Reset the flag after a short delay to allow state to propagate
         setTimeout(() => setIsRestarting(false), 500); 
       });
   };
@@ -425,7 +408,7 @@ export default function GameBoard({
   const handleZoomOut = () => setZoomLevel(prev => Math.max(prev - 0.2, 0.5));
   
   const handleToggleWallBuilding = () => {
-    if (!isBuildingWall && (currentUser.walls ?? 0) <= 0) {
+    if (!isBuildingWall && (currentUser?.walls ?? 0) <= 0) {
       toast({
         variant: "destructive",
         title: "성벽 없음",
@@ -440,7 +423,7 @@ export default function GameBoard({
     if (!currentUser || (currentUser.tokens ?? 0) <= 0 || isProcessingClick || isBuildingWall) {
       return false;
     }
-    return canConquerLogic(tile, currentUser, initialAllUsers, userCountryTiles, landTiles);
+    return canConquerLogic(tile, currentUser, allUsers, userCountryTiles, landTiles);
   };
   
   const canBuildWall = (tile: ClientTile) => {
@@ -452,13 +435,11 @@ export default function GameBoard({
     if (!open) {
       setIsProcessingClick(false);
       if (invasionTarget) {
-        // If invasion was cancelled, refund the token
         if (authUser && currentUser) {
             const userRef = doc(firestore, 'users', authUser.uid);
-            const refundData = { tokens: increment(1) };
-            updateDoc(userRef, refundData)
+            updateDoc(userRef, { tokens: increment(1) })
               .catch(error => {
-                errorEmitter.emit('permission-error', new FirestorePermissionError({ path: userRef.path, operation: 'update', requestResourceData: refundData }));
+                errorEmitter.emit('permission-error', new FirestorePermissionError({ path: userRef.path, operation: 'update', requestResourceData: { tokens: increment(1) } }));
               });
         }
         setInvasionTarget(null);
@@ -495,7 +476,6 @@ export default function GameBoard({
         console.error('문제 풀이 기록 오류:', error);
       }
     );
-     // Optimistically update local state
      setProblemAttempts(prev => [...prev, { ...newAttempt, id: Math.random().toString(), timestamp: new Date().toISOString() }]);
   }
 
@@ -509,31 +489,18 @@ export default function GameBoard({
     );
   }
 
-  // This effect will unlock the UI after a map event has been processed
-  useEffect(() => {
-    if (isProcessingClick) {
-        setIsProcessingClick(false);
-    }
-  }, [landTiles]); // It depends on the result of the map event update
-
   return (
     <div className="flex w-full flex-grow flex-col gap-6">
       <Header 
         currentUser={currentUser} 
         onSolveProblemClick={handleSolveProblemForToken} 
-        countries={initialCountries}
         problemAttempts={problemAttempts}
-        users={initialAllUsers}
-        wrongAnswers={initialWrongAnswers}
         isBuildingWall={isBuildingWall}
         onToggleWallBuilding={handleToggleWallBuilding}
-        landTiles={landTiles}
       />
       <div className="relative h-full w-full max-w-7xl flex-grow">
         <WorldMap 
-            displayMapData={landTiles}
-            countries={initialCountries} 
-            users={initialAllUsers}
+            landTiles={landTiles}
             onTileClick={handleTileClick} 
             canConquer={canConquer}
             canBuildWall={canBuildWall}

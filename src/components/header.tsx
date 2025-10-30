@@ -3,13 +3,13 @@
 import { Logo } from "@/components/icons/logo";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import type { User, ClientTile } from "@/lib/types";
+import type { User } from "@/lib/types";
 import { UserCircle, HelpCircle, User as UserIcon, Trophy, Store, Shield, AlertTriangle } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import ProfileSheet from "./profile-sheet";
 import LeaderboardSheet from "./leaderboard-sheet";
 import MarketSheet from "./market-sheet";
-import type { Country, ProblemAttempt, WrongAnswer } from "@/lib/types";
+import type { ProblemAttempt } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 import { useMemo, useState } from "react";
 import { Badge } from "./ui/badge";
@@ -20,11 +20,7 @@ import { Alert, AlertDescription } from "./ui/alert";
 interface HeaderProps {
   currentUser: User;
   onSolveProblemClick: () => void;
-  countries: Country[];
   problemAttempts: ProblemAttempt[];
-  landTiles: ClientTile[];
-  users: User[];
-  wrongAnswers: WrongAnswer[];
   isBuildingWall: boolean;
   onToggleWallBuilding: () => void;
 }
@@ -32,16 +28,13 @@ interface HeaderProps {
 export default function Header({ 
   currentUser, 
   onSolveProblemClick, 
-  countries, 
   problemAttempts, 
-  landTiles, 
-  users, 
-  wrongAnswers,
   isBuildingWall,
   onToggleWallBuilding,
 }: HeaderProps) {
-  const userCountry = countries.find(c => c.id === currentUser.countryId);
   const { toast } = useToast();
+  const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
 
   const remainingProblems = useMemo(() => {
     const twentyFourHoursAgo = Date.now() - 24 * 60 * 60 * 1000;
@@ -129,7 +122,7 @@ export default function Header({
               </div>
             </div>
             
-            <Sheet>
+            <Sheet open={isProfileOpen} onOpenChange={setIsProfileOpen}>
               <SheetTrigger asChild>
                 <Button variant="ghost" size="icon">
                   <UserIcon className="h-5 w-5" />
@@ -140,17 +133,10 @@ export default function Header({
                 <SheetHeader>
                   <SheetTitle>내 프로필</SheetTitle>
                 </SheetHeader>
-                {currentUser && (
-                  <ProfileSheet 
-                    currentUser={currentUser} 
-                    userCountry={userCountry}
-                    problemAttempts={problemAttempts}
-                    wrongAnswers={wrongAnswers}
-                    landTiles={landTiles}
-                    users={users}
-                    countries={countries}
-                  />
-                )}
+                <ProfileSheet 
+                    currentUser={currentUser}
+                    onOpenChange={setIsProfileOpen}
+                />
               </SheetContent>
             </Sheet>
 
@@ -169,7 +155,7 @@ export default function Header({
               </SheetContent>
             </Sheet>
 
-            <Sheet>
+            <Sheet open={isLeaderboardOpen} onOpenChange={setIsLeaderboardOpen}>
               <SheetTrigger asChild>
                 <Button variant="ghost" size="icon">
                   <Trophy className="h-5 w-5" />
@@ -180,11 +166,7 @@ export default function Header({
                 <SheetHeader>
                   <SheetTitle>리더보드</SheetTitle>
                 </SheetHeader>
-                <LeaderboardSheet
-                  users={users}
-                  countries={countries}
-                  landTiles={landTiles}
-                />
+                <LeaderboardSheet />
               </SheetContent>
             </Sheet>
 

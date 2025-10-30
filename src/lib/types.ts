@@ -50,6 +50,11 @@ export interface ClientTile {
   y: number;
   ownerId: string | null;
   hasWall: boolean;
+  // Denormalized fields for performance
+  ownerNickname?: string | null;
+  countryId?: string | null;
+  countryName?: string | null;
+  countryColor?: string | null;
 }
 
 export interface MapEvent {
@@ -60,6 +65,11 @@ export interface MapEvent {
   newOwnerId: string | null;
   newHasWall: boolean;
   timestamp: any;
+  // Denormalized fields
+  newOwnerNickname?: string | null;
+  newCountryId?: string | null;
+  newCountryName?: string | null;
+  newCountryColor?: string | null;
 }
 
 

@@ -1,16 +1,17 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import type { User, Country, ClientTile, RankedUser, RankedCountry } from '@/lib/types';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from './ui/badge';
-import { MAP_HEIGHT, MAP_WIDTH } from '@/lib/world-map-shape';
+import { useFirestore } from '@/firebase';
+import { collection, getDocs } from 'firebase/firestore';
+import { Skeleton } from './ui/skeleton';
 
-interface LeaderboardSheetProps {
-  users: User[];
-  countries: Country[];
-  landTiles: ClientTile[];
+interface LeaderboardData {
+  userRankings: RankedUser[];
+  countryRankings: RankedCountry[];
 }
 
 const RankingTable = ({ data, type }: { data: (RankedUser | RankedCountry)[], type: 'user' | 'country' }) => {
@@ -48,72 +49,109 @@ const RankingTable = ({ data, type }: { data: (RankedUser | RankedCountry)[], ty
 }
 
 
-export default function LeaderboardSheet({ users, countries, landTiles }: LeaderboardSheetProps) {
-    const { userRankings, countryRankings } = useMemo(() => {
-        if (!users || users.length === 0) {
-            return { userRankings: [], countryRankings: [] };
+export default function LeaderboardSheet() {
+    const firestore = useFirestore();
+    const [isLoading, setIsLoading] = useState(true);
+    const [leaderboardData, setLeaderboardData] = useState<LeaderboardData>({ userRankings: [], countryRankings: [] });
+
+    useEffect(() => {
+      const fetchLeaderboardData = async () => {
+        if (!firestore) return;
+        setIsLoading(true);
+
+        try {
+          const [usersSnapshot, countriesSnapshot, landTilesSnapshot] = await Promise.all([
+            getDocs(collection(firestore, "users")),
+            getDocs(collection(firestore, "countries")),
+            getDocs(collection(firestore, "land_tiles"))
+          ]);
+
+          const users = usersSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as User[];
+          const countries = countriesSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as Country[];
+          const landTiles = landTilesSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as ClientTile[];
+
+          // User Rankings
+          const userTileCount = users.reduce((acc, user) => {
+            acc[user.id] = 0;
+            return acc;
+          }, {} as Record<string, number>);
+
+          landTiles.forEach(tile => {
+            if (tile && tile.ownerId) {
+              if (userTileCount[tile.ownerId] !== undefined) {
+                userTileCount[tile.ownerId]++;
+              }
+            }
+          });
+
+          const sortedUsers: RankedUser[] = Object.entries(userTileCount)
+            .map(([id, count]) => {
+              const user = users.find(u => u.id === id);
+              return {
+                rank: 0, // will be set later
+                id: id,
+                nickname: user?.nickname || '알 수 없는 플레이어',
+                tileCount: count,
+              };
+            })
+            .sort((a, b) => b.tileCount - a.tileCount)
+            .map((p, index) => ({ ...p, rank: index + 1 }));
+
+          // Country Rankings
+          const countryTileCount = countries.reduce((acc, country) => {
+            acc[country.id] = 0;
+            return acc;
+          }, {} as Record<string, number>);
+
+          const userToCountryMap = new Map(users.map(u => [u.id, u.countryId]));
+
+          landTiles.forEach(tile => {
+            if (tile && tile.ownerId) {
+              const countryId = userToCountryMap.get(tile.ownerId);
+              if (countryId && countryTileCount[countryId] !== undefined) {
+                countryTileCount[countryId]++;
+              }
+            }
+          });
+
+          const sortedCountries: RankedCountry[] = Object.entries(countryTileCount)
+            .map(([id, count]) => {
+              const country = countries.find(co => co.id === id);
+              return {
+                rank: 0, // will be set later
+                id: id,
+                name: country?.name || '알 수 없는 국가',
+                color: country?.color || '#888',
+                tileCount: count,
+              };
+            })
+            .sort((a, b) => b.tileCount - a.tileCount)
+            .map((item, index) => ({ ...item, rank: index + 1 }));
+
+            setLeaderboardData({ userRankings: sortedUsers, countryRankings: sortedCountries });
+        } catch (error) {
+          console.error("Error fetching leaderboard data:", error);
+        } finally {
+          setIsLoading(false);
         }
+      };
 
-        // User Rankings
-        const userTileCount = users.reduce((acc, user) => {
-        acc[user.id] = 0;
-        return acc;
-        }, {} as Record<string, number>);
-
-        landTiles.forEach(tile => {
-            if (tile && tile.ownerId) {
-                if (userTileCount[tile.ownerId] !== undefined) {
-                    userTileCount[tile.ownerId]++;
-                }
-            }
-        });
-
-        const sortedUsers: RankedUser[] = Object.entries(userTileCount)
-        .map(([id, count]) => ({ id, count }))
-        .sort((a, b) => b.count - a.count)
-        .map((p, index) => {
-            const user = users.find(u => u.id === p.id);
-            return {
-            rank: index + 1,
-            id: p.id,
-            nickname: user?.nickname || '알 수 없는 플레이어',
-            tileCount: p.count,
-            }
-        });
-
-        // Country Rankings
-        const countryTileCount = countries.reduce((acc, country) => {
-        acc[country.id] = 0;
-        return acc;
-        }, {} as Record<string, number>);
-
-        const userToCountryMap = new Map(users.map(u => [u.id, u.countryId]));
-
-        landTiles.forEach(tile => {
-            if (tile && tile.ownerId) {
-                const countryId = userToCountryMap.get(tile.ownerId);
-                if (countryId && countryTileCount[countryId] !== undefined) {
-                    countryTileCount[countryId]++;
-                }
-            }
-        });
-
-        const sortedCountries: RankedCountry[] = Object.entries(countryTileCount)
-        .map(([id, count]) => ({ id, count }))
-        .sort((a, b) => b.count - a.count)
-        .map((item, index) => {
-            const country = countries.find(co => co.id === item.id);
-            return {
-            rank: index + 1,
-            id: item.id,
-            name: country?.name || '알 수 없는 국가',
-            color: country?.color || '#888',
-            tileCount: item.count,
-            };
-        });
-
-        return { userRankings: sortedUsers, countryRankings: sortedCountries };
-    }, [users, countries, landTiles]);
+      fetchLeaderboardData();
+    }, [firestore]);
+    
+  if (isLoading) {
+    return (
+      <div className="mt-6 space-y-4">
+        <Skeleton className="h-10 w-full" />
+        <div className='space-y-2'>
+          <Skeleton className="h-8 w-full" />
+          <Skeleton className="h-8 w-full" />
+          <Skeleton className="h-8 w-full" />
+          <Skeleton className="h-8 w-full" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mt-6">
@@ -123,10 +161,10 @@ export default function LeaderboardSheet({ users, countries, landTiles }: Leader
           <TabsTrigger value="user">개인별 순위</TabsTrigger>
         </TabsList>
         <TabsContent value="country">
-          <RankingTable data={countryRankings} type="country" />
+          <RankingTable data={leaderboardData.countryRankings} type="country" />
         </TabsContent>
         <TabsContent value="user">
-          <RankingTable data={userRankings} type="user" />
+          <RankingTable data={leaderboardData.userRankings} type="user" />
         </TabsContent>
       </Tabs>
     </div>

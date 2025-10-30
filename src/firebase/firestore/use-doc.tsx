@@ -34,17 +34,28 @@ export interface UseDocResult<T> {
  *
  *
  * @template T Optional type for document data. Defaults to any.
- * @param {DocumentReference<DocumentData> | null | undefined} docRef -
+ * @param {DocumentReference<DocumentData> | null | undefined} memoizedDocRef -
  * The Firestore DocumentReference. Waits if null/undefined.
+ * @param {T | null} [initialData=null] - Optional initial data to prevent layout shifts.
  * @returns {UseDocResult<T>} Object with data, isLoading, error.
  */
 export function useDoc<T = any>(
   memoizedDocRef: DocumentReference<DocumentData> | null | undefined,
+  initialData: T | null = null,
 ): UseDocResult<T> {
   type StateDataType = WithId<T> | null;
 
-  const [data, setData] = useState<StateDataType>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const getInitialState = (): StateDataType => {
+      if (initialData) {
+          // Assuming initialData has an 'id', or we can construct it if needed.
+          // For this hook, let's assume the user provides the full object.
+          return initialData as WithId<T>;
+      }
+      return null;
+  }
+
+  const [data, setData] = useState<StateDataType>(getInitialState());
+  const [isLoading, setIsLoading] = useState<boolean>(!initialData);
   const [error, setError] = useState<FirestoreError | Error | null>(null);
 
   useEffect(() => {
@@ -55,7 +66,10 @@ export function useDoc<T = any>(
       return;
     }
 
-    setIsLoading(true);
+    // If we have initial data, we are not in a 'loading' state from the start
+    if(!initialData) {
+      setIsLoading(true);
+    }
     setError(null);
 
     const unsubscribe = onSnapshot(
@@ -85,7 +99,7 @@ export function useDoc<T = any>(
     );
 
     return () => unsubscribe();
-  }, [memoizedDocRef]);
+  }, [memoizedDocRef, initialData]);
 
   return { data, isLoading, error };
 }
