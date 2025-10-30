@@ -105,7 +105,7 @@ export default function Home() {
           initialCountries={initialCountries}
           initialLandTiles={initialLandTiles}
           initialProblemAttempts={problemAttempts}
-          initialWrongAnswers={wrongAnswers}
+          initialWrongAnswers={initialWrongAnswers}
           initialAllUsers={initialAllUsers}
           mapEvents={mapEvents || []}
         />
