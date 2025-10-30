@@ -22,6 +22,7 @@ interface GameBoardProps {
   initialLandTiles: ClientTile[];
   initialProblemAttempts: ProblemAttempt[];
   initialWrongAnswers: WrongAnswer[];
+  allUsers: User[];
 }
 
 export default function GameBoard({ 
@@ -30,6 +31,7 @@ export default function GameBoard({
   initialLandTiles,
   initialProblemAttempts,
   initialWrongAnswers,
+  allUsers,
 }: GameBoardProps) {
   const firestore = useFirestore();
   const { user: authUser } = useUser();
@@ -43,10 +45,6 @@ export default function GameBoard({
   const [zoomLevel, setZoomLevel] = useState(1);
   const [isProcessingClick, setIsProcessingClick] = useState(false);
   const [isBuildingWall, setIsBuildingWall] = useState(false);
-
-  // --- Real-time data ---
-  const allUsersQuery = useMemoFirebase(() => firestore ? collection(firestore, 'users') : null, [firestore]);
-  const { data: allUsers } = useCollection<User>(allUsersQuery);
 
   const flatLandTiles = initialLandTiles;
 
