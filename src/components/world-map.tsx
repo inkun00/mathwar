@@ -113,8 +113,8 @@ export default function WorldMap({ displayMapData, users, countries, onTileClick
   };
   
   const mapGrid = useMemo(() => {
-    const grid: (ClientTile | { x: number; y: number; ownerId: null; hasWall: boolean})[][] = Array.from({ length: MAP_HEIGHT }, (_, y) =>
-        Array.from({ length: MAP_WIDTH }, (_, x) => ({ x, y, ownerId: null, hasWall: false }))
+    const grid: (ClientTile | { x: number; y: number; id: string; ownerId: null; hasWall: boolean})[][] = Array.from({ length: MAP_HEIGHT }, (_, y) =>
+        Array.from({ length: MAP_WIDTH }, (_, x) => ({ x, y, id: `${x}-${y}`, ownerId: null, hasWall: false }))
     );
     displayMapData.forEach(tile => {
         if (grid[tile.y] && grid[tile.y][tile.x]) {

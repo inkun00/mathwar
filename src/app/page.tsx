@@ -5,7 +5,7 @@ import GameBoard from "@/components/game-board";
 import Login from "@/components/login";
 import SignUpDetails from "@/components/signup-details";
 import { useUser, useFirestore, useDoc, useCollection, useMemoFirebase } from "@/firebase";
-import { doc, collection, getDocs, query } from "firebase/firestore";
+import { doc, collection } from "firebase/firestore";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { User, Country, ClientTile, ProblemAttempt, WrongAnswer } from "@/lib/types";
 
@@ -19,17 +19,15 @@ export default function Home() {
   const landTilesQuery = useMemoFirebase(() => firestore ? collection(firestore, 'land_tiles') : null, [firestore]);
   const problemAttemptsQuery = useMemoFirebase(() => (firestore && authUser) ? collection(firestore, 'problem_attempts', authUser.uid, 'attempts') : null, [firestore, authUser]);
   const wrongAnswersQuery = useMemoFirebase(() => (firestore && authUser) ? collection(firestore, 'users', authUser.uid, 'wrong_answers') : null, [firestore, authUser]);
-  const allUsersQuery = useMemoFirebase(() => firestore ? collection(firestore, 'users') : null, [firestore]);
-
+  
   const { data: userProfile, isLoading: isUserProfileLoading } = useDoc<User>(userDocRef);
   const { data: countries, isLoading: isCountriesLoading } = useCollection<Country>(countriesQuery);
   const { data: landTiles, isLoading: isLandTilesLoading } = useCollection<ClientTile>(landTilesQuery);
   const { data: problemAttempts, isLoading: isAttemptsLoading } = useCollection<ProblemAttempt>(problemAttemptsQuery);
   const { data: wrongAnswers, isLoading: isWrongAnswersLoading } = useCollection<WrongAnswer>(wrongAnswersQuery);
-  const { data: allUsers, isLoading: isAllUsersLoading } = useCollection<User>(allUsersQuery);
-
+  
   // Derived loading state
-  const isCoreDataLoading = isUserProfileLoading || isCountriesLoading || isLandTilesLoading || isAttemptsLoading || isWrongAnswersLoading || isAllUsersLoading;
+  const isCoreDataLoading = isUserProfileLoading || isCountriesLoading || isLandTilesLoading || isAttemptsLoading || isWrongAnswersLoading;
 
   if (isAuthUserLoading) {
     return (
@@ -64,7 +62,7 @@ export default function Home() {
 
   // user is logged in, has a profile, and all data is loaded
   // problemAttempts and wrongAnswers can be null for new users.
-  if (userProfile && countries && landTiles && allUsers && problemAttempts !== undefined && wrongAnswers !== undefined) {
+  if (userProfile && countries && landTiles && problemAttempts !== undefined && wrongAnswers !== undefined) {
     return (
       <div className="relative flex h-screen w-full flex-col items-center bg-background p-4 sm:p-6 md:p-8">
         <GameBoard 
@@ -73,7 +71,6 @@ export default function Home() {
           initialLandTiles={landTiles}
           initialProblemAttempts={problemAttempts || []}
           initialWrongAnswers={wrongAnswers || []}
-          initialAllUsers={allUsers}
         />
       </div>
     );
