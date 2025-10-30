@@ -74,10 +74,6 @@ TileComponent.displayName = "TileComponent";
 
 export default function WorldMap({ landTiles, onTileClick, canConquer, canBuildWall, zoomLevel, currentUser }: WorldMapProps) {
   
-  if (landTiles.length > 0) {
-    console.log('[WorldMap] Rendering with landTiles. Count:', landTiles.length, 'First tile:', landTiles[0]);
-  }
-
   const tilesMap = useMemo(() => {
     const map = new Map<string, ClientTile>();
     landTiles.forEach(tile => {
@@ -138,5 +134,3 @@ export default function WorldMap({ landTiles, onTileClick, canConquer, canBuildW
     </div>
   );
 }
-
-    

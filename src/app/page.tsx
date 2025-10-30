@@ -29,10 +29,9 @@ export default function Home() {
 
   useEffect(() => {
     const fetchInitialData = async () => {
-      if (!firestore || !authUser) return; // Wait for authentication and firestore
+      if (!firestore || !authUser) return;
 
       try {
-        console.log("[page.tsx] Starting to fetch initial data...");
         setIsInitialDataLoading(true);
         
         const [tilesSnapshot, countriesSnapshot, usersSnapshot, attemptsSnapshot, wrongsSnapshot] = await Promise.all([
@@ -43,31 +42,38 @@ export default function Home() {
           getDocs(collection(firestore, 'users', authUser.uid, 'wrong_answers'))
         ]);
 
-        const tilesData = tilesSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as ClientTile[];
-        setInitialLandTiles(tilesData);
-        console.log('[page.tsx] Fetched Tiles. Count:', tilesData.length, 'First tile:', tilesData.length > 0 ? tilesData[0] : 'N/A');
-
+        const rawTiles = tilesSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as (Omit<ClientTile, 'ownerNickname' | 'countryId' | 'countryName' | 'countryColor'> & { id: string });
         const countriesData = countriesSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as Country[];
-        setInitialCountries(countriesData);
-        console.log('[page.tsx] Fetched Countries. Count:', countriesData.length, 'First country:', countriesData.length > 0 ? countriesData[0] : 'N/A');
-        
         const usersData = usersSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as User[];
-        setInitialAllUsers(usersData);
-        console.log('[page.tsx] Fetched Users. Count:', usersData.length, 'First user:', usersData.length > 0 ? usersData[0] : 'N/A');
-
         const attemptsData = attemptsSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as ProblemAttempt[];
-        setProblemAttempts(attemptsData);
-        
         const wrongsData = wrongsSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as WrongAnswer[];
-        setWrongAnswers(wrongsData);
 
+        const userMap = new Map(usersData.map(user => [user.id, user]));
+        const countryMap = new Map(countriesData.map(country => [country.id, country]));
+
+        const enrichedTiles = rawTiles.map(tile => {
+            const owner = tile.ownerId ? userMap.get(tile.ownerId) : null;
+            const country = owner ? countryMap.get(owner.countryId) : null;
+            
+            return {
+                ...tile,
+                ownerNickname: owner?.nickname || null,
+                countryId: owner?.countryId || null,
+                countryName: country?.name || null,
+                countryColor: country?.color || null,
+            };
+        }) as ClientTile[];
+
+        setInitialLandTiles(enrichedTiles);
+        setInitialCountries(countriesData);
+        setInitialAllUsers(usersData);
+        setProblemAttempts(attemptsData);
+        setWrongAnswers(wrongsData);
 
       } catch (error) {
         console.error("Error fetching initial game data: ", error);
-        // Handle error state appropriately, maybe show a toast
       } finally {
         setIsInitialDataLoading(false);
-        console.log("[page.tsx] Finished fetching initial data.");
       }
     };
     
@@ -134,5 +140,3 @@ export default function Home() {
     </div>
   );
 }
-
-    
