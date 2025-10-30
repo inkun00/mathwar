@@ -101,6 +101,21 @@
             "createdAt": { "type": "string", "format": "date-time" }
         },
         "required": ["requestingCountryId", "requestingCountryName", "targetCountryId", "status", "createdAt"]
+    },
+    "MapEvent": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "MapEvent",
+      "type": "object",
+      "description": "Represents a single change event on the game map. These events are used to broadcast delta updates to clients. TTL should be enabled on this collection.",
+      "properties": {
+        "tileId": { "type": "string", "description": "The document ID of the land_tile that was changed." },
+        "x": { "type": "number", "description": "The x-coordinate of the tile." },
+        "y": { "type": "number", "description": "The y-coordinate of the tile." },
+        "newOwnerId": { "type": "string", "description": "The new owner's user ID. Null if it became unowned." },
+        "newHasWall": { "type": "boolean", "description": "The new wall status of the tile." },
+        "timestamp": { "type": "string", "format": "date-time", "description": "The timestamp of the event." }
+      },
+      "required": ["tileId", "x", "y", "newOwnerId", "newHasWall", "timestamp"]
     }
   },
   "auth": { "providers": ["password"] },
@@ -140,6 +155,10 @@
       {
           "path": "/alliance_requests/{requestId}",
           "definition": { "entityName": "allianceRequest", "schema": { "$ref": "#/backend/entities/AllianceRequest" }, "description": "Requests from countries to form an alliance.", "allow": ["list", "get", "create", "update"] }
+      },
+      {
+        "path": "/map_events/{eventId}",
+        "definition": { "entityName": "mapEvent", "schema": { "$ref": "#/backend/entities/MapEvent" }, "description": "A collection of transient map change events for delta updates. Enable TTL.", "allow": ["list", "create"] }
       }
     ]
   }

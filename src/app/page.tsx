@@ -5,9 +5,9 @@ import GameBoard from "@/components/game-board";
 import Login from "@/components/login";
 import SignUpDetails from "@/components/signup-details";
 import { useUser, useFirestore, useDoc, useCollection, useMemoFirebase } from "@/firebase";
-import { doc, collection } from "firebase/firestore";
+import { doc, collection, getDocs, query, orderBy, limit, startAfter, Timestamp } from "firebase/firestore";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { User, Country, ClientTile, ProblemAttempt, WrongAnswer } from "@/lib/types";
+import type { User, Country, ClientTile, ProblemAttempt, WrongAnswer, MapEvent } from "@/lib/types";
 
 export default function Home() {
   const { user: authUser, isUserLoading: isAuthUserLoading } = useUser();
@@ -16,20 +16,50 @@ export default function Home() {
   // Data fetching hooks
   const userDocRef = useMemoFirebase(() => (firestore && authUser) ? doc(firestore, 'users', authUser.uid) : null, [firestore, authUser]);
   const countriesQuery = useMemoFirebase(() => firestore ? collection(firestore, 'countries') : null, [firestore]);
-  const landTilesQuery = useMemoFirebase(() => firestore ? collection(firestore, 'land_tiles') : null, [firestore]);
   const problemAttemptsQuery = useMemoFirebase(() => (firestore && authUser) ? collection(firestore, 'problem_attempts', authUser.uid, 'attempts') : null, [firestore, authUser]);
   const wrongAnswersQuery = useMemoFirebase(() => (firestore && authUser) ? collection(firestore, 'users', authUser.uid, 'wrong_answers') : null, [firestore, authUser]);
   const allUsersQuery = useMemoFirebase(() => firestore ? collection(firestore, 'users') : null, [firestore]);
+
+  const [initialLandTiles, setInitialLandTiles] = useState<ClientTile[]>([]);
+  const [isLandTilesLoading, setIsLandTilesLoading] = useState(true);
+
+  // Fetch all land_tiles once on initial load
+  useEffect(() => {
+    const fetchTiles = async () => {
+      if (!firestore) return;
+      try {
+        setIsLandTilesLoading(true);
+        const querySnapshot = await getDocs(collection(firestore, "land_tiles"));
+        const tiles = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as ClientTile[];
+        setInitialLandTiles(tiles);
+      } catch (error) {
+        console.error("Error fetching initial land tiles: ", error);
+      } finally {
+        setIsLandTilesLoading(false);
+      }
+    };
+    fetchTiles();
+  }, [firestore]);
   
+  // Real-time listeners for everything else
   const { data: userProfile, isLoading: isUserProfileLoading } = useDoc<User>(userDocRef);
   const { data: countries, isLoading: isCountriesLoading } = useCollection<Country>(countriesQuery);
-  const { data: landTiles, isLoading: isLandTilesLoading } = useCollection<ClientTile>(landTilesQuery);
   const { data: problemAttempts, isLoading: isAttemptsLoading } = useCollection<ProblemAttempt>(problemAttemptsQuery);
   const { data: wrongAnswers, isLoading: isWrongAnswersLoading } = useCollection<WrongAnswer>(wrongAnswersQuery);
   const { data: allUsers, isLoading: isAllUsersLoading } = useCollection<User>(allUsersQuery);
+  
+  // Listen for real-time map events
+  const mapEventsQuery = useMemoFirebase(() => {
+    if (!firestore) return null;
+    // Only listen for events that happened in the last minute to avoid loading a huge history
+    const oneMinuteAgo = Timestamp.fromMillis(Date.now() - 60000);
+    return query(collection(firestore, 'map_events'), orderBy('timestamp', 'desc'), limit(50));
+  }, [firestore]);
+  const { data: mapEvents, isLoading: isMapEventsLoading } = useCollection<MapEvent>(mapEventsQuery);
+
 
   // Derived loading state
-  const isCoreDataLoading = isUserProfileLoading || isCountriesLoading || isLandTilesLoading || isAttemptsLoading || isWrongAnswersLoading || isAllUsersLoading;
+  const isCoreDataLoading = isUserProfileLoading || isCountriesLoading || isLandTilesLoading || isAttemptsLoading || isWrongAnswersLoading || isAllUsersLoading || isMapEventsLoading;
 
   if (isAuthUserLoading) {
     return (
@@ -63,17 +93,17 @@ export default function Home() {
   }
 
   // user is logged in, has a profile, and all data is loaded
-  // problemAttempts and wrongAnswers can be null for new users.
-  if (userProfile && countries && landTiles && allUsers && problemAttempts !== undefined && wrongAnswers !== undefined) {
+  if (userProfile && countries && initialLandTiles && allUsers && problemAttempts !== undefined && wrongAnswers !== undefined && mapEvents !== undefined) {
     return (
       <div className="relative flex h-screen w-full flex-col items-center bg-background p-4 sm:p-6 md:p-8">
         <GameBoard 
           currentUser={userProfile}
           initialCountries={countries}
-          initialLandTiles={landTiles}
+          initialLandTiles={initialLandTiles}
           initialProblemAttempts={problemAttempts || []}
           initialWrongAnswers={wrongAnswers || []}
           initialAllUsers={allUsers || []}
+          mapEvents={mapEvents || []}
         />
       </div>
     );

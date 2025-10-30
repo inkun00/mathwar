@@ -52,6 +52,17 @@ export interface ClientTile {
   hasWall: boolean;
 }
 
+export interface MapEvent {
+  id: string;
+  tileId: string;
+  x: number;
+  y: number;
+  newOwnerId: string | null;
+  newHasWall: boolean;
+  timestamp: any;
+}
+
+
 export type MapData = ClientTile[][];
 
 export type ProblemType = 'decimal' | 'fraction' | 'conversion' | 'mixed';
