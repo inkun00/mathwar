@@ -2,39 +2,39 @@
 
 import { firebaseConfig } from '@/firebase/config';
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { getFirestore, enableIndexedDbPersistence } from 'firebase/firestore'
+import { getAuth, Auth } from 'firebase/auth';
+import { getFirestore, enableIndexedDbPersistence, Firestore } from 'firebase/firestore'
+
+let firebaseApp: FirebaseApp;
+let auth: Auth;
+let firestore: Firestore;
 
 // IMPORTANT: DO NOT MODIFY THIS FUNCTION
 export function initializeFirebase() {
-  if (!getApps().length) {
-    const firebaseApp = initializeApp(firebaseConfig);
-    
-    const firestore = getFirestore(firebaseApp);
-    // Enable offline persistence
-    enableIndexedDbPersistence(firestore)
-      .catch((err) => {
-        if (err.code === 'failed-precondition') {
-          console.warn('Firestore persistence failed: Multiple tabs open, persistence can only be enabled in one tab at a time.');
-        } else if (err.code === 'unimplemented') {
-          console.warn('Firestore persistence failed: The current browser does not support all of the features required to enable persistence.');
-        }
-      });
-      
-    return getSdks(firebaseApp, firestore);
+  if (getApps().length === 0) {
+    firebaseApp = initializeApp(firebaseConfig);
+    auth = getAuth(firebaseApp);
+    firestore = getFirestore(firebaseApp);
+
+    try {
+      enableIndexedDbPersistence(firestore)
+        .catch((err) => {
+          if (err.code === 'failed-precondition') {
+            console.warn('Firestore persistence failed: Multiple tabs open, persistence can only be enabled in one tab at a time.');
+          } else if (err.code === 'unimplemented') {
+            console.warn('Firestore persistence failed: The current browser does not support all of the features required to enable persistence.');
+          }
+        });
+    } catch (e) {
+        console.warn('Failed to enable persistence', e);
+    }
+  } else {
+    firebaseApp = getApp();
+    auth = getAuth(firebaseApp);
+    firestore = getFirestore(firebaseApp);
   }
 
-  const app = getApp();
-  const firestore = getFirestore(app);
-  return getSdks(app, firestore);
-}
-
-export function getSdks(firebaseApp: FirebaseApp, firestore: ReturnType<typeof getFirestore>) {
-  return {
-    firebaseApp,
-    auth: getAuth(firebaseApp),
-    firestore: firestore
-  };
+  return { firebaseApp, auth, firestore };
 }
 
 export * from './provider';
