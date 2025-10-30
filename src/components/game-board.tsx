@@ -64,6 +64,8 @@ export default function GameBoard({
   const problemAttempts = initialProblemAttempts; 
   const wrongAnswers = initialWrongAnswers;
 
+  // Since allUsers is now passed from page.tsx and updated via its state,
+  // we can derive the liveCurrentUser directly.
   const liveCurrentUser = useMemo(() => allUsers.find(u => u.id === currentUser.id) || currentUser, [allUsers, currentUser]);
 
   // --- Component State ---
@@ -346,9 +348,27 @@ export default function GameBoard({
         return;
       }
       
-      const originalOwnerId = clickedTile?.ownerId || null;
-
-      if (!clickedTile) {
+      if (clickedTile) {
+          // Invade another player's tile or do nothing if it's ours
+          if(clickedTile.ownerId !== liveCurrentUser.id) {
+              const owner = allUsers.find(u => u.id === clickedTile.ownerId);
+              if (owner && owner.countryId === liveCurrentUser.countryId) {
+                  toast({
+                      variant: "default",
+                      title: "공격 불가",
+                      description: "같은 국가 소속의 플레이어는 공격할 수 없습니다.",
+                  });
+              } else {
+                  // This is an invasion
+                  await updateDoc(userRef, { tokens: increment(-1) });
+                  setInvasionTarget({ x, y, id: clickedTile.id, originalOwnerId: clickedTile.ownerId, hasWall: clickedTile.hasWall });
+                  setInvasionWallBreaks(0);
+                  setCurrentProblem(generateMathProblem());
+                  setIsModalOpen(true);
+              }
+          }
+          // If tile owner is current user, do nothing for now.
+      } else {
           // Conquer empty tile
           const tileData = { x, y, ownerId: liveCurrentUser.id, hasWall: false };
 
@@ -359,26 +379,6 @@ export default function GameBoard({
           });
           
           toast({ title: "영토 확장!", description: "새로운 땅을 정복했습니다." });
-
-      } else if (originalOwnerId !== liveCurrentUser.id) {
-          // Invade another player's tile
-          const owner = allUsers.find(u => u.id === originalOwnerId);
-          if (owner && owner.countryId === liveCurrentUser.countryId) {
-              toast({
-                  variant: "default",
-                  title: "공격 불가",
-                  description: "같은 국가 소속의 플레이어는 공격할 수 없습니다.",
-              });
-              setIsProcessingClick(false);
-              return;
-          }
-
-          // Decrease token first, then open modal
-          await updateDoc(userRef, { tokens: increment(-1) });
-          setInvasionTarget({ x, y, id: clickedTile.id, originalOwnerId: originalOwnerId!, hasWall: clickedTile.hasWall });
-          setInvasionWallBreaks(0);
-          setCurrentProblem(generateMathProblem());
-          setIsModalOpen(true);
       }
     } catch (error) {
         console.error("타일 클릭 트랜잭션 실패:", error);
