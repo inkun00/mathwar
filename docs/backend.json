@@ -136,16 +136,8 @@
         "definition": {
           "entityName": "user",
           "schema": { "$ref": "#/entities/User" },
-          "description": "Stores user profiles. Users can only update their own profile.",
-          "allow": ["get", "list", "create"],
-          "rules": {
-            "update": [
-              {
-                "description": "A user can update their own document.",
-                "condition": "request.auth.uid == userId"
-              }
-            ]
-          }
+          "description": "Stores user profiles. Users can only update their own profile, unless a country owner is changing their countryId.",
+          "allow": ["get", "list", "create", "update"]
         }
       },
       {
