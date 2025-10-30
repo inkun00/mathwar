@@ -64,7 +64,7 @@ export default function Home() {
 
   // user is logged in, has a profile, and all data is loaded
   // problemAttempts and wrongAnswers can be null for new users.
-  if (userProfile && countries && landTiles && problemAttempts !== undefined && wrongAnswers !== undefined && allUsers) {
+  if (userProfile && countries && landTiles && allUsers && problemAttempts !== undefined && wrongAnswers !== undefined) {
     return (
       <div className="relative flex h-screen w-full flex-col items-center bg-background p-4 sm:p-6 md:p-8">
         <GameBoard 
