@@ -172,6 +172,9 @@ export default function GameBoard({
     if (!currentUser || !firestore || !authUser) return;
     const userRef = doc(firestore, "users", authUser.uid);
     updateDoc(userRef, { tokens: increment(1) })
+      .then(() => {
+         setIsModalOpen(false); // Close modal on success for gaining token.
+      })
       .catch(error => {
         const permissionError = new FirestorePermissionError({
             path: userRef.path,
@@ -445,22 +448,17 @@ export default function GameBoard({
   }
 
   const handleProblemModalClose = (open: boolean) => {
-    setIsModalOpen(open);
+    // This function now only handles the state of the modal.
+    // The logic for cancelling an invasion is removed.
     if (!open) {
-      // This logic now only runs for explicit cancellations (e.g., closing with "X")
+      // If modal is closing, reset invasion target state regardless of why it's closing.
+      // This prevents stale state if a new problem is opened for a different reason.
       if (invasionTarget) {
-        if (authUser && currentUser) {
-            const userRef = doc(firestore, 'users', authUser.uid);
-            updateDoc(userRef, { tokens: increment(1) })
-              .catch(error => {
-                errorEmitter.emit('permission-error', new FirestorePermissionError({ path: userRef.path, operation: 'update', requestResourceData: { tokens: increment(1) } }));
-              });
-        }
         setInvasionTarget(null);
         setInvasionWallBreaks(0);
-        toast({ title: "침략 취소", description: "사용한 토큰이 반환되었습니다.", variant: "default" });
       }
     }
+    setIsModalOpen(open);
   }
 
 
@@ -473,6 +471,9 @@ export default function GameBoard({
         title: '침략 실패!',
         description: '문제를 틀려 영토 획득에 실패했습니다.',
       });
+      // Reset invasion state on wrong answer during invasion
+      setInvasionTarget(null);
+      setInvasionWallBreaks(0);
     } else {
       addWrongAnswer(firestore, authUser.uid, problem);
     }

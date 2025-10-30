@@ -156,18 +156,16 @@ export default function ProblemModal({
           if (hasWall && invasionWallBreaks < 1) {
             toastTitle = '성벽 돌파!';
             toastDescription = '첫 번째 방어를 뚫었습니다! 한 문제 더 남았습니다.';
-            await onCorrectAnswer(problem); // This might trigger a state change to show a new problem.
+            // This is a multi-step invasion, so we call onCorrectAnswer but don't close the modal.
+            // The parent component (GameBoard) is responsible for providing the next problem.
+            await onCorrectAnswer(problem); 
             setAnswers(Array(numInputs).fill('')); 
             setIsSubmitting(false);
-            return; // Important: Don't close the modal yet.
+            return; 
           } else {
             toastTitle = '침략 성공!';
             toastDescription = '적의 영토를 획득했습니다.';
-            await onCorrectAnswer(problem); // This will close the modal in GameBoard.
           }
-        } else {
-           await onCorrectAnswer(problem);
-           onOpenChange(false); // Close for non-invasion correct answer
         }
   
         toast({
@@ -177,6 +175,9 @@ export default function ProblemModal({
             'border-green-500 bg-green-50 text-green-700 dark:bg-green-900/50 dark:text-green-300 dark:border-green-700',
           action: <CheckCircle className="text-green-500" />,
         });
+        
+        // Let the parent component handle closing the modal.
+        await onCorrectAnswer(problem);
   
       } else {
         toast({
@@ -202,12 +203,8 @@ export default function ProblemModal({
         title: "오류",
         description: "답변을 제출하는 중 오류가 발생했습니다.",
       });
+      setIsSubmitting(false);
       onOpenChange(false);
-    } finally {
-        // Only set isSubmitting to false if it was not a successful action that closes the modal
-        if (!isAnswerCorrect(answers, problem?.answer || [])) {
-             setIsSubmitting(false);
-        }
     }
   };
   
