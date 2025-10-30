@@ -11,11 +11,12 @@ import FlagDisplay from "./flag-display";
 interface WorldMapProps {
   displayMapData: ClientTile[];
   countries: Country[];
+  users: User[];
   onTileClick: (x: number, y: number) => void;
   canConquer: (tile: ClientTile) => boolean;
   canBuildWall: (tile: ClientTile) => boolean;
   zoomLevel: number;
-  currentUser: User; // We need this to determine user's country
+  currentUser: User;
 }
 
 const TileComponent = React.memo(({ 
@@ -76,42 +77,25 @@ const TileComponent = React.memo(({
 TileComponent.displayName = "TileComponent";
 
 
-export default function WorldMap({ displayMapData, countries, onTileClick, canConquer, canBuildWall, zoomLevel, currentUser }: WorldMapProps) {
+export default function WorldMap({ displayMapData, countries, users, onTileClick, canConquer, canBuildWall, zoomLevel, currentUser }: WorldMapProps) {
   const countryColorMap = useMemo(() => new Map(countries.map(c => [c.id, c.color])), [countries]);
-  
-  // This map can't be created anymore without allUsers. 
-  // We'll determine color differently.
-  // const userCountryMap = useMemo(() => new Map(users.map(u => [u.id, u.countryId])), [users]);
+  const userCountryMap = useMemo(() => new Map(users.map(u => [u.id, u.countryId])), [users]);
   
   const getTileOwnerColor = (ownerId: string | null): string | null => {
     if (!ownerId) return null;
-    
-    // Simplification: We assume if a tile has an owner, it belongs to the current user's country
-    // for coloring purposes. This is a limitation of not having the `allUsers` list.
-    const ownerCountry = countries.find(c => c.id === currentUser.countryId);
-    if(ownerId === currentUser.id){
-       return ownerCountry?.color || null;
-    }
-    
-    // For other users, we can't easily find their country. 
-    // We can assign a default color or leave it blank.
-    return '#888888'; // A neutral grey for other players
+    const ownerCountryId = userCountryMap.get(ownerId);
+    if (!ownerCountryId) return '#888888'; // Fallback for users without a country
+    return countryColorMap.get(ownerCountryId) || '#888888'; // Fallback for country without a color
   };
 
   const getTooltipContent = (tile: ClientTile): React.ReactNode => {
     if (!isLand(tile.x, tile.y)) return null;
     if (!tile.ownerId) return <p className="text-lg">미개척지</p>;
     
-    let content: string;
-    let country: Country | undefined;
-
-    if (tile.ownerId === currentUser.id) {
-        country = countries.find(c => c.id === currentUser.countryId);
-        content = `${country?.name || '소속 없음'} (${currentUser.nickname})`;
-    } else {
-        // We don't have the owner's details, so we show generic information.
-        content = `다른 플레이어의 영토`;
-    }
+    const owner = users.find(u => u.id === tile.ownerId);
+    const country = countries.find(c => c.id === owner?.countryId);
+    
+    let content = owner ? `${country?.name || '소속 없음'} (${owner.nickname})` : '알 수 없는 소유자';
 
     if (tile.hasWall) {
       content += ' - 성벽';

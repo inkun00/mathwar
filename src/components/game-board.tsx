@@ -6,7 +6,7 @@ import { generateMathProblem, isAdjacent, canConquer as canConquerLogic } from "
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { ZoomIn, ZoomOut } from "lucide-react";
-import { useFirestore, useUser, errorEmitter, FirestorePermissionError, useCollection, useMemoFirebase } from "@/firebase";
+import { useFirestore, useUser, errorEmitter, FirestorePermissionError } from "@/firebase";
 import { doc, updateDoc, writeBatch, increment, collection, arrayUnion, runTransaction, getDocs, addDoc, query, where, documentId, getDoc, serverTimestamp } from "firebase/firestore";
 import { addWrongAnswer } from "@/firebase/firestore/data";
 
@@ -22,6 +22,7 @@ interface GameBoardProps {
   initialLandTiles: ClientTile[];
   initialProblemAttempts: ProblemAttempt[];
   initialWrongAnswers: WrongAnswer[];
+  initialAllUsers: User[];
 }
 
 export default function GameBoard({ 
@@ -29,7 +30,8 @@ export default function GameBoard({
   initialCountries, 
   initialLandTiles,
   initialProblemAttempts,
-  initialWrongAnswers
+  initialWrongAnswers,
+  initialAllUsers
 }: GameBoardProps) {
   const firestore = useFirestore();
   const { user: authUser } = useUser();
@@ -154,10 +156,31 @@ export default function GameBoard({
     const remainingTiles = flatLandTiles.filter(tile => tile.ownerId === originalOwnerId).length;
 
     if (remainingTiles === 1 && conquerorId) { // The last tile was just conquered
-      // This part requires a list of all users to find the original owner's countryId.
-      // Since we removed the allUsers query, this logic is currently non-functional and would need a refactor,
-      // for example, by passing a map of user-to-country from the server or another optimized query.
-      console.warn("Could not execute handleTerritoryCut: `allUsers` data is not available.");
+      const originalOwner = initialAllUsers.find(u => u.id === originalOwnerId);
+      if (!originalOwner) return;
+
+      const conqueror = initialAllUsers.find(u => u.id === conquerorId);
+      if (!conqueror || !conqueror.countryId) return;
+
+      const conquerorCountry = initialCountries.find(c => c.id === conqueror.countryId);
+      if (!conquerorCountry) return;
+
+      const countryRef = doc(firestore, "countries", originalOwner.countryId);
+      const conquerorUserRef = doc(firestore, "users", conqueror.id);
+      
+      try {
+        await runTransaction(firestore, async (transaction) => {
+          transaction.update(countryRef, { demised: true });
+          transaction.update(conquerorUserRef, { conqueredCountries: arrayUnion(originalOwner.countryId) });
+        });
+        toast({
+            title: "국가 정복!",
+            description: `상대 국가의 마지막 영토를 점령하여 정복했습니다!`,
+            duration: 5000,
+        });
+      } catch (e) {
+          console.error("국가 정복 트랜잭션 실패:", e);
+      }
     }
   };
 
@@ -253,9 +276,12 @@ export default function GameBoard({
         return;
       }
       
-      // We need `allUsers` to check for countryman. Since it's removed, this check is disabled.
-      // const owner = allUsers.find(u => u.id === clickedTile.ownerId);
-      // if (owner && owner.countryId === currentUser.countryId) { ... }
+      const owner = initialAllUsers.find(u => u.id === clickedTile.ownerId);
+      if (owner && owner.countryId === currentUser.countryId) {
+        toast({ variant: "destructive", title: "공격 불가", description: "같은 국가의 영토는 공격할 수 없습니다." });
+        setIsProcessingClick(false);
+        return;
+      }
       
       // This is an invasion
       const tokenUpdateData = { tokens: increment(-1) };
@@ -277,7 +303,7 @@ export default function GameBoard({
       const canPlace = canConquerLogic(
           { x, y, id: '', ownerId: null, hasWall: false },
           currentUser,
-          [], // Pass empty array for allUsers
+          initialAllUsers, 
           userCountryTiles,
           flatLandTiles
       );
@@ -348,7 +374,7 @@ export default function GameBoard({
     if (!currentUser || (currentUser.tokens ?? 0) <= 0 || isProcessingClick || isBuildingWall) {
       return false;
     }
-    return canConquerLogic(tile, currentUser, [], userCountryTiles, flatLandTiles);
+    return canConquerLogic(tile, currentUser, initialAllUsers, userCountryTiles, flatLandTiles);
   };
   
   const canBuildWall = (tile: ClientTile) => {
@@ -412,7 +438,7 @@ export default function GameBoard({
         onSolveProblemClick={handleSolveProblemForToken} 
         countries={initialCountries}
         problemAttempts={problemAttempts}
-        users={[]}
+        users={initialAllUsers}
         wrongAnswers={initialWrongAnswers}
         isBuildingWall={isBuildingWall}
         onToggleWallBuilding={handleToggleWallBuilding}
@@ -422,6 +448,7 @@ export default function GameBoard({
         <WorldMap 
             displayMapData={flatLandTiles}
             countries={initialCountries} 
+            users={initialAllUsers}
             onTileClick={handleTileClick} 
             canConquer={canConquer}
             canBuildWall={canBuildWall}
