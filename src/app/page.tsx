@@ -44,7 +44,6 @@ export default function Home() {
         ]);
 
         const tilesData = tilesSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as ClientTile[];
-        console.log('[page.tsx] Fetched initial data. Tile count:', tilesData.length);
         setInitialLandTiles(tilesData);
         
         setInitialCountries(countriesSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as Country[]);

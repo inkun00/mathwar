@@ -23,33 +23,33 @@ const TileComponent = React.memo(({
   isWallBuildable,
   tooltipContent
 }: {
-  tile: ClientTile;
+  tile: ClientTile | null;
   onClick: () => void;
   isConquerable: boolean;
   isWallBuildable: boolean;
   tooltipContent: React.ReactNode;
 }) => {
-  const isLandTile = isLand(tile.x, tile.y);
+  const isLandTile = !!tile;
 
   const tileClasses = cn(
     "relative aspect-square transition-all duration-300 ease-in-out border border-border/10",
     {
-      'bg-[#f0e6d2]': isLandTile && !tile.countryColor,
-      'hover:bg-[#e6dac8]': isLandTile && !tile.countryColor && isConquerable,
+      'bg-[#f0e6d2]': isLandTile && !tile?.countryColor,
+      'hover:bg-[#e6dac8]': isLandTile && !tile?.countryColor && isConquerable,
       'bg-[#aadaff]': !isLandTile, 
     },
-    { 'shadow-inner': tile.countryColor },
+    { 'shadow-inner': tile?.countryColor },
     isConquerable && "cursor-pointer ring-2 ring-offset-1 ring-offset-background ring-primary/70 z-10 hover:brightness-110",
     isWallBuildable && "cursor-pointer ring-2 ring-offset-1 ring-offset-background ring-yellow-500 z-10 hover:brightness-110",
-    tile.hasWall && "border-2 border-slate-700 dark:border-slate-300 z-5"
+    tile?.hasWall && "border-2 border-slate-700 dark:border-slate-300 z-5"
   );
 
   const tileElement = (
      <div
       className={tileClasses}
-      style={{ backgroundColor: tile.countryColor ?? undefined }}
+      style={{ backgroundColor: tile?.countryColor ?? undefined }}
       onClick={(isConquerable || isWallBuildable) ? onClick : undefined}
-      aria-label={`타일 ${tile.x}, ${tile.y}. ${tile.countryColor ? `플레이어 소유.` : '주인 없음.'} ${isConquerable ? '정복하려면 클릭하세요.' : ''}`}
+      aria-label={`타일. ${tile?.countryColor ? `플레이어 소유.` : '주인 없음.'} ${isConquerable ? '정복하려면 클릭하세요.' : ''}`}
     >
     </div>
   )
@@ -73,10 +73,17 @@ TileComponent.displayName = "TileComponent";
 
 
 export default function WorldMap({ landTiles, onTileClick, canConquer, canBuildWall, zoomLevel, currentUser }: WorldMapProps) {
-  console.log('[WorldMap] Rendering with landTiles prop length:', landTiles.length);
   
-  const getTooltipContent = (tile: ClientTile): React.ReactNode => {
-    if (!isLand(tile.x, tile.y)) return null;
+  const tilesMap = useMemo(() => {
+    const map = new Map<string, ClientTile>();
+    landTiles.forEach(tile => {
+      map.set(`${tile.x},${tile.y}`, tile);
+    });
+    return map;
+  }, [landTiles]);
+  
+  const getTooltipContent = (tile: ClientTile | null): React.ReactNode => {
+    if (!tile) return null;
     if (!tile.ownerId) return <p className="text-lg">미개척지</p>;
     
     let content = tile.countryName ? `${tile.countryName} (${tile.ownerNickname})` : (tile.ownerNickname || '알 수 없는 소유자');
@@ -85,8 +92,6 @@ export default function WorldMap({ landTiles, onTileClick, canConquer, canBuildW
       content += ' - 성벽';
     }
 
-    // Since flag data is not on the tile, we can't display it here without prop-drilling or context.
-    // For now, we will omit the flag from the tooltip.
     return (
         <div className="flex items-center gap-2">
             <p className="text-lg">{content}</p>
@@ -94,18 +99,6 @@ export default function WorldMap({ landTiles, onTileClick, canConquer, canBuildW
     );
   };
   
-  const mapGrid = useMemo(() => {
-    const grid: (ClientTile | { x: number; y: number; id: string; ownerId: null; hasWall: boolean})[][] = Array.from({ length: MAP_HEIGHT }, (_, y) =>
-        Array.from({ length: MAP_WIDTH }, (_, x) => ({ x, y, id: `${x}-${y}`, ownerId: null, hasWall: false }))
-    );
-    landTiles.forEach(tile => {
-        if (grid[tile.y] && grid[tile.y][tile.x]) {
-            grid[tile.y][tile.x] = tile;
-        }
-    });
-    return grid.flat();
-  }, [landTiles]);
-
   return (
     <div className="relative h-full w-full max-w-7xl overflow-auto rounded-lg border bg-card/80 p-2 shadow-inner backdrop-blur-sm md:p-4">
       <div 
@@ -116,16 +109,27 @@ export default function WorldMap({ landTiles, onTileClick, canConquer, canBuildW
           transformOrigin: 'center center',
         }}
       >
-        {mapGrid.map((tile) => (
-          <TileComponent
-            key={`${tile.x}-${tile.y}`}
-            tile={tile}
-            onClick={() => onTileClick(tile.x, tile.y)}
-            isConquerable={canConquer(tile)}
-            isWallBuildable={canBuildWall(tile)}
-            tooltipContent={getTooltipContent(tile)}
-          />
-        ))}
+        {Array.from({ length: MAP_HEIGHT * MAP_WIDTH }).map((_, index) => {
+          const x = index % MAP_WIDTH;
+          const y = Math.floor(index / MAP_WIDTH);
+          
+          if (!isLand(x,y)) {
+             return <TileComponent key={index} tile={null} onClick={()=>{}} isConquerable={false} isWallBuildable={false} tooltipContent={null} />
+          }
+
+          const tile = tilesMap.get(`${x},${y}`) || { id: `${x}-${y}`, x, y, ownerId: null, hasWall: false };
+
+          return (
+            <TileComponent
+              key={index}
+              tile={tile}
+              onClick={() => onTileClick(tile.x, tile.y)}
+              isConquerable={canConquer(tile)}
+              isWallBuildable={canBuildWall(tile)}
+              tooltipContent={getTooltipContent(tile)}
+            />
+          );
+        })}
       </div>
     </div>
   );

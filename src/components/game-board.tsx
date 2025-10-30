@@ -39,7 +39,6 @@ export default function GameBoard({
   const { user: authUser } = useUser();
   const { toast } = useToast();
 
-  console.log('[GameBoard] Received initialLandTiles prop with length:', initialLandTiles.length);
   
   // --- Component State ---
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -62,7 +61,6 @@ export default function GameBoard({
   useEffect(() => {
     // This effect ensures that the internal state is updated if the initial props change
     // after the component has already mounted (e.g., due to async data fetching in parent).
-    console.log('[GameBoard] useEffect for initialLandTiles is running. New prop length:', initialLandTiles.length);
     setLandTiles(initialLandTiles);
   }, [initialLandTiles]);
 
@@ -501,8 +499,6 @@ export default function GameBoard({
       </div>
     );
   }
-
-  console.log('[GameBoard] Rendering with landTiles state length:', landTiles.length);
 
   return (
     <div className="flex w-full flex-grow flex-col gap-6">
