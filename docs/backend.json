@@ -149,7 +149,7 @@
             "$ref": "#/backend/entities/LandTile"
           },
           "description": "Stores all land tiles on the game map. Accessible to all authenticated users for gameplay.",
-           "allow": ["list", "get", "create", "update"]
+           "allow": ["list", "get", "write"]
         }
       },
       {
