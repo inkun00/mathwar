@@ -27,6 +27,14 @@ const shuffleArray = <T,>(array: T[]): T[] => {
   return newArray;
 };
 const normalizeFraction = (whole: number, num: number, den: number): {whole: number, num: number, den: number} => {
+    if (num < 0) { // Handle cases where numerator becomes negative after subtraction
+      let borrowed = Math.ceil(Math.abs(num) / den);
+      return {
+        whole: whole - borrowed,
+        num: (num % den + den) % den,
+        den: den,
+      }
+    }
     if (num >= den) {
         return {
             whole: whole + Math.floor(num / den),
@@ -41,7 +49,7 @@ const normalizeFraction = (whole: number, num: number, den: number): {whole: num
 // --- React Component Utilities for Problems ---
 
 // A placeholder component to be replaced by a real Input
-export const AnswerInput = () => <div data-answer-input="true" style={{display: 'none'}} />;
+export const AnswerInput = () => <span data-answer-input="true" style={{display: 'none'}} />;
 
 
 interface FractionProps {
@@ -63,7 +71,7 @@ const Fraction = ({
     <span
       className={cn('inline-flex flex-col items-center align-middle mx-1', className)}
     >
-      <span className="border-b border-current px-1">{numElement}</span>
+      <span className="border-b-2 border-current px-1">{numElement}</span>
       {denElement}
     </span>
   );
@@ -166,21 +174,17 @@ const generateMixedFractionSubtractProblem = (withBorrowing: boolean): MathProbl
     const d = randomInt(5, 12);
     const w1 = randomInt(2, 5);
     const w2 = randomInt(1, w1 - 1);
-    let n1, n2, answerWhole, answerNum;
+    let n1, n2;
 
     if (withBorrowing) {
         n1 = randomInt(1, d - 2);
         n2 = randomInt(n1 + 1, d - 1);
-        answerWhole = w1 - 1 - w2;
-        answerNum = (n1 + d) - n2;
     } else {
         n1 = randomInt(2, d - 1);
         n2 = randomInt(1, n1);
-        answerWhole = w1 - w2;
-        answerNum = n1 - n2;
     }
     
-    const { whole, num, den } = normalizeFraction(answerWhole, answerNum, d);
+    const { whole, num, den } = normalizeFraction(w1 - w2, n1 - n2, d);
 
     return {
         problem: (
@@ -263,8 +267,8 @@ const generateIntegerSubtractMixedFractionProblem = (): MathProblem => {
     const w1 = randomInt(3, 6);
     const w2 = randomInt(1, w1 - 2);
     const n2 = randomInt(1, d - 1);
-    const answerWhole = w1 - 1 - w2;
-    const answerNum = d - n2;
+    
+    const { whole, num, den } = normalizeFraction(w1 - w2, -n2, d);
 
     return {
         problem: (
@@ -277,7 +281,7 @@ const generateIntegerSubtractMixedFractionProblem = (): MathProblem => {
                 <Fraction numerator={<AnswerInput />} denominator={<AnswerInput />} />
             </div>
         ),
-        answer: [String(answerWhole), String(answerNum), String(d)],
+        answer: [String(whole), String(num), String(den)],
         type: 'fraction',
         subType: 'fraction-subtract-mixed', // Reusing for logic
         storable: { type: 'fraction', subType: 'fraction-subtract-mixed', operands: [w1, 0, d, w2, n2, d], operator: 'subtract' }
@@ -453,10 +457,10 @@ const generateWordProblem = (): MathProblem => {
 
     return {
       problem: (
-        <p className="text-base text-center leading-relaxed">
+        <div className="text-base text-center leading-relaxed">
           준호는 초콜릿 {total}kg 중에서 친구들에게 {used}kg을 나누어주었습니다. <br />
           준호에게 남은 초콜릿의 무게는 몇 kg인가요? <AnswerInput /> kg
-        </p>
+        </div>
       ),
       answer: [String(answer)],
       type: 'decimal',
@@ -508,11 +512,11 @@ const generateVerticalCalculationProblem = (): MathProblem => {
   return {
     problem: (
       <div className="font-mono text-xl inline-block text-right leading-tight">
-        <p className="pr-8">{num1.toFixed(2)}</p>
-        <p>
+        <div className="pr-8">{num1.toFixed(2)}</div>
+        <div>
           <span className="mr-2">{operator}</span>
           <span className="pr-8">{num2.toFixed(2)}</span>
-        </p>
+        </div>
         <hr className="border-foreground my-1" />
         <AnswerInput />
       </div>
@@ -563,8 +567,8 @@ const generateTenthsDecompositionProblem = (): MathProblem => {
     return {
         problem: (
             <div className="text-base text-center leading-relaxed">
-                <p>{num1}은 0.1이 <AnswerInput />개이고, {num2}는 0.1이 <AnswerInput />개입니다.</p>
-                <p className="mt-2">{num1} + {num2}는 0.1이 모두 <AnswerInput />개이므로 <AnswerInput />입니다.</p>
+                <div>{num1}은 0.1이 <AnswerInput />개이고, {num2}는 0.1이 <AnswerInput />개입니다.</div>
+                <div className="mt-2">{num1} + {num2}는 0.1이 모두 <AnswerInput />개이므로 <AnswerInput />입니다.</div>
             </div>
         ),
         answer: [String(num1_in_0_1), String(num2_in_0_1), String(sum_in_0_1), String(sum)],
@@ -586,7 +590,7 @@ const generateListNavigationProblem = (): MathProblem => {
   return {
     problem: (
       <div className="text-center">
-        <p>다음 카드 중 가장 큰 수와 가장 작은 수의 {op_text}을 구하세요.</p>
+        <div>다음 카드 중 가장 큰 수와 가장 작은 수의 {op_text}을 구하세요.</div>
         <div className="flex justify-center gap-2 my-2">
           {nums.map((n, index) => (
             <div key={`${n}-${index}`} className="p-3 border rounded bg-gray-100 font-mono">
@@ -594,7 +598,7 @@ const generateListNavigationProblem = (): MathProblem => {
             </div>
           ))}
         </div>
-        <p>답: <AnswerInput /></p>
+        <div>답: <AnswerInput /></div>
       </div>
     ),
     answer: [String(answer)],
@@ -612,11 +616,11 @@ const generateMultiStepWordProblem = (): MathProblem => {
 
   return {
     problem: (
-      <p className="text-base text-center leading-relaxed">
+      <div className="text-base text-center leading-relaxed">
         바구니의 무게는 {container.toFixed(2)}kg 입니다. <br />
         이 바구니에 {item1.toFixed(2)}kg짜리 사과와 {item2.toFixed(2)}kg짜리 오렌지를 담았습니다. <br />
         과일이 담긴 바구니의 총 무게는 얼마인가요? <AnswerInput /> kg
-      </p>
+      </div>
     ),
     answer: [String(answer)],
     type: 'decimal',
@@ -636,8 +640,8 @@ const generateDecompositionProblem = (): MathProblem => {
     return {
         problem: (
             <div className="text-base text-center leading-relaxed">
-                <p>{num1}은 0.01이 <AnswerInput />개이고, {num2}는 0.01이 <AnswerInput />개입니다.</p>
-                <p className="mt-2">{num1}+{num2}는 0.01이 모두 <AnswerInput />개이므로 <AnswerInput />입니다.</p>
+                <div>{num1}은 0.01이 <AnswerInput />개이고, {num2}는 0.01이 <AnswerInput />개입니다.</div>
+                <div className="mt-2">{num1}+{num2}는 0.01이 모두 <AnswerInput />개이므로 <AnswerInput />입니다.</div>
             </div>
         ),
         answer: [String(num1_in_0_01), String(num2_in_0_01), String(sum_in_0_01), String(sum)],
