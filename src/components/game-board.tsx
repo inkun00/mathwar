@@ -158,10 +158,6 @@ export default function GameBoard({
     const userRef = doc(firestore, "users", authUser.uid);
     const updateData = { tokens: increment(1) };
     updateDoc(userRef, updateData)
-     .then(() => {
-        // Optimistically update local state
-        setCurrentUser(prev => ({ ...prev!, tokens: (prev?.tokens ?? 0) + 1 }));
-      })
       .catch(error => {
         const permissionError = new FirestorePermissionError({
             path: userRef.path,
@@ -399,7 +395,6 @@ export default function GameBoard({
           });
           errorEmitter.emit('permission-error', permissionError);
           toast({ variant: "destructive", title: "확장 오류", description: e.message || "영토를 확장하는 중 오류가 발생했습니다." });
-          setIsProcessingClick(false); // Unlock on failure
       } finally {
         // We do not set isProcessingClick to false here for empty tiles.
         // It will be handled by the useEffect that listens to mapEvents.
