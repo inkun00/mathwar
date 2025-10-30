@@ -16,14 +16,16 @@ export default function Home() {
   // --- Data Fetching ---
   const userDocRef = useMemoFirebase(() => (firestore && authUser) ? doc(firestore, 'users', authUser.uid) : null, [firestore, authUser]);
   const mapEventsQuery = useMemoFirebase(() => (firestore && authUser) ? query(collection(firestore, 'map_events'), orderBy('timestamp', 'desc'), limit(50)) : null, [firestore, authUser]);
+  const problemAttemptsQuery = useMemoFirebase(() => (firestore && authUser) ? query(collection(firestore, 'problem_attempts', authUser.uid, 'attempts'), orderBy('timestamp', 'desc')) : null, [firestore, authUser]);
 
   const { data: userProfile, isLoading: isUserProfileLoading } = useDoc<User>(userDocRef);
   const { data: mapEvents, isLoading: isMapEventsLoading } = useCollection<MapEvent>(mapEventsQuery);
+  const { data: problemAttempts, isLoading: isProblemAttemptsLoading } = useCollection<ProblemAttempt>(problemAttemptsQuery);
+  
 
   const [initialLandTiles, setInitialLandTiles] = useState<ClientTile[]>([]);
   const [initialCountries, setInitialCountries] = useState<Country[]>([]);
   const [initialAllUsers, setInitialAllUsers] = useState<User[]>([]);
-  const [problemAttempts, setProblemAttempts] = useState<ProblemAttempt[]>([]);
   const [wrongAnswers, setWrongAnswers] = useState<WrongAnswer[]>([]);
   const [isInitialDataLoading, setIsInitialDataLoading] = useState(true);
 
@@ -34,18 +36,16 @@ export default function Home() {
       try {
         setIsInitialDataLoading(true);
         
-        const [tilesSnapshot, countriesSnapshot, usersSnapshot, attemptsSnapshot, wrongsSnapshot] = await Promise.all([
+        const [tilesSnapshot, countriesSnapshot, usersSnapshot, wrongsSnapshot] = await Promise.all([
           getDocs(collection(firestore, "land_tiles")),
           getDocs(collection(firestore, "countries")),
           getDocs(collection(firestore, "users")),
-          getDocs(query(collection(firestore, 'problem_attempts', authUser.uid, 'attempts'), orderBy('timestamp', 'desc'))),
           getDocs(collection(firestore, 'users', authUser.uid, 'wrong_answers'))
         ]);
 
         const rawTiles = tilesSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as (Omit<ClientTile, 'ownerNickname' | 'countryId' | 'countryName' | 'countryColor'> & { id: string });
         const countriesData = countriesSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as Country[];
         const usersData = usersSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as User[];
-        const attemptsData = attemptsSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as ProblemAttempt[];
         const wrongsData = wrongsSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as WrongAnswer[];
 
         const userMap = new Map(usersData.map(user => [user.id, user]));
@@ -53,7 +53,7 @@ export default function Home() {
 
         const enrichedTiles = rawTiles.map(tile => {
             const owner = tile.ownerId ? userMap.get(tile.ownerId) : null;
-            const country = owner ? countryMap.get(owner.countryId) : null;
+            const country = owner?.countryId ? countryMap.get(owner.countryId) : null;
             
             return {
                 ...tile,
@@ -67,7 +67,6 @@ export default function Home() {
         setInitialLandTiles(enrichedTiles);
         setInitialCountries(countriesData);
         setInitialAllUsers(usersData);
-        setProblemAttempts(attemptsData);
         setWrongAnswers(wrongsData);
 
       } catch (error) {
@@ -82,7 +81,7 @@ export default function Home() {
     }
   }, [firestore, authUser]);
 
-  const isCoreDataLoading = isUserProfileLoading || isInitialDataLoading;
+  const isCoreDataLoading = isUserProfileLoading || isInitialDataLoading || isProblemAttemptsLoading;
 
   if (isAuthUserLoading) {
     return (
@@ -114,7 +113,7 @@ export default function Home() {
     );
   }
 
-  if (userProfile && initialLandTiles.length > 0) {
+  if (userProfile && initialLandTiles.length > 0 && problemAttempts) {
     return (
       <div className="relative flex h-screen w-full flex-col items-center bg-background p-4 sm:p-6 md:p-8">
         <GameBoard 

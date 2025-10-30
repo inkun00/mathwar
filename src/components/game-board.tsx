@@ -53,7 +53,6 @@ export default function GameBoard({
   const [landTiles, setLandTiles] = useState<ClientTile[]>([]);
   const [countries, setCountries] = useState(initialCountries);
   const [allUsers, setAllUsers] = useState(initialAllUsers);
-  const [problemAttempts, setProblemAttempts] = useState(initialProblemAttempts);
   
   const userDocRef = useMemoFirebase(() => (firestore && authUser) ? doc(firestore, 'users', authUser.uid) : null, [firestore, authUser]);
   const { data: currentUser } = useDoc<User>(userDocRef, liveCurrentUser);
@@ -487,7 +486,6 @@ export default function GameBoard({
         console.error('문제 풀이 기록 오류:', error);
       }
     );
-     setProblemAttempts(prev => [...prev, { ...newAttempt, id: Math.random().toString(), timestamp: new Date().toISOString() }]);
   }
 
   if (!currentUser) {
@@ -505,7 +503,7 @@ export default function GameBoard({
       <Header 
         currentUser={currentUser} 
         onSolveProblemClick={handleSolveProblemForToken} 
-        problemAttempts={problemAttempts}
+        problemAttempts={initialProblemAttempts}
         isBuildingWall={isBuildingWall}
         onToggleWallBuilding={handleToggleWallBuilding}
       />
