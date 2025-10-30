@@ -117,7 +117,6 @@ export default function GameBoard({
     const updateData = { tokens: increment(1) };
     updateDoc(userRef, updateData)
       .catch(error => {
-        console.error("토큰 획득 실패:", error);
         const permissionError = new FirestorePermissionError({
             path: userRef.path,
             operation: 'update',
@@ -153,10 +152,10 @@ export default function GameBoard({
 
   const handleInvasionSuccess = async () => {
     if (!currentUser || !firestore || !invasionTarget || !authUser) return;
-    
+  
     setIsProcessingClick(true);
     const tileRef = doc(firestore, "land_tiles", invasionTarget.id!);
-    
+  
     if (invasionTarget.hasWall && invasionWallBreaks < 1) {
       setInvasionWallBreaks(1);
       toast({
@@ -168,24 +167,30 @@ export default function GameBoard({
       setIsProcessingClick(false);
       return;
     }
-    
+  
     setInvasionWallBreaks(0);
     const originalOwnerId = invasionTarget.originalOwnerId;
-    
-    try {
-        await updateDoc(tileRef, { ownerId: currentUser.id });
-
+    const updateData = { ownerId: currentUser.id };
+  
+    updateDoc(tileRef, updateData)
+      .then(async () => {
         if (originalOwnerId) {
-            await handleTerritoryCut(originalOwnerId, currentUser.id);
+          await handleTerritoryCut(originalOwnerId, currentUser.id);
         }
-        
-    } catch (error) {
-        console.error("침략 업데이트 실패:", error);
+      })
+      .catch((error) => {
+        const permissionError = new FirestorePermissionError({
+          path: tileRef.path,
+          operation: 'update',
+          requestResourceData: updateData,
+        });
+        errorEmitter.emit('permission-error', permissionError);
         toast({ variant: "destructive", title: "오류", description: "영토를 점령하는 중 오류가 발생했습니다."});
-    } finally {
+      })
+      .finally(() => {
         setInvasionTarget(null);
         setIsProcessingClick(false);
-    }
+      });
   };
 
   const handleTileClick = async (x: number, y: number) => {
@@ -195,89 +200,106 @@ export default function GameBoard({
   
     const clickedTile = flatLandTiles.find(t => t.x === x && t.y === y);
   
-    try {
-      if (isBuildingWall) {
-        if (!clickedTile || clickedTile.ownerId !== currentUser.id || clickedTile.hasWall || (currentUser.walls ?? 0) <= 0) {
-            toast({
-              variant: "destructive",
-              title: "건설 불가",
-              description: "자신의 영토에만 성벽을 건설할 수 있습니다. 성벽이 이미 있거나, 보유한 성벽이 없습니다.",
-            });
-            setIsBuildingWall(false);
-        } else {
-            const tileRef = doc(firestore, 'land_tiles', clickedTile.id!);
-            await writeBatch(firestore)
-                .update(tileRef, { hasWall: true })
-                .update(userRef, { walls: increment(-1) })
-                .commit();
-            toast({ title: "성벽 건설 완료!", description: "영토의 방어도가 상승했습니다."});
-            setIsBuildingWall(false);
-        }
-        setIsProcessingClick(false);
-        return;
+    if (isBuildingWall) {
+      if (!clickedTile || clickedTile.ownerId !== currentUser.id || clickedTile.hasWall || (currentUser.walls ?? 0) <= 0) {
+          toast({
+            variant: "destructive",
+            title: "건설 불가",
+            description: "자신의 영토에만 성벽을 건설할 수 있습니다. 성벽이 이미 있거나, 보유한 성벽이 없습니다.",
+          });
+          setIsBuildingWall(false);
+          setIsProcessingClick(false);
+          return;
       }
-  
-      if ((currentUser.tokens ?? 0) <= 0) {
-        toast({
-          variant: "destructive",
-          title: "토큰이 없습니다!",
-          description: "문제를 풀어 더 많은 확장 토큰을 획득하세요.",
-        });
-        setIsProcessingClick(false);
-        return;
-      }
-      
-      if (clickedTile) { // Conquering an existing tile
-        if (clickedTile.ownerId !== currentUser.id) {
-          const owner = allUsers.find(u => u.id === clickedTile.ownerId);
-          if (owner && owner.countryId === currentUser.countryId) {
-            toast({
-              title: "공격 불가",
-              description: "같은 국가 소속의 플레이어는 공격할 수 없습니다.",
-            });
-          } else {
-            // This is an invasion
-            await updateDoc(userRef, { tokens: increment(-1) });
-            setInvasionTarget({ x, y, id: clickedTile.id, originalOwnerId: clickedTile.ownerId, hasWall: clickedTile.hasWall });
-            setInvasionWallBreaks(0);
-            setCurrentProblem(generateMathProblem());
-            setIsModalOpen(true);
-          }
-        }
-        // If tile owner is current user, do nothing.
-      } else { // Conquering an empty tile
-        const canPlace = canConquerLogic(
-            { x, y, ownerId: null, hasWall: false },
-            currentUser,
-            allUsers,
-            userCountryTiles,
-            flatLandTiles
-        );
-        if (!canPlace) {
-             toast({ variant: "destructive", title: "확장 불가", description: "국가 영토에 인접한 타일만 확장할 수 있습니다." });
-             setIsProcessingClick(false);
-             return;
-        }
 
-        await runTransaction(firestore, async (transaction) => {
-            const newTileRef = doc(collection(firestore, "land_tiles"));
-            transaction.set(newTileRef, { x, y, ownerId: currentUser.id, hasWall: false });
-            transaction.update(userRef, { tokens: increment(-1) });
-        });
-        
-        toast({ title: "영토 확장!", description: "새로운 땅을 정복했습니다." });
+      const tileRef = doc(firestore, 'land_tiles', clickedTile.id!);
+      const wallBatch = writeBatch(firestore);
+      const tileUpdateData = { hasWall: true };
+      const userUpdateData = { walls: increment(-1) };
+
+      wallBatch.update(tileRef, tileUpdateData);
+      wallBatch.update(userRef, userUpdateData);
+
+      wallBatch.commit()
+          .then(() => {
+              toast({ title: "성벽 건설 완료!", description: "영토의 방어도가 상승했습니다."});
+          })
+          .catch((error) => {
+              errorEmitter.emit('permission-error', new FirestorePermissionError({ path: tileRef.path, operation: 'update', requestResourceData: tileUpdateData }));
+              errorEmitter.emit('permission-error', new FirestorePermissionError({ path: userRef.path, operation: 'update', requestResourceData: userUpdateData }));
+              toast({ variant: "destructive", title: "오류", description: "성벽 건설 중 오류가 발생했습니다."});
+          })
+          .finally(() => {
+              setIsBuildingWall(false);
+              setIsProcessingClick(false);
+          });
+      return;
+    }
+  
+    if ((currentUser.tokens ?? 0) <= 0) {
+      toast({
+        variant: "destructive",
+        title: "토큰이 없습니다!",
+        description: "문제를 풀어 더 많은 확장 토큰을 획득하세요.",
+      });
+      setIsProcessingClick(false);
+      return;
+    }
+    
+    if (clickedTile) { // Conquering an existing tile
+      if (clickedTile.ownerId !== currentUser.id) {
+        const owner = allUsers.find(u => u.id === clickedTile.ownerId);
+        if (owner && owner.countryId === currentUser.countryId) {
+          toast({
+            title: "공격 불가",
+            description: "같은 국가 소속의 플레이어는 공격할 수 없습니다.",
+          });
+          setIsProcessingClick(false);
+        } else {
+          // This is an invasion
+          const tokenUpdateData = { tokens: increment(-1) };
+          updateDoc(userRef, tokenUpdateData)
+            .then(() => {
+                setInvasionTarget({ x, y, id: clickedTile.id, originalOwnerId: clickedTile.ownerId, hasWall: clickedTile.hasWall });
+                setInvasionWallBreaks(0);
+                setCurrentProblem(generateMathProblem());
+                setIsModalOpen(true);
+            })
+            .catch((error) => {
+                errorEmitter.emit('permission-error', new FirestorePermissionError({ path: userRef.path, operation: 'update', requestResourceData: tokenUpdateData }));
+                toast({ variant: "destructive", title: "오류", description: "작업을 처리하는 중 오류가 발생했습니다."});
+                setIsProcessingClick(false);
+            });
+        }
+      } else {
+          setIsProcessingClick(false); // clicked own tile
       }
-    } catch (error) {
-      console.error("타일 클릭 트랜잭션 실패:", error);
-      toast({ variant: "destructive", title: "오류", description: "작업을 처리하는 중 오류가 발생했습니다."});
-      if (invasionTarget) {
-        updateDoc(userRef, { tokens: increment(1) });
-        setInvasionTarget(null);
+    } else { // Conquering an empty tile
+      const canPlace = canConquerLogic(
+          { x, y, ownerId: null, hasWall: false },
+          currentUser,
+          allUsers,
+          userCountryTiles,
+          flatLandTiles
+      );
+      if (!canPlace) {
+           toast({ variant: "destructive", title: "확장 불가", description: "국가 영토에 인접한 타일만 확장할 수 있습니다." });
+           setIsProcessingClick(false);
+           return;
       }
-    } finally {
-      if (!isModalOpen) { // Only stop processing if modal isn't about to open
-        setIsProcessingClick(false);
-      }
+
+      runTransaction(firestore, async (transaction) => {
+          const newTileRef = doc(collection(firestore, "land_tiles"));
+          transaction.set(newTileRef, { x, y, ownerId: currentUser.id, hasWall: false });
+          transaction.update(userRef, { tokens: increment(-1) });
+      }).then(() => {
+          toast({ title: "영토 확장!", description: "새로운 땅을 정복했습니다." });
+      }).catch((error) => {
+          console.error("타일 클릭 트랜잭션 실패:", error);
+          toast({ variant: "destructive", title: "오류", description: "작업을 처리하는 중 오류가 발생했습니다."});
+      }).finally(() => {
+          setIsProcessingClick(false);
+      });
     }
   };
   
@@ -289,7 +311,6 @@ export default function GameBoard({
   
     updateDoc(userRef, updateData)
       .catch(error => {
-        console.error("재시작 실패:", error);
         errorEmitter.emit('permission-error', new FirestorePermissionError({ path: userRef.path, operation: 'update', requestResourceData: updateData }));
       });
   };
@@ -328,7 +349,11 @@ export default function GameBoard({
         // If invasion was cancelled, refund the token
         if (authUser) {
             const userRef = doc(firestore, 'users', authUser.uid);
-            updateDoc(userRef, { tokens: increment(1) });
+            const refundData = { tokens: increment(1) };
+            updateDoc(userRef, refundData)
+              .catch(error => {
+                errorEmitter.emit('permission-error', new FirestorePermissionError({ path: userRef.path, operation: 'update', requestResourceData: refundData }));
+              });
         }
         setInvasionTarget(null);
         setInvasionWallBreaks(0);
