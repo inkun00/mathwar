@@ -168,21 +168,19 @@ export default function GameBoard({
     setIsModalOpen(true);
   };
   
-  const handleGainToken = () => {
+  const handleGainToken = async () => {
     if (!currentUser || !firestore || !authUser) return;
     const userRef = doc(firestore, "users", authUser.uid);
-    updateDoc(userRef, { tokens: increment(1) })
-      .then(() => {
-         setIsModalOpen(false); // Close modal on success for gaining token.
-      })
-      .catch(error => {
-        const permissionError = new FirestorePermissionError({
-            path: userRef.path,
-            operation: 'update',
-            requestResourceData: { tokens: increment(1) },
-        });
-        errorEmitter.emit('permission-error', permissionError);
-    });
+    try {
+      await updateDoc(userRef, { tokens: increment(1) });
+    } catch (error) {
+      const permissionError = new FirestorePermissionError({
+          path: userRef.path,
+          operation: 'update',
+          requestResourceData: { tokens: increment(1) },
+      });
+      errorEmitter.emit('permission-error', permissionError);
+    }
   };
 
  const handleTerritoryCut = async (originalOwnerId: string, conquerorId: string | null) => {
@@ -251,7 +249,7 @@ export default function GameBoard({
                 newCountryName: currentUserCountry.name, newCountryColor: currentUserCountry.color,
                 timestamp: serverTimestamp(),
             });
-
+            setIsModalOpen(false); // Close modal on success
         } else {
             console.error("Invasion target ID is missing.");
         }
@@ -263,7 +261,6 @@ export default function GameBoard({
     } finally {
         setInvasionTarget(null);
         setInvasionWallBreaks(0);
-        setIsModalOpen(false);
         setIsProcessingClick(false);
     }
   };
