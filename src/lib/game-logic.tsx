@@ -7,7 +7,8 @@ import type {
   StorableProblem,
 } from './types';
 import { isLand } from './world-map-shape';
-import React, { ReactNode } from 'react';
+import React, from 'react';
+import type { ReactNode } from 'react';
 import { cn } from './utils';
 
 // --- Utility Functions ---
@@ -25,6 +26,16 @@ const shuffleArray = <T,>(array: T[]): T[] => {
   }
   return newArray;
 };
+const normalizeFraction = (whole: number, num: number, den: number): {whole: number, num: number, den: number} => {
+    if (num >= den) {
+        return {
+            whole: whole + Math.floor(num / den),
+            num: num % den,
+            den: den
+        };
+    }
+    return { whole, num, den };
+}
 
 
 // --- React Component Utilities for Problems ---
@@ -83,6 +94,189 @@ const MixedFraction = ({
 };
 
 // --- Problem Generators by Difficulty ---
+
+// --- FRACTION PROBLEMS ---
+
+const generateFractionAddSameDenProblem = (sumOverOne: boolean): MathProblem => {
+    const d = randomInt(5, 12);
+    let n1, n2;
+    let attempts = 0;
+
+    if (sumOverOne) {
+        do {
+            n1 = randomInt(2, d - 1);
+            n2 = randomInt(2, d - 1);
+            attempts++;
+        } while (n1 + n2 < d && attempts < 20);
+    } else {
+         do {
+            n1 = randomInt(1, d - 2);
+            n2 = randomInt(1, d - 1 - n1);
+            attempts++;
+        } while (n1 + n2 >= d && attempts < 20);
+    }
+    
+    const { whole, num, den } = normalizeFraction(0, n1 + n2, d);
+
+    return {
+        problem: (
+            <div className="flex items-center justify-center gap-2">
+                <Fraction numerator={n1} denominator={d} />
+                <span className="text-2xl">+</span>
+                <Fraction numerator={n2} denominator={d} />
+                <span className="text-2xl">=</span>
+                {whole > 0 ? <AnswerInput /> : null} 
+                {num > 0 ? <Fraction numerator={<AnswerInput />} denominator={<AnswerInput />} /> : (whole === 0 ? <AnswerInput /> : null)}
+            </div>
+        ),
+        answer: whole > 0 
+            ? [String(whole), String(num), String(den)] 
+            : [String(num), String(den)],
+        type: 'fraction',
+        subType: sumOverOne ? 'fraction-add-mixed' : 'fraction-add-same-den',
+        storable: { type: 'fraction', subType: sumOverOne ? 'fraction-add-mixed' : 'fraction-add-same-den', operands: [n1, d, n2, d], operator: 'add' }
+    };
+};
+
+const generateFractionSubtractSameDenProblem = (): MathProblem => {
+    const d = randomInt(5, 12);
+    const n1 = randomInt(3, d - 1);
+    const n2 = randomInt(1, n1 - 1);
+    const answerNum = n1 - n2;
+
+    return {
+        problem: (
+            <div className="flex items-center justify-center gap-2">
+                <Fraction numerator={n1} denominator={d} />
+                <span className="text-2xl">-</span>
+                <Fraction numerator={n2} denominator={d} />
+                <span className="text-2xl">=</span>
+                <Fraction numerator={<AnswerInput />} denominator={<AnswerInput />} />
+            </div>
+        ),
+        answer: [String(answerNum), String(d)],
+        type: 'fraction',
+        subType: 'fraction-subtract-same-den',
+        storable: { type: 'fraction', subType: 'fraction-subtract-same-den', operands: [n1, d, n2, d], operator: 'subtract' }
+    };
+};
+
+const generateMixedFractionSubtractProblem = (withBorrowing: boolean): MathProblem => {
+    const d = randomInt(5, 12);
+    const w1 = randomInt(2, 5);
+    const w2 = randomInt(1, w1 - 1);
+    let n1, n2, answerWhole, answerNum;
+
+    if (withBorrowing) {
+        n1 = randomInt(1, d - 2);
+        n2 = randomInt(n1 + 1, d - 1);
+        answerWhole = w1 - 1 - w2;
+        answerNum = (n1 + d) - n2;
+    } else {
+        n1 = randomInt(2, d - 1);
+        n2 = randomInt(1, n1);
+        answerWhole = w1 - w2;
+        answerNum = n1 - n2;
+    }
+    
+    const { whole, num, den } = normalizeFraction(answerWhole, answerNum, d);
+
+    return {
+        problem: (
+            <div className="flex items-center justify-center gap-2">
+                <MixedFraction integer={w1} numerator={n1} denominator={d} />
+                <span className="text-2xl">-</span>
+                <MixedFraction integer={w2} numerator={n2} denominator={d} />
+                <span className="text-2xl">=</span>
+                {whole > 0 ? <AnswerInput /> : null}
+                {num > 0 ? <Fraction numerator={<AnswerInput />} denominator={<AnswerInput />} /> : (whole === 0 ? <AnswerInput /> : null) }
+            </div>
+        ),
+        answer: whole > 0 && num > 0 ? [String(whole), String(num), String(den)] : (whole > 0 ? [String(whole)] : [String(num), String(den)]),
+        type: 'fraction',
+        subType: 'fraction-subtract-mixed',
+        storable: { type: 'fraction', subType: 'fraction-subtract-mixed', operands: [w1, n1, d, w2, n2, d], operator: 'subtract' }
+    };
+};
+
+const generateIntegerSubtractFractionProblem = (): MathProblem => {
+    const d = randomInt(5, 12);
+    const w1 = randomInt(2, 5);
+    const n1 = randomInt(1, d - 1);
+    const answerWhole = w1 - 1;
+    const answerNum = d - n1;
+
+    return {
+        problem: (
+            <div className="flex items-center justify-center gap-2">
+                <span className="text-2xl">{w1}</span>
+                <span className="text-2xl">-</span>
+                <Fraction numerator={n1} denominator={d} />
+                <span className="text-2xl">=</span>
+                <AnswerInput />
+                <Fraction numerator={<AnswerInput />} denominator={<AnswerInput />} />
+            </div>
+        ),
+        answer: [String(answerWhole), String(answerNum), String(d)],
+        type: 'fraction',
+        subType: 'fraction-subtract-from-int',
+        storable: { type: 'fraction', subType: 'fraction-subtract-from-int', operands: [w1, n1, d], operator: 'subtract' }
+    };
+};
+
+const generateMixedFractionAddProblem = (): MathProblem => {
+    const d = randomInt(5, 12);
+    const w1 = randomInt(1, 3);
+    const w2 = randomInt(1, 3);
+    const n1 = randomInt(1, d - 1);
+    const n2 = randomInt(1, d - 1);
+    
+    const { whole, num, den } = normalizeFraction(w1 + w2, n1 + n2, d);
+
+    return {
+        problem: (
+            <div className="flex items-center justify-center gap-2">
+                <MixedFraction integer={w1} numerator={n1} denominator={d} />
+                <span className="text-2xl">+</span>
+                <MixedFraction integer={w2} numerator={n2} denominator={d} />
+                <span className="text-2xl">=</span>
+                {whole > 0 ? <AnswerInput /> : null}
+                {num > 0 ? <Fraction numerator={<AnswerInput />} denominator={<AnswerInput />} /> : null}
+            </div>
+        ),
+        answer: num > 0 ? [String(whole), String(num), String(den)] : [String(whole)],
+        type: 'fraction',
+        subType: 'fraction-add-mixed',
+        storable: { type: 'fraction', subType: 'fraction-add-mixed', operands: [w1, n1, d, w2, n2, d], operator: 'add' }
+    };
+};
+
+const generateIntegerSubtractMixedFractionProblem = (): MathProblem => {
+    const d = randomInt(5, 12);
+    const w1 = randomInt(3, 6);
+    const w2 = randomInt(1, w1 - 2);
+    const n2 = randomInt(1, d - 1);
+    const answerWhole = w1 - 1 - w2;
+    const answerNum = d - n2;
+
+    return {
+        problem: (
+             <div className="flex items-center justify-center gap-2">
+                <span className="text-2xl">{w1}</span>
+                <span className="text-2xl">-</span>
+                <MixedFraction integer={w2} numerator={n2} denominator={d} />
+                <span className="text-2xl">=</span>
+                <AnswerInput />
+                <Fraction numerator={<AnswerInput />} denominator={<AnswerInput />} />
+            </div>
+        ),
+        answer: [String(answerWhole), String(answerNum), String(d)],
+        type: 'fraction',
+        subType: 'fraction-subtract-mixed', // Reusing for logic
+        storable: { type: 'fraction', subType: 'fraction-subtract-mixed', operands: [w1, 0, d, w2, n2, d], operator: 'subtract' }
+    }
+}
+
 
 // --- EASY PROBLEMS ---
 
@@ -465,7 +659,13 @@ export const generateProblemFromData = (data: StorableProblem): MathProblem => {
     'process-decomposition': generateDecompositionProblem,
     'tenths-decomposition': generateTenthsDecompositionProblem,
     'conditional-operation': generatePlaceValueProblem,
-    'diagram': generateDiagramProblem
+    'diagram': generateDiagramProblem,
+    'fraction-add-same-den': () => generateFractionAddSameDenProblem(false),
+    'fraction-add-mixed': generateMixedFractionAddProblem,
+    'fraction-subtract-same-den': generateFractionSubtractSameDenProblem,
+    'fraction-subtract-mixed': () => generateMixedFractionSubtractProblem(false),
+    'fraction-subtract-from-int': generateIntegerSubtractFractionProblem,
+
   };
 
   const generator = problemMap[data.subType] || generateDirectCalculationProblem;
@@ -499,9 +699,34 @@ export const problemNodeToString = (node: React.ReactNode): string => {
 
 // --- Main Problem Generation Function ---
 
-const easyProblems = [generateDirectCalculationProblem, generateUnitConversionConceptProblem, generatePlaceValueProblem, generateFinerUnitConversionConceptProblem];
-const mediumProblems = [generateComparisonProblem, generateWordProblem, generateConditionalProblem, generateVerticalCalculationProblem, generateDiagramProblem, generatePlaceValueRelationshipProblem];
-const hardProblems = [generateListNavigationProblem, generateMultiStepWordProblem, generateDecompositionProblem, generateTenthsDecompositionProblem];
+const easyProblems = [
+    generateDirectCalculationProblem, 
+    generateUnitConversionConceptProblem, 
+    generatePlaceValueProblem, 
+    generateFinerUnitConversionConceptProblem,
+    () => generateFractionAddSameDenProblem(false),
+    generateFractionSubtractSameDenProblem,
+];
+const mediumProblems = [
+    generateComparisonProblem, 
+    generateWordProblem, 
+    generateConditionalProblem, 
+    generateVerticalCalculationProblem, 
+    generateDiagramProblem, 
+    generatePlaceValueRelationshipProblem,
+    () => generateFractionAddSameDenProblem(true),
+    generateIntegerSubtractFractionProblem,
+    generateMixedFractionAddProblem,
+];
+const hardProblems = [
+    generateListNavigationProblem, 
+    generateMultiStepWordProblem, 
+    generateDecompositionProblem, 
+    generateTenthsDecompositionProblem,
+    () => generateMixedFractionSubtractProblem(false),
+    () => generateMixedFractionSubtractProblem(true),
+    generateIntegerSubtractMixedFractionProblem,
+];
 
 export const generateMathProblem = (): MathProblem => {
   const chance = Math.random() * 10; // 0 to 10
@@ -572,7 +797,7 @@ export const canConquer = (tile: ClientTile, currentUser: User, allUsers: User[]
     
     // 타일 소유자가 같은 국가 소속인지 확인
     const owner = tile.ownerId ? allUsers.find(u => u.id === tile.ownerId) : null;
-    if (owner && owner.countryId === currentUser.countryId) {
+    if (owner && owner.countryId && currentUser.countryId && owner.countryId === currentUser.countryId) {
       return false; // Cannot conquer a tile owned by a countryman
     }
     
