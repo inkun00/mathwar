@@ -22,7 +22,6 @@ interface GameBoardProps {
   initialLandTiles: ClientTile[];
   initialProblemAttempts: ProblemAttempt[];
   initialWrongAnswers: WrongAnswer[];
-  initialAllUsers: User[];
 }
 
 export default function GameBoard({ 
@@ -31,7 +30,6 @@ export default function GameBoard({
   initialLandTiles,
   initialProblemAttempts,
   initialWrongAnswers,
-  initialAllUsers,
 }: GameBoardProps) {
   const firestore = useFirestore();
   const { user: authUser } = useUser();
@@ -57,17 +55,19 @@ export default function GameBoard({
     setProblemAttempts(initialProblemAttempts);
   }, [initialProblemAttempts]);
 
+  const allUsersQuery = useMemoFirebase(() => firestore ? collection(firestore, 'users') : null, [firestore]);
+  const { data: allUsers, isLoading: isAllUsersLoading } = useCollection<User>(allUsersQuery);
 
   const flatLandTiles = initialLandTiles;
 
   const currentUserCountry = useMemo(() => initialCountries.find(c => c.id === currentUser?.countryId), [initialCountries, currentUser]);
   
   const userCountryTiles = useMemo(() => {
-    if (!currentUser || !initialAllUsers) return [];
-    const countryMembers = initialAllUsers.filter(u => u.countryId === currentUser.countryId);
+    if (!currentUser || !allUsers) return [];
+    const countryMembers = allUsers.filter(u => u.countryId === currentUser.countryId);
     const memberIds = new Set(countryMembers.map(u => u.id));
     return flatLandTiles.filter(tile => tile.ownerId && memberIds.has(tile.ownerId));
-  }, [flatLandTiles, initialAllUsers, currentUser]);
+  }, [flatLandTiles, allUsers, currentUser]);
 
   const isDemise = useMemo(() => {
     if (!currentUser) return false;
@@ -78,7 +78,7 @@ export default function GameBoard({
 
   useEffect(() => {
     const handleTokenPenalty = async () => {
-      if (!firestore || !currentUser || currentUser.tokens >= 0) return;
+      if (!firestore || !currentUser || !currentUser.tokens || currentUser.tokens >= 0) return;
 
       const penalty = Math.abs(currentUser.tokens);
       toast({
@@ -128,7 +128,7 @@ export default function GameBoard({
     updateDoc(userRef, updateData)
      .then(() => {
         // Optimistically update local state
-        setCurrentUser(prev => ({ ...prev, tokens: prev.tokens + 1 }));
+        setCurrentUser(prev => ({ ...prev!, tokens: (prev?.tokens ?? 0) + 1 }));
         setProblemAttempts(prev => [...prev, {
             id: Math.random().toString(),
             userId: authUser.uid,
@@ -151,13 +151,13 @@ export default function GameBoard({
   };
 
  const handleTerritoryCut = async (originalOwnerId: string, conquerorId: string | null) => {
-    if (!firestore || !currentUser || !initialAllUsers) return;
+    if (!firestore || !currentUser || !allUsers) return;
 
     // Check if the original owner has any tiles left
     const remainingTiles = flatLandTiles.filter(tile => tile.ownerId === originalOwnerId).length;
 
     if (remainingTiles === 1 && conquerorId) { // The last tile was just conquered
-      const originalOwnerUser = initialAllUsers.find(u => u.id === originalOwnerId);
+      const originalOwnerUser = allUsers.find(u => u.id === originalOwnerId);
       if (originalOwnerUser && originalOwnerUser.countryId) {
           const conquerorRef = doc(firestore, "users", conquerorId);
           const countryRef = doc(firestore, "countries", originalOwnerUser.countryId);
@@ -178,57 +178,26 @@ export default function GameBoard({
     if (!currentUser || !firestore || !invasionTarget || !authUser) return;
   
     setIsProcessingClick(true);
-    const tileRef = doc(firestore, "land_tiles", invasionTarget.id!);
-  
-    if (invasionTarget.hasWall && invasionWallBreaks < 1) {
-      setInvasionWallBreaks(1);
-      toast({
-        title: "성벽 돌파!",
-        description: "성벽을 파괴했습니다! 한 문제만 더 맞히면 점령할 수 있습니다.",
-      });
-      setCurrentProblem(generateMathProblem());
-      setIsModalOpen(true);
-      setIsProcessingClick(false);
-      return;
-    }
-  
-    setInvasionWallBreaks(0);
-    const originalOwnerId = invasionTarget.originalOwnerId;
-    const updateData = { ownerId: currentUser.id, hasWall: invasionTarget.hasWall && invasionWallBreaks < 1 };
-  
-    updateDoc(tileRef, updateData)
-      .then(async () => {
-        if (originalOwnerId) {
-          await handleTerritoryCut(originalOwnerId, currentUser.id);
-        }
-        setProblemAttempts(prev => [...prev, {
-            id: Math.random().toString(),
-            userId: authUser.uid,
-            unit: 'decimal',
-            area: 'decimal-add',
-            correct: true,
-            timestamp: new Date().toISOString(),
-            isReview: false,
-            problem: 'optimistic-invasion-update'
-        }]);
-      })
-      .catch((error) => {
-        const permissionError = new FirestorePermissionError({
-          path: tileRef.path,
-          operation: 'update',
-          requestResourceData: updateData,
-        });
-        errorEmitter.emit('permission-error', permissionError);
-        toast({ variant: "destructive", title: "오류", description: "영토를 점령하는 중 오류가 발생했습니다."});
-      })
-      .finally(() => {
-        setInvasionTarget(null);
-        setIsProcessingClick(false);
-      });
+    
+    // TODO: Cloud Function을 호출하여 타일 소유자를 변경해야 합니다.
+    // 클라이언트에서 직접 문서를 업데이트하는 것은 보안 규칙에 의해 차단됩니다.
+    
+    // 예시: 
+    // const conquerTile = httpsCallable(functions, 'conquerTile');
+    // await conquerTile({ tileId: invasionTarget.id, breaksWall: invasionWallBreaks > 0 });
+
+    toast({
+        title: "기능 비활성화됨",
+        description: "Cloud Function으로의 마이그레이션이 필요합니다.",
+        variant: "destructive"
+    });
+
+    setInvasionTarget(null);
+    setIsProcessingClick(false);
   };
 
   const handleTileClick = async (x: number, y: number) => {
-    if (!currentUser || !firestore || isProcessingClick || !initialAllUsers || !authUser) return;
+    if (!currentUser || !firestore || isProcessingClick || !allUsers || !authUser) return;
     const userRef = doc(firestore, 'users', authUser.uid);
     setIsProcessingClick(true);
   
@@ -245,29 +214,15 @@ export default function GameBoard({
           setIsProcessingClick(false);
           return;
       }
-
-      const tileRef = doc(firestore, 'land_tiles', clickedTile.id!);
-      const wallBatch = writeBatch(firestore);
-      const tileUpdateData = { hasWall: true };
-      const userUpdateData = { walls: increment(-1) };
-
-      wallBatch.update(tileRef, tileUpdateData);
-      wallBatch.update(userRef, userUpdateData);
-
-      wallBatch.commit()
-          .then(() => {
-              toast({ title: "성벽 건설 완료!", description: "영토의 방어도가 상승했습니다."});
-              setCurrentUser(prev => ({...prev, walls: (prev.walls ?? 0) -1 }));
-          })
-          .catch((error) => {
-              errorEmitter.emit('permission-error', new FirestorePermissionError({ path: tileRef.path, operation: 'update', requestResourceData: tileUpdateData }));
-              errorEmitter.emit('permission-error', new FirestorePermissionError({ path: userRef.path, operation: 'update', requestResourceData: userUpdateData }));
-              toast({ variant: "destructive", title: "오류", description: "성벽 건설 중 오류가 발생했습니다."});
-          })
-          .finally(() => {
-              setIsBuildingWall(false);
-              setIsProcessingClick(false);
-          });
+      
+      // TODO: Cloud Function을 호출하여 성벽을 건설해야 합니다.
+      toast({
+          title: "기능 비활성화됨",
+          description: "Cloud Function으로의 마이그레이션이 필요합니다.",
+          variant: "destructive"
+      });
+      setIsBuildingWall(false);
+      setIsProcessingClick(false);
       return;
     }
   
@@ -283,7 +238,7 @@ export default function GameBoard({
     
     if (clickedTile) { // Conquering an existing tile
       if (clickedTile.ownerId !== currentUser.id) {
-        const owner = initialAllUsers.find(u => u.id === clickedTile.ownerId);
+        const owner = allUsers.find(u => u.id === clickedTile.ownerId);
         if (owner && owner.countryId === currentUser.countryId) {
           toast({
             title: "공격 불가",
@@ -295,7 +250,7 @@ export default function GameBoard({
           const tokenUpdateData = { tokens: increment(-1) };
           updateDoc(userRef, tokenUpdateData)
             .then(() => {
-                setCurrentUser(prev => ({ ...prev, tokens: prev.tokens - 1 }));
+                setCurrentUser(prev => ({ ...prev!, tokens: (prev?.tokens ?? 0) - 1 }));
                 setInvasionTarget({ x, y, id: clickedTile.id, originalOwnerId: clickedTile.ownerId, hasWall: clickedTile.hasWall });
                 setInvasionWallBreaks(0);
                 setCurrentProblem(generateMathProblem());
@@ -314,7 +269,7 @@ export default function GameBoard({
       const canPlace = canConquerLogic(
           { x, y, ownerId: null, hasWall: false },
           currentUser,
-          initialAllUsers,
+          allUsers,
           userCountryTiles,
           flatLandTiles
       );
@@ -324,19 +279,20 @@ export default function GameBoard({
            return;
       }
 
-      runTransaction(firestore, async (transaction) => {
-          const newTileRef = doc(collection(firestore, "land_tiles"));
-          transaction.set(newTileRef, { x, y, ownerId: currentUser.id, hasWall: false });
-          transaction.update(userRef, { tokens: increment(-1) });
-      }).then(() => {
-          toast({ title: "영토 확장!", description: "새로운 땅을 정복했습니다." });
-          setCurrentUser(prev => ({ ...prev, tokens: prev.tokens - 1 }));
-      }).catch((error) => {
-          console.error("타일 클릭 트랜잭션 실패:", error);
-          toast({ variant: "destructive", title: "오류", description: "작업을 처리하는 중 오류가 발생했습니다."});
-      }).finally(() => {
-          setIsProcessingClick(false);
+      // TODO: Cloud Function을 호출하여 타일을 생성하고 토큰을 차감해야 합니다.
+      // 클라이언트에서 직접 트랜잭션을 실행하는 것은 보안 규칙에 의해 차단됩니다.
+
+      // 예시: 
+      // const expandTerritory = httpsCallable(functions, 'expandTerritory');
+      // await expandTerritory({ x, y });
+
+      toast({
+          title: "기능 비활성화됨",
+          description: "Cloud Function으로의 마이그레이션이 필요합니다.",
+          variant: "destructive"
       });
+
+      setIsProcessingClick(false);
     }
   };
   
@@ -348,7 +304,7 @@ export default function GameBoard({
   
     updateDoc(userRef, updateData)
       .then(() => {
-        setCurrentUser(prev => ({ ...prev, tokens: 1 }));
+        setCurrentUser(prev => ({ ...prev!, tokens: 1 }));
       })
       .catch(error => {
         errorEmitter.emit('permission-error', new FirestorePermissionError({ path: userRef.path, operation: 'update', requestResourceData: updateData }));
@@ -371,10 +327,10 @@ export default function GameBoard({
   }
 
   const canConquer = (tile: ClientTile) => {
-    if (!currentUser || !initialAllUsers || (currentUser.tokens ?? 0) <= 0 || isProcessingClick || isBuildingWall) {
+    if (!currentUser || !allUsers || (currentUser.tokens ?? 0) <= 0 || isProcessingClick || isBuildingWall) {
       return false;
     }
-    return canConquerLogic(tile, currentUser, initialAllUsers, userCountryTiles, flatLandTiles);
+    return canConquerLogic(tile, currentUser, allUsers, userCountryTiles, flatLandTiles);
   };
   
   const canBuildWall = (tile: ClientTile) => {
@@ -387,12 +343,12 @@ export default function GameBoard({
       setIsProcessingClick(false);
       if (invasionTarget) {
         // If invasion was cancelled, refund the token
-        if (authUser) {
+        if (authUser && currentUser) {
             const userRef = doc(firestore, 'users', authUser.uid);
             const refundData = { tokens: increment(1) };
             updateDoc(userRef, refundData)
               .then(() => {
-                setCurrentUser(prev => ({ ...prev, tokens: prev.tokens + 1 }));
+                setCurrentUser(prev => ({ ...prev!, tokens: (prev?.tokens ?? 0) + 1 }));
               })
               .catch(error => {
                 errorEmitter.emit('permission-error', new FirestorePermissionError({ path: userRef.path, operation: 'update', requestResourceData: refundData }));
@@ -421,7 +377,7 @@ export default function GameBoard({
     }
   };
 
-  if (!currentUser) {
+  if (!currentUser || isAllUsersLoading) {
      return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
@@ -438,7 +394,7 @@ export default function GameBoard({
         onSolveProblemClick={handleSolveProblemForToken} 
         countries={initialCountries}
         problemAttempts={problemAttempts}
-        users={initialAllUsers}
+        users={allUsers ?? []}
         wrongAnswers={initialWrongAnswers}
         isBuildingWall={isBuildingWall}
         onToggleWallBuilding={handleToggleWallBuilding}
@@ -447,7 +403,7 @@ export default function GameBoard({
       <div className="relative h-full w-full max-w-7xl flex-grow">
         <WorldMap 
             displayMapData={flatLandTiles}
-            users={initialAllUsers} 
+            users={allUsers ?? []} 
             countries={initialCountries} 
             onTileClick={handleTileClick} 
             canConquer={canConquer}
