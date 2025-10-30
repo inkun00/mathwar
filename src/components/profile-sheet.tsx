@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { useMemo, useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { LogOut, BookOpen, ChevronsUpDown, Check, Crown, Handshake, Flag, Swords, Pencil, UserPlus, ShieldCheck, X, RefreshCw } from "lucide-react";
-import { useAuth, useFirestore, useDoc, useMemoFirebase } from "@/firebase";
+import { useAuth, useFirestore, useDoc, useMemoFirebase, errorEmitter, FirestorePermissionError } from "@/firebase";
 import { signOut } from "firebase/auth";
 import ProblemModal from "./problem-modal";
 import { deleteWrongAnswer } from "@/firebase/firestore/data";
@@ -314,41 +314,60 @@ export default function ProfileSheet({ currentUser: initialUser, onOpenChange }:
   };
   
   const handleRequestResponse = async (request: JoinRequest | AllianceRequest, type: 'join' | 'alliance', action: 'approve' | 'reject') => {
-      if (!firestore || !profileData?.userCountry) return;
-      setIsProcessing(true);
-      const requestRef = doc(firestore, `${type}_requests`, request.id);
-      try {
-          if (action === 'approve') {
-              const batch = writeBatch(firestore);
-              batch.update(requestRef, { status: "approved" });
-              if (type === 'join') {
-                  batch.update(doc(firestore, "users", (request as JoinRequest).requesterId), { countryId: (request as JoinRequest).targetCountryId });
-                  toast({ title: "가입 수락", description: `${(request as JoinRequest).requesterNickname}님이 국가에 가입했습니다.` });
-              } else { // 'alliance'
-                  const requestingCountryId = (request as AllianceRequest).requestingCountryId;
-                  const targetCountryId = (request as AllianceRequest).targetCountryId;
-
-                  // Find all users from the requesting country
-                  const q = query(collection(firestore, "users"), where("countryId", "==", requestingCountryId));
-                  const membersSnapshot = await getDocs(q);
-                  
-                  // Update each member to the target country
-                  membersSnapshot.forEach(memberDoc => {
-                      batch.update(memberDoc.ref, { countryId: targetCountryId, isCountryOwner: false });
-                  });
-                  
-                  // Mark the old country as demised
-                  batch.update(doc(firestore, "countries", requestingCountryId), { demised: true });
-
-                  toast({ title: "동맹 체결 (합병)!", description: `${(request as AllianceRequest).requestingCountryName} 국가가 우리 국가로 합병되었습니다.` });
-              }
-              await batch.commit();
-          } else {
-              await updateDoc(requestRef, { status: "rejected" });
-              toast({ title: "요청 거절", description: `요청을 거절했습니다.` });
-          }
-          fetchProfileData(); // Refresh data
-      } catch (e) { console.error(e); toast({ variant: "destructive", title: "오류" }); } finally { setIsProcessing(false); }
+    if (!firestore || !profileData?.userCountry || !currentUser) return;
+    setIsProcessing(true);
+  
+    const requestRef = doc(firestore, `${type}_requests`, request.id);
+    const updateData: { [key: string]: any } = { status: action === 'approve' ? 'approved' : 'rejected' };
+    
+    try {
+      if (action === 'approve') {
+        const batch = writeBatch(firestore);
+        batch.update(requestRef, { status: "approved" });
+        
+        if (type === 'join') {
+          const joinReq = request as JoinRequest;
+          const userToUpdateRef = doc(firestore, "users", joinReq.requesterId);
+          const userUpdateData = { countryId: joinReq.targetCountryId };
+          batch.update(userToUpdateRef, userUpdateData);
+          await batch.commit().catch(err => {
+              const permissionError = new FirestorePermissionError({
+                  path: userToUpdateRef.path,
+                  operation: 'update',
+                  requestResourceData: userUpdateData,
+              });
+              errorEmitter.emit('permission-error', permissionError);
+              throw permissionError; // Re-throw to be caught by outer catch
+          });
+          toast({ title: "가입 수락", description: `${joinReq.requesterNickname}님이 국가에 가입했습니다.` });
+        } else { // 'alliance'
+          const allianceReq = request as AllianceRequest;
+          const q = query(collection(firestore, "users"), where("countryId", "==", allianceReq.requestingCountryId));
+          const membersSnapshot = await getDocs(q);
+          
+          membersSnapshot.forEach(memberDoc => {
+            batch.update(memberDoc.ref, { countryId: allianceReq.targetCountryId, isCountryOwner: false });
+          });
+          
+          batch.update(doc(firestore, "countries", allianceReq.requestingCountryId), { demised: true });
+          await batch.commit(); // This might also throw permission errors
+          toast({ title: "동맹 체결 (합병)!", description: `${allianceReq.requestingCountryName} 국가가 우리 국가로 합병되었습니다.` });
+        }
+      } else { // reject
+        await updateDoc(requestRef, { status: "rejected" });
+        toast({ title: "요청 거절", description: `요청을 거절했습니다.` });
+      }
+  
+      fetchProfileData(); // Refresh data
+    } catch (e) {
+      // The specific error is already emitted, this is a fallback.
+      if (!(e instanceof FirestorePermissionError)) {
+          console.error(`Error processing ${type} request:`, e);
+          toast({ variant: "destructive", title: "처리 오류", description: "요청을 처리하는 중 오류가 발생했습니다." });
+      }
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
 
