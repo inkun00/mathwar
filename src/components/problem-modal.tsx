@@ -138,29 +138,27 @@ export default function ProblemModal({
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!problem || isSubmitting) return;
-
+  
     setIsSubmitting(true);
-
+  
     try {
       const correct = isAnswerCorrect(answers, problem.answer);
-
+  
       if (!isReview) {
         recordAttempt(correct);
       }
-
+  
       if (correct) {
         let toastTitle = '정답입니다!';
         let toastDescription = '확장 토큰을 획득했습니다.';
         let shouldCloseModal = true;
-
+  
         if (isInvasion) {
           if (hasWall && invasionWallBreaks < 1) {
             toastTitle = '성벽 돌파!';
             toastDescription = '첫 번째 방어를 뚫었습니다! 한 문제 더 남았습니다.';
-            shouldCloseModal = false; // Don't close, wait for the next problem
-            // Here you would typically call a function to set a new problem
-            // For now, we will just allow another attempt on a new problem
-            onCorrectAnswer(); // This will increment wall breaks
+            shouldCloseModal = false; 
+            await onCorrectAnswer(problem);
           } else {
             toastTitle = '침략 성공!';
             toastDescription = '적의 영토를 획득했습니다.';
@@ -169,8 +167,7 @@ export default function ProblemModal({
         } else {
            await onCorrectAnswer(problem);
         }
-
-
+  
         toast({
           title: toastTitle,
           description: toastDescription,
@@ -182,11 +179,10 @@ export default function ProblemModal({
         if (shouldCloseModal) {
           onOpenChange(false);
         } else {
-          // If not closing (e.g. wall break), reset for the next problem.
            setAnswers(Array(numInputs).fill('')); 
-           setIsSubmitting(false); // Allow next submission
+           setIsSubmitting(false);
         }
-
+  
       } else {
         toast({
           variant: 'destructive',
@@ -211,13 +207,15 @@ export default function ProblemModal({
         title: "오류",
         description: "답변을 제출하는 중 오류가 발생했습니다.",
       });
-      onOpenChange(false); // Close modal on error as well
+      onOpenChange(false);
     } finally {
-       if (!(isInvasion && hasWall && isAnswerCorrect(answers, problem.answer) && invasionWallBreaks < 1)) {
-         setIsSubmitting(false);
-       }
+      // Only set isSubmitting to false if we are not in the middle of a wall break
+      if (!(isInvasion && hasWall && isAnswerCorrect(answers, problem.answer) && invasionWallBreaks < 1)) {
+        setIsSubmitting(false);
+      }
     }
   };
+  
 
 
   const title = isInvasion

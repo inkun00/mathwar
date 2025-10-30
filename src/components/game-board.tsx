@@ -50,7 +50,7 @@ export default function GameBoard({
   const [isBuildingWall, setIsBuildingWall] = useState(false);
   const [isRestarting, setIsRestarting] = useState(false);
   
-  const [landTiles, setLandTiles] = useState(initialLandTiles);
+  const [landTiles, setLandTiles] = useState<ClientTile[]>([]);
   const [countries, setCountries] = useState(initialCountries);
   const [allUsers, setAllUsers] = useState(initialAllUsers);
   const [problemAttempts, setProblemAttempts] = useState(initialProblemAttempts);
@@ -236,7 +236,7 @@ export default function GameBoard({
             countryColor: currentUserCountry.color,
         };
         
-        updateDoc(tileRef, updateData)
+        await updateDoc(tileRef, updateData)
             .then(() => {
                 handleTerritoryCut(invasionTarget.originalOwnerId!, currentUser.id);
 
@@ -444,8 +444,8 @@ export default function GameBoard({
 
   const handleProblemModalClose = (open: boolean) => {
     if (!open) {
-      setIsProcessingClick(false);
-      if (invasionTarget) {
+      // Don't refund token if the click is still being processed (i.e., successful invasion)
+      if (invasionTarget && !isProcessingClick) {
         if (authUser && currentUser) {
             const userRef = doc(firestore, 'users', authUser.uid);
             updateDoc(userRef, { tokens: increment(1) })
@@ -457,6 +457,7 @@ export default function GameBoard({
         setInvasionWallBreaks(0);
         toast({ title: "침략 취소", description: "사용한 토큰이 반환되었습니다.", variant: "default" });
       }
+      setIsProcessingClick(false);
     }
     setIsModalOpen(open);
   }
