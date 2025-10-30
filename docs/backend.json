@@ -136,7 +136,7 @@
         "definition": {
           "entityName": "user",
           "schema": { "$ref": "#/entities/User" },
-          "description": "Stores user profiles. Users can only update their own profile, unless a country owner is changing their countryId.",
+          "description": "Stores user profiles. Users can update their own profile, and country owners can update countryId for members.",
           "allow": ["get", "list", "create", "update"]
         }
       },
@@ -178,3 +178,5 @@
     ]
   }
 }
+
+    
