@@ -160,25 +160,25 @@ export default function ProblemModal({
             // The parent component (GameBoard) is responsible for providing the next problem.
             await onCorrectAnswer(problem); 
             setAnswers(Array(numInputs).fill('')); 
-            setIsSubmitting(false);
-            return; 
+            // We don't close the modal here. The parent component will provide a new problem.
           } else {
             toastTitle = '침략 성공!';
             toastDescription = '적의 영토를 획득했습니다.';
+            await onCorrectAnswer(problem);
+            onOpenChange(false);
           }
+        } else {
+             toast({
+                title: toastTitle,
+                description: toastDescription,
+                className:
+                    'border-green-500 bg-green-50 text-green-700 dark:bg-green-900/50 dark:text-green-300 dark:border-green-700',
+                action: <CheckCircle className="text-green-500" />,
+            });
+            await onCorrectAnswer(problem);
+            onOpenChange(false);
         }
-  
-        toast({
-          title: toastTitle,
-          description: toastDescription,
-          className:
-            'border-green-500 bg-green-50 text-green-700 dark:bg-green-900/50 dark:text-green-300 dark:border-green-700',
-          action: <CheckCircle className="text-green-500" />,
-        });
-        
-        // Let the parent component handle closing the modal.
-        await onCorrectAnswer(problem);
-  
+
       } else {
         toast({
           variant: 'destructive',
@@ -203,8 +203,9 @@ export default function ProblemModal({
         title: "오류",
         description: "답변을 제출하는 중 오류가 발생했습니다.",
       });
-      setIsSubmitting(false);
       onOpenChange(false);
+    } finally {
+        setIsSubmitting(false);
     }
   };
   

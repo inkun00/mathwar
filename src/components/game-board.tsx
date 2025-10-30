@@ -263,7 +263,7 @@ export default function GameBoard({
     } finally {
         setInvasionTarget(null);
         setInvasionWallBreaks(0);
-        setIsModalOpen(false); // Close modal on success
+        setIsModalOpen(false);
         setIsProcessingClick(false);
     }
   };
@@ -448,16 +448,8 @@ export default function GameBoard({
   }
 
   const handleProblemModalClose = (open: boolean) => {
-    // This function now only handles the state of the modal.
-    // The logic for cancelling an invasion is removed.
-    if (!open) {
-      // If modal is closing, reset invasion target state regardless of why it's closing.
-      // This prevents stale state if a new problem is opened for a different reason.
-      if (invasionTarget) {
-        setInvasionTarget(null);
-        setInvasionWallBreaks(0);
-      }
-    }
+    // This function now only handles the modal's open/close state.
+    // The logic for cancelling an invasion has been completely removed.
     setIsModalOpen(open);
   }
 
