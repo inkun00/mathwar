@@ -125,13 +125,15 @@ const generateFractionAddSameDenProblem = (sumOverOne: boolean): MathProblem => 
                 <span className="text-2xl">+</span>
                 <Fraction numerator={n2} denominator={d} />
                 <span className="text-2xl">=</span>
-                {whole > 0 ? <AnswerInput /> : null} 
-                {num > 0 ? <Fraction numerator={<AnswerInput />} denominator={<AnswerInput />} /> : (whole === 0 ? <AnswerInput /> : null)}
+                {whole > 0 && <AnswerInput />}
+                {num > 0 ? (
+                  <Fraction numerator={<AnswerInput />} denominator={<AnswerInput />} />
+                ) : (whole === 0 ? <AnswerInput /> : null)}
             </div>
         ),
-        answer: whole > 0 
-            ? [String(whole), String(num), String(den)] 
-            : [String(num), String(den)],
+        answer: whole > 0 && num > 0
+          ? [String(whole), String(num), String(den)]
+          : (num > 0 ? [String(num), String(den)] : [String(whole)]),
         type: 'fraction',
         subType: sumOverOne ? 'fraction-add-mixed' : 'fraction-add-same-den',
         storable: { type: 'fraction', subType: sumOverOne ? 'fraction-add-mixed' : 'fraction-add-same-den', operands: [n1, d, n2, d], operator: 'add' }
@@ -188,11 +190,15 @@ const generateMixedFractionSubtractProblem = (withBorrowing: boolean): MathProbl
                 <span className="text-2xl">-</span>
                 <MixedFraction integer={w2} numerator={n2} denominator={d} />
                 <span className="text-2xl">=</span>
-                {whole > 0 ? <AnswerInput /> : null}
-                {num > 0 ? <Fraction numerator={<AnswerInput />} denominator={<AnswerInput />} /> : (whole === 0 ? <AnswerInput /> : null) }
+                {whole > 0 && <AnswerInput />}
+                {num > 0 ? (
+                  <Fraction numerator={<AnswerInput />} denominator={<AnswerInput />} />
+                ) : (whole === 0 ? <AnswerInput /> : null)}
             </div>
         ),
-        answer: whole > 0 && num > 0 ? [String(whole), String(num), String(den)] : (whole > 0 ? [String(whole)] : [String(num), String(den)]),
+        answer: whole > 0 && num > 0
+          ? [String(whole), String(num), String(den)]
+          : (num > 0 ? [String(num), String(den)] : [String(whole)]),
         type: 'fraction',
         subType: 'fraction-subtract-mixed',
         storable: { type: 'fraction', subType: 'fraction-subtract-mixed', operands: [w1, n1, d, w2, n2, d], operator: 'subtract' }
@@ -240,8 +246,10 @@ const generateMixedFractionAddProblem = (): MathProblem => {
                 <span className="text-2xl">+</span>
                 <MixedFraction integer={w2} numerator={n2} denominator={d} />
                 <span className="text-2xl">=</span>
-                {whole > 0 ? <AnswerInput /> : null}
-                {num > 0 ? <Fraction numerator={<AnswerInput />} denominator={<AnswerInput />} /> : null}
+                {whole > 0 && <AnswerInput />}
+                {num > 0 ? (
+                  <Fraction numerator={<AnswerInput />} denominator={<AnswerInput />} />
+                ) : (whole === 0 ? null : null)}
             </div>
         ),
         answer: num > 0 ? [String(whole), String(num), String(den)] : [String(whole)],

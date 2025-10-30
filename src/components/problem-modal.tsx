@@ -153,32 +153,20 @@ export default function ProblemModal({
         let toastDescription = '확장 토큰을 획득했습니다.';
         
         if (isInvasion) {
-          if (hasWall && invasionWallBreaks < 1) {
-            toastTitle = '성벽 돌파!';
-            toastDescription = '첫 번째 방어를 뚫었습니다! 한 문제 더 남았습니다.';
-            // This is a multi-step invasion, so we call onCorrectAnswer but don't close the modal.
-            // The parent component (GameBoard) is responsible for providing the next problem.
-            await onCorrectAnswer(problem); 
-            setAnswers(Array(numInputs).fill('')); 
-            // We don't close the modal here. The parent component will provide a new problem.
-          } else {
             toastTitle = '침략 성공!';
             toastDescription = '적의 영토를 획득했습니다.';
-            await onCorrectAnswer(problem);
-            onOpenChange(false);
-          }
-        } else {
-             toast({
-                title: toastTitle,
-                description: toastDescription,
-                className:
-                    'border-green-500 bg-green-50 text-green-700 dark:bg-green-900/50 dark:text-green-300 dark:border-green-700',
-                action: <CheckCircle className="text-green-500" />,
-            });
-            await onCorrectAnswer(problem);
-            onOpenChange(false);
         }
+        
+        toast({
+            title: toastTitle,
+            description: toastDescription,
+            className:
+                'border-green-500 bg-green-50 text-green-700 dark:bg-green-900/50 dark:text-green-300 dark:border-green-700',
+            action: <CheckCircle className="text-green-500" />,
+        });
 
+        await onCorrectAnswer(problem);
+        onOpenChange(false);
       } else {
         toast({
           variant: 'destructive',
@@ -203,9 +191,14 @@ export default function ProblemModal({
         title: "오류",
         description: "답변을 제출하는 중 오류가 발생했습니다.",
       });
-      onOpenChange(false);
     } finally {
-        setIsSubmitting(false);
+        setIsSubmitting(false); // Ensure this is always called
+        if (isSubmitting) {
+          // Additional safety check in case of race conditions
+          // This might not be strictly necessary with `finally`, but adds robustness
+        } else {
+          onOpenChange(false);
+        }
     }
   };
   
