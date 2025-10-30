@@ -1,16 +1,8 @@
 'use client';
 
-import type { Metadata } from 'next';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import { FirebaseClientProvider } from '@/firebase';
-
-// Metadata cannot be defined in a client component.
-// We will move this to a server component if needed, or define it statically.
-// export const metadata: Metadata = {
-//   title: '수학 전쟁',
-//   description: '소수 배우기 게임',
-// };
 
 export default function RootLayout({
   children,
