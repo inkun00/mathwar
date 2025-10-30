@@ -50,20 +50,25 @@ export default function GameBoard({
   const [isRestarting, setIsRestarting] = useState(false);
   
   const [landTiles, setLandTiles] = useState(initialLandTiles);
-  console.log('[game-board.tsx] landTiles state updated. Count:', landTiles.length, 'from initial:', initialLandTiles.length);
   const [countries, setCountries] = useState(initialCountries);
   const [allUsers, setAllUsers] = useState(initialAllUsers);
   const [problemAttempts, setProblemAttempts] = useState(initialProblemAttempts);
   
   const userDocRef = useMemoFirebase(() => (firestore && authUser) ? doc(firestore, 'users', authUser.uid) : null, [firestore, authUser]);
   const { data: currentUser } = useDoc<User>(userDocRef, liveCurrentUser);
+  
+  useEffect(() => {
+    // This effect ensures that the internal state is updated if the initial props change
+    // after the component has already mounted (e.g., due to async data fetching in parent).
+    setLandTiles(initialLandTiles);
+  }, [initialLandTiles]);
+
 
   useEffect(() => {
     // CRITICAL FIX: Do not process if mapEvents is null, undefined, or empty.
     if (!mapEvents || mapEvents.length === 0) {
       return;
     }
-    console.log('[game-board.tsx] Processing', mapEvents.length, 'map events.');
 
     setLandTiles(currentTiles => {
       const newTiles = [...currentTiles];
