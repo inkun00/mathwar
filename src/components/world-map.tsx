@@ -24,7 +24,7 @@ const TileComponent = React.memo(({
   isLandTile,
   tooltipContent
 }: {
-  tile: ClientTile | null;
+  tile: ClientTile;
   onClick: () => void;
   isConquerable: boolean;
   isWallBuildable: boolean;
@@ -34,20 +34,20 @@ const TileComponent = React.memo(({
   const tileClasses = cn(
     "relative aspect-square transition-all duration-300 ease-in-out border border-border/10",
     {
-      'bg-[#f0e6d2]': isLandTile && tile && !tile.countryColor,
-      'hover:bg-[#e6dac8]': isLandTile && tile && !tile.countryColor && isConquerable,
-      'bg-[#aadaff]': !isLandTile,
+      'hover:brightness-110': isLandTile && tile && !tile.countryColor && isConquerable,
     },
     { 'shadow-inner': tile?.countryColor },
-    isConquerable && "cursor-pointer ring-2 ring-offset-1 ring-offset-background ring-primary/70 z-10 hover:brightness-110",
-    isWallBuildable && "cursor-pointer ring-2 ring-offset-1 ring-offset-background ring-yellow-500 z-10 hover:brightness-110",
+    isConquerable && "cursor-pointer ring-2 ring-offset-1 ring-offset-background ring-primary/70 z-10",
+    isWallBuildable && "cursor-pointer ring-2 ring-offset-1 ring-offset-background ring-yellow-500 z-10",
     tile?.hasWall && "border-2 border-slate-700 dark:border-slate-300 z-5"
   );
 
   const tileElement = (
      <div
       className={tileClasses}
-      style={{ backgroundColor: tile?.countryColor ?? undefined }}
+      style={{ 
+          backgroundColor: tile.countryColor ? tile.countryColor : (isLandTile ? '#f0e6d2' : '#aadaff')
+      }}
       onClick={(isConquerable || isWallBuildable) ? onClick : undefined}
       aria-label={`타일. ${tile?.countryColor ? `플레이어 소유.` : '주인 없음.'} ${isConquerable ? '정복하려면 클릭하세요.' : ''}`}
     >
@@ -114,15 +114,19 @@ export default function WorldMap({ landTiles, onTileClick, canConquer, canBuildW
           const y = Math.floor(index / MAP_WIDTH);
           const isLandTile = isLand(x, y);
 
-          const tile = isLandTile ? (tilesMap.get(`${x},${y}`) || { id: `${x}-${y}`, x, y, ownerId: null, hasWall: false, ownerNickname: null, countryId: null, countryName: null, countryColor: null }) : null;
+          // Get tile from map, or create a default "empty" tile if it's land but not in the map
+          const tile = isLandTile 
+            ? (tilesMap.get(`${x},${y}`) || { id: `${x}-${y}`, x, y, ownerId: null, hasWall: false, ownerNickname: null, countryId: null, countryName: null, countryColor: null })
+            // This is a water tile, we pass a "dummy" object so TileComponent doesn't get a null prop
+            : { id: `${x}-${y}`, x, y, ownerId: null, hasWall: false, ownerNickname: null, countryId: null, countryName: null, countryColor: '#aadaff' };
 
           return (
             <TileComponent
               key={index}
               tile={tile}
-              onClick={() => tile && onTileClick(x, y)}
-              isConquerable={tile ? canConquer(tile) : false}
-              isWallBuildable={tile ? canBuildWall(tile) : false}
+              onClick={() => onTileClick(x, y)}
+              isConquerable={isLandTile ? canConquer(tile) : false}
+              isWallBuildable={isLandTile ? canBuildWall(tile) : false}
               isLandTile={isLandTile}
               tooltipContent={getTooltipContent(tile)}
             />
