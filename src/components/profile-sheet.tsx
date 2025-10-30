@@ -36,11 +36,6 @@ interface ProfileSheetProps {
   onOpenChange: (open: boolean) => void;
 }
 
-interface ProfileData {
-    joinRequests: JoinRequest[];
-    allianceRequests: AllianceRequest[];
-}
-
 const areaLabels: Record<ProblemSubType, string> = {
   'decimal-add': '소수 덧셈',
   'decimal-subtract': '소수 뺄셈',
@@ -94,6 +89,41 @@ export default function ProfileSheet({ currentUser, allUsers, allCountries, land
 
   const allianceRequestsQuery = useMemoFirebase(() => (firestore && currentUser.countryId) ? query(collection(firestore, "alliance_requests"), where("targetCountryId", "==", currentUser.countryId), where("status", "==", "pending")) : null, [firestore, currentUser.countryId]);
   const { data: allianceRequests, isLoading: isLoadingAllianceRequests } = useCollection<AllianceRequest>(allianceRequestsQuery);
+  
+  const myApprovedJoinRequestQuery = useMemoFirebase(() => (firestore && !currentUser.countryId) ? query(collection(firestore, "join_requests"), where("requesterId", "==", currentUser.id), where("status", "==", "approved")) : null, [firestore, currentUser]);
+  const { data: approvedJoinRequest } = useCollection<JoinRequest>(myApprovedJoinRequestQuery);
+
+
+  // Effect to handle self-update after a join request is approved
+  useEffect(() => {
+    const handleJoinCountry = async () => {
+        if (approvedJoinRequest && approvedJoinRequest.length > 0 && firestore && currentUser) {
+            const request = approvedJoinRequest[0];
+            const userRef = doc(firestore, "users", currentUser.id);
+            const requestRef = doc(firestore, "join_requests", request.id);
+
+            try {
+                await runTransaction(firestore, async (transaction) => {
+                    transaction.update(userRef, { countryId: request.targetCountryId });
+                    transaction.delete(requestRef);
+                });
+                toast({
+                    title: "국가 가입 완료!",
+                    description: `이제 국가의 일원이 되었습니다.`,
+                });
+            } catch (e: any) {
+                console.error("국가 가입 처리 중 오류 발생:", e);
+                toast({
+                    variant: "destructive",
+                    title: "오류",
+                    description: e.message || "국가 가입 처리 중 오류가 발생했습니다.",
+                });
+            }
+        }
+    };
+
+    handleJoinCountry();
+  }, [approvedJoinRequest, firestore, currentUser, toast]);
 
 
   const handleLogout = () => {
@@ -125,7 +155,6 @@ export default function ProfileSheet({ currentUser, allUsers, allCountries, land
   const { unitStats, areaStats, userRank, countryRank } = useMemo(() => {
     if (!problemAttempts || !allUsers || !allCountries || !landTiles) return { unitStats: [], areaStats: [], userRank: null, countryRank: null };
     
-    // Unit & Area Stats
     const stats = {
       unit: { decimal: { total: 0, correct: 0 }, fraction: { total: 0, correct: 0 }, conversion: { total: 0, correct: 0 } },
       area: {} as Record<string, { total: number, correct: number, subType: ProblemSubType }>
@@ -143,7 +172,6 @@ export default function ProfileSheet({ currentUser, allUsers, allCountries, land
     const unitStats = Object.entries(stats.unit).map(([key, value]) => ({ name: { decimal: '소수', fraction: '분수', conversion: '변환' }[key] || key, ...value, accuracy: value.total > 0 ? (value.correct / value.total) * 100 : 0 }));
     const areaStats = Object.values(stats.area).map(data => ({ name: areaLabels[data.subType] || data.subType, subType: data.subType, total: data.total, correct: data.correct, accuracy: data.total > 0 ? (data.correct / data.total) * 100 : 0, })).sort((a,b) => b.total - a.total);
 
-    // Rankings
     const userTileCount = allUsers.reduce((acc, user) => ({ ...acc, [user.id]: 0 }), {} as Record<string, number>);
     landTiles.forEach(tile => { if (tile.ownerId && userTileCount[tile.ownerId] !== undefined) userTileCount[tile.ownerId]++; });
     const sortedUsers = Object.entries(userTileCount).map(([id, count]) => ({ id, count })).sort((a, b) => b.count - a.count);
@@ -204,7 +232,12 @@ export default function ProfileSheet({ currentUser, allUsers, allCountries, land
             toast({ variant: "default", title: "요청 중복", description: "이미 해당 국가에 동맹을 요청했습니다." });
             return;
         }
-        await addDoc(collection(firestore, 'alliance_requests'), { requestingCountryId: userCountry.id, requestingCountryName: userCountry.name, targetCountryId, status: 'pending', createdAt: serverTimestamp() });
+        const requestData = { requestingCountryId: userCountry.id, requestingCountryName: userCountry.name, targetCountryId, status: 'pending', createdAt: serverTimestamp() };
+        await addDoc(collection(firestore, 'alliance_requests'), requestData).catch(err => {
+            errorEmitter.emit('permission-error', new FirestorePermissionError({ path: `alliance_requests/`, operation: 'create', requestResourceData: requestData }));
+            throw err;
+        });
+
         toast({ title: "동맹 요청 완료!", description: `동맹 요청을 보냈습니다.` });
         setAllianceComboboxOpen(false);
     } catch (e: any) { 
@@ -259,47 +292,41 @@ export default function ProfileSheet({ currentUser, allUsers, allCountries, land
     setIsProcessing(true);
   
     const requestRef = doc(firestore, `${type}_requests`, request.id);
+    const updateData = { status: action };
     
     try {
       if (action === 'approve') {
-        const batch = writeBatch(firestore);
-        batch.update(requestRef, { status: "approved" });
-        
         if (type === 'join') {
-          const joinReq = request as JoinRequest;
-          const userToUpdateRef = doc(firestore, "users", joinReq.requesterId);
-          const userUpdateData = { countryId: joinReq.targetCountryId };
-          batch.update(userToUpdateRef, userUpdateData);
-          
-          await batch.commit().catch(err => {
-              const permissionError = new FirestorePermissionError({
-                  path: userToUpdateRef.path,
-                  operation: 'update',
-                  requestResourceData: userUpdateData,
-              });
-              errorEmitter.emit('permission-error', permissionError);
-              throw permissionError; // Re-throw to be caught by outer catch
-          });
-          toast({ title: "가입 수락", description: `${joinReq.requesterNickname}님이 국가에 가입했습니다.` });
+            await updateDoc(requestRef, updateData).catch(err => {
+                errorEmitter.emit('permission-error', new FirestorePermissionError({ path: requestRef.path, operation: 'update', requestResourceData: updateData }));
+                throw err;
+            });
+          toast({ title: "가입 수락", description: `${(request as JoinRequest).requesterNickname}님의 가입 요청을 수락했습니다. 가입자가 다음 접속 시 처리됩니다.` });
         } else { // 'alliance'
-          const allianceReq = request as AllianceRequest;
-          const q = query(collection(firestore, "users"), where("countryId", "==", allianceReq.requestingCountryId));
-          const membersSnapshot = await getDocs(q);
+            const allianceReq = request as AllianceRequest;
+            const batch = writeBatch(firestore);
+            
+            const q = query(collection(firestore, "users"), where("countryId", "==", allianceReq.requestingCountryId));
+            const membersSnapshot = await getDocs(q);
           
-          membersSnapshot.forEach(memberDoc => {
-            batch.update(memberDoc.ref, { countryId: allianceReq.targetCountryId, isCountryOwner: false });
-          });
+            membersSnapshot.forEach(memberDoc => {
+                batch.update(memberDoc.ref, { countryId: allianceReq.targetCountryId, isCountryOwner: false });
+            });
           
-          batch.update(doc(firestore, "countries", allianceReq.requestingCountryId), { demised: true });
-          await batch.commit(); // This might also throw permission errors
-          toast({ title: "동맹 체결 (합병)!", description: `${allianceReq.requestingCountryName} 국가가 우리 국가로 합병되었습니다.` });
+            batch.update(doc(firestore, "countries", allianceReq.requestingCountryId), { demised: true });
+            batch.update(requestRef, { status: 'approved' });
+            
+            await batch.commit();
+            toast({ title: "동맹 체결 (합병)!", description: `${allianceReq.requestingCountryName} 국가가 우리 국가로 합병되었습니다.` });
         }
       } else { // reject
-        await updateDoc(requestRef, { status: "rejected" });
+        await updateDoc(requestRef, updateData).catch(err => {
+            errorEmitter.emit('permission-error', new FirestorePermissionError({ path: requestRef.path, operation: 'update', requestResourceData: updateData }));
+            throw err;
+        });
         toast({ title: "요청 거절", description: `요청을 거절했습니다.` });
       }
     } catch (e: any) {
-      // The specific error is already emitted, this is a fallback.
       if (!(e instanceof FirestorePermissionError)) {
           console.error(`Error processing ${type} request:`, e);
           toast({ variant: "destructive", title: "처리 오류", description: e.message || "요청을 처리하는 중 오류가 발생했습니다." });
@@ -392,7 +419,7 @@ export default function ProfileSheet({ currentUser, allUsers, allCountries, land
             <h3 className="text-lg font-semibold tracking-tight">외교</h3>
             <Card>
               <CardContent className="pt-6 space-y-4">
-                {currentUser.isCountryOwner && (
+                {currentUser.isCountryOwner ? (
                     <div>
                         {(joinRequests && joinRequests.length > 0) || (allianceRequests && allianceRequests.length > 0) ? (
                             <>
@@ -431,8 +458,9 @@ export default function ProfileSheet({ currentUser, allUsers, allCountries, land
                             </PopoverContent>
                         </Popover>
                     </div>
-                )}
-                {!currentUser.isCountryOwner && userCountry && (
+                ) : userCountry ? (
+                   <p className="text-sm text-muted-foreground text-center">국가 주인만 외교 활동을 할 수 있습니다.</p>
+                ) : (
                    <AlertDialog open={isIndependenceAlertOpen} onOpenChange={setIndependenceAlertOpen}>
                     <AlertDialogTrigger asChild><Button variant="outline" className="w-full"><Flag className="mr-2 h-4 w-4" /> 독립 선언</Button></AlertDialogTrigger>
                     <AlertDialogContent>
