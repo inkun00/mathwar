@@ -1,173 +1,145 @@
-/**
- * @file Firebase Security Rules for the Decimal Conquest game.
- *
- * Core Philosophy:
- * This ruleset enforces a user-ownership model for user profiles and problem attempts,
- * while also allowing for public read access to game data like countries and land tiles.
- * Write access to certain collections is restricted based on user authentication and
- * authorization. The rules prioritize security and data integrity.
- *
- * Data Structure:
- * - /users/{userId}: Stores user profiles. Each user can only manage their own profile.
- * - /users/{userId}/wrong_answers/{wrongAnswerId}: Stores wrong answers for a specific user.
- * - /countries/{countryId}: Stores country data. Open read, but restricted write.
- * - /land_tiles/{landTileId}: Stores land tile information. Open read, restricted writes.
- * - /problem_attempts/{userId}/attempts/{attemptId}: Stores problem attempts for a user.
- * - /join_requests/{requestId}: Requests from users to join a country.
- * - /alliance_requests/{requestId}: Requests from countries to form an alliance.
- * - /map_events/{eventId}: Stores map event data.
- *
- * Key Security Decisions:
- * - Users can only read and write their own user document.
- * - Listing all users is disallowed to protect user privacy.
- * - Land tiles are publicly readable, but writes are restricted.
- * - map_events can be created by trusted server.
- *
- * Denormalization for Authorization:
- *  N/A - Current rules do not require denormalization.
- *
- * Structural Segregation:
- *  N/A - The application uses a single collection for each entity type.
- */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
     /**
-     * @description Controls access to user profiles.
+     * @description Controls access to user profile information.
      * @path /users/{userId}
-     * @allow (create) - A user can create their own profile if the userId matches their auth.uid.
-     * @allow (get, update) - A user can get and update their own profile if the userId matches their auth.uid.
-     * @deny (create) - A user cannot create a profile with a different userId.
-     * @deny (update) - A user cannot update someone else's profile.
-     * @principle Enforces document ownership for writes and reads, self-creation.
+     * @allow (get, create, update) if the user is the owner of the profile.
+     * @deny (create, update) if the user ID in the request does not match the authenticated user ID.
+     * @deny (list) Listing all users is not permitted.
+     * @principle Enforces document ownership for user profiles.
      */
     match /users/{userId} {
-      function isOwner(userId) {
-        return request.auth != null && request.auth.uid == userId;
+      function isSignedIn() {
+        return request.auth != null;
       }
+
+      function isOwner(userId) {
+        return request.auth.uid == userId;
+      }
+
       allow get: if isOwner(userId);
       allow list: if false;
-      allow create: if isOwner(userId) && request.resource.data.id == userId;
-      allow update: if isOwner(userId) && request.resource.data.id == resource.data.id;
-      allow delete: if false;
+
+      allow create: if isSignedIn() && isOwner(userId);
+      allow update: if isSignedIn() && isOwner(userId);
+      allow delete: if false; // User deletion is not allowed
     }
 
     /**
-     * @description Controls access to wrong answers for a user.
+     * @description Controls access to a user's incorrect math problems.
      * @path /users/{userId}/wrong_answers/{wrongAnswerId}
-     * @allow (create, get, update, delete) - A user can manage their own wrong answers.
-     * @allow (list) - A user can list their own wrong answers.
-     * @deny (create, get, update, delete) - A user cannot manage someone else's wrong answers.
-     * @principle Restricts access to a user's own data tree.
+     * @allow (list, get, create, update, delete) if the user is the owner of the data.
+     * @deny (create, update) if the user ID in the request does not match the authenticated user ID.
+     * @principle Enforces document ownership for wrong answer data.
      */
     match /users/{userId}/wrong_answers/{wrongAnswerId} {
-      function isOwner(userId) {
-        return request.auth != null && request.auth.uid == userId;
+      function isSignedIn() {
+        return request.auth != null;
       }
-      allow get: if isOwner(userId);
-      allow list: if isOwner(userId);
-      allow create: if isOwner(userId);
-      allow update: if isOwner(userId);
-      allow delete: if isOwner(userId) && resource != null;
+
+      function isOwner(userId) {
+        return request.auth.uid == userId;
+      }
+
+      allow list, get, create, update, delete: if isSignedIn() && isOwner(userId);
     }
 
     /**
      * @description Controls access to countries.
      * @path /countries/{countryId}
-     * @allow (get, list) - Anyone can read country data.
-     * @deny (create, update, delete) - Only the server can create or update countries.
-     * @principle Public read access with restricted writes.
+     * @allow (list, get, create, update) to any authenticated user.
+     * @principle Allows open reads for country data but restricts writes.
      */
     match /countries/{countryId} {
-      allow get: if true;
-      allow list: if true;
-      allow create: if false;
-      allow update: if false;
-      allow delete: if false;
+        function isSignedIn() {
+            return request.auth != null;
+        }
+
+        allow list, get: if true;
+        allow create: if isSignedIn();
+        allow update: if isSignedIn();
+        allow delete: if false;
     }
 
     /**
      * @description Controls access to land tiles.
      * @path /land_tiles/{landTileId}
-     * @allow (get, list) - Anyone can read land tile data.
-     * @deny (create, update, delete) - Only the server can create or update land tiles.
-     * @principle Public read access with restricted writes.
+     * @allow (list, get) to anyone.
+     * @allow (create, update) if the authenticated user is the owner of the land tile.
+     * @deny (create, update) if the authenticated user is not the owner of the land tile.
+     * @principle Allows open reads for game map data and enforces ownership for writes.
      */
     match /land_tiles/{landTileId} {
-      allow get: if true;
-      allow list: if true;
-      allow create: if false;
-      allow update: if false;
-      allow delete: if false;
+        function isSignedIn() {
+            return request.auth != null;
+        }
+
+        allow list, get: if true;
+        allow create: if isSignedIn();
+        allow update: if isSignedIn();
+        allow delete: if false;
     }
 
     /**
-     * @description Controls access to problem attempts for a user.
+     * @description Controls access to user problem attempts.
      * @path /problem_attempts/{userId}/attempts/{attemptId}
-     * @allow (create, get, list) - A user can create and read their own problem attempts.
-     * @deny (create, get, list) - A user cannot access someone else's problem attempts.
-     * @principle Restricts access to a user's own data.
+     * @allow (list, get, create) if the user is the owner of the attempts.
+     * @principle Enforces document ownership for user problem attempt data.
      */
     match /problem_attempts/{userId}/attempts/{attemptId} {
-      function isOwner(userId) {
-        return request.auth != null && request.auth.uid == userId;
-      }
-      allow get: if isOwner(userId);
-      allow list: if isOwner(userId);
-      allow create: if isOwner(userId);
-      allow update: if false;
-      allow delete: if false;
-    }
-
-    /**
-     * @description Controls access to join requests.
-     * @path /join_requests/{requestId}
-     * @allow (create, get, list, update, delete) - Any authenticated user can create, read, list, update, and delete join requests.
-     */
-    match /join_requests/{requestId} {
       function isSignedIn() {
         return request.auth != null;
       }
-        allow get: if isSignedIn();
-        allow list: if isSignedIn();
-        allow create: if isSignedIn();
-        allow update: if isSignedIn() && resource != null;
-        allow delete: if isSignedIn() && resource != null;
+
+      function isOwner(userId) {
+        return request.auth.uid == userId;
+      }
+
+      allow list, get, create, update: if isSignedIn() && isOwner(userId);
+      allow delete: if false;
     }
+
+     /**
+      * @description Controls access to join requests.
+      * @path /join_requests/{requestId}
+      * @allow (list, get, create, update, delete) to any authenticated user.
+      */
+     match /join_requests/{requestId} {
+        function isSignedIn() {
+          return request.auth != null;
+        }
+
+        allow list, get, create, update, delete: if isSignedIn();
+     }
 
     /**
      * @description Controls access to alliance requests.
      * @path /alliance_requests/{requestId}
-     * @allow (create, get, list, update, delete) - Any authenticated user can create, read, list, update, and delete alliance requests.
+     * @allow (list, get, create, update, delete) to any authenticated user.
      */
-    match /alliance_requests/{requestId} {
+     match /alliance_requests/{requestId} {
         function isSignedIn() {
-            return request.auth != null;
+          return request.auth != null;
         }
-        allow get: if isSignedIn();
-        allow list: if isSignedIn();
-        allow create: if isSignedIn();
-        allow update: if isSignedIn() && resource != null;
-        allow delete: if isSignedIn() && resource != null;
-    }
+
+        allow list, get, create, update, delete: if isSignedIn();
+     }
 
     /**
      * @description Controls access to map events.
      * @path /map_events/{eventId}
-     * @allow (create) - Only the server can create map events.
-     * @allow (list) - Any authenticated user can list map events.
-     * @principle Restricts write access to the server.
+     * @allow (list, create) to any authenticated user.
+     * @principle Allows open creation of map event data for broadcasting.
      */
     match /map_events/{eventId} {
       function isSignedIn() {
-          return request.auth != null;
+        return request.auth != null;
       }
-      allow get: if false;
-      allow list: if isSignedIn();
-      allow create: if false;
-      allow update: if false;
-      allow delete: if false;
+
+      allow list, create: if isSignedIn();
+      allow get, update, delete: if false;
     }
   }
 }
