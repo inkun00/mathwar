@@ -46,7 +46,7 @@
         "ownerId": { "type": "string", "description": "Reference to the User who owns this land tile." },
         "hasWall": { "type": "boolean", "description": "Indicates if a defensive wall is built on this tile." }
       },
-      "required": ["x", "y", "ownerId"]
+      "required": ["x", "y"]
     },
     "ProblemAttempt": {
       "$schema": "http://json-schema.org/draft-07/schema#",

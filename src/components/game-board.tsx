@@ -220,7 +220,6 @@ export default function GameBoard({
 
   const handleTileClick = async (x: number, y: number) => {
     if (!currentUser || !firestore || isProcessingClick || !authUser) return;
-    const userRef = doc(firestore, 'users', authUser.uid);
     setIsProcessingClick(true);
   
     const clickedTile = flatLandTiles.find(t => t.x === x && t.y === y);
@@ -284,6 +283,7 @@ export default function GameBoard({
       }
       
       // This is an invasion
+      const userRef = doc(firestore, 'users', authUser.uid);
       const tokenUpdateData = { tokens: increment(-1) };
       updateDoc(userRef, tokenUpdateData)
         .then(() => {
@@ -472,8 +472,10 @@ export default function GameBoard({
         onWrongAnswer={handleWrongAnswer}
         userId={authUser?.uid}
         isInvasion={!!invasionTarget}
-        invasionWallBreaks={invasionWallBreaks}
+        isReview={false}
+        reviewProblem={null}
         hasWall={invasionTarget?.hasWall}
+        invasionWallBreaks={invasionWallBreaks}
       />
       {isDemise && <DemiseScreen onRestart={handleRestart} />}
     </div>

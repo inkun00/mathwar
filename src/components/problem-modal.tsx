@@ -29,7 +29,7 @@ interface ProblemModalProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
   problem: MathProblem | null;
-  onCorrectAnswer: (problem: MathProblem) => Promise<void> | void;
+  onCorrectAnswer: (problem?: MathProblem) => Promise<void> | void;
   onWrongAnswer?: (problem: MathProblem) => Promise<void> | void;
   userId?: string;
   isInvasion?: boolean;
@@ -166,11 +166,18 @@ export default function ProblemModal({
             toastTitle = '성벽 돌파!';
             toastDescription = '첫 번째 방어를 뚫었습니다! 한 문제 더 남았습니다.';
             shouldCloseModal = false; // Don't close, wait for the next problem
+            // Here you would typically call a function to set a new problem
+            // For now, we will just allow another attempt on a new problem
+            onCorrectAnswer(); // This will increment wall breaks
           } else {
             toastTitle = '침략 성공!';
             toastDescription = '적의 영토를 획득했습니다.';
+            await onCorrectAnswer(problem);
           }
+        } else {
+           await onCorrectAnswer(problem);
         }
+
 
         toast({
           title: toastTitle,
@@ -180,13 +187,12 @@ export default function ProblemModal({
           action: <CheckCircle className="text-green-500" />,
         });
         
-        await onCorrectAnswer(problem);
-
         if (shouldCloseModal) {
           onOpenChange(false);
         } else {
-          // If not closing (e.g. wall break), reset for the next problem but keep submitting state
-          setAnswers(Array(numInputs).fill('')); 
+          // If not closing (e.g. wall break), reset for the next problem.
+           setAnswers(Array(numInputs).fill('')); 
+           setIsSubmitting(false); // Allow next submission
         }
 
       } else {
@@ -215,8 +221,7 @@ export default function ProblemModal({
       });
       onOpenChange(false); // Close modal on error as well
     } finally {
-      // Re-enable the button only if the modal is not expecting another problem
-       if (!(isInvasion && hasWall && isAnswerCorrect(answers, problem.answer))) {
+       if (!(isInvasion && hasWall && isAnswerCorrect(answers, problem.answer) && invasionWallBreaks < 1)) {
          setIsSubmitting(false);
        }
     }
@@ -248,7 +253,7 @@ export default function ProblemModal({
             {isInvasion && hasWall && (
                 <div className="flex justify-center items-center gap-4 pt-2">
                     <Shield className={cn("w-6 h-6", invasionWallBreaks > 0 ? "text-muted-foreground" : "text-yellow-500")}/>
-                    <Shield className="w-6 h-6 text-muted-foreground"/>
+                    <Shield className={cn("w-6 h-6", invasionWallBreaks > 1 ? "text-muted-foreground" : "text-yellow-500")}/>
                 </div>
             )}
           </DialogHeader>
