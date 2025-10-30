@@ -222,44 +222,45 @@ export default function GameBoard({
   
     setIsProcessingClick(true);
     
-    if (invasionTarget.id) {
-        const tileRef = doc(firestore, "land_tiles", invasionTarget.id);
-        const hasWall = invasionTarget.hasWall ?? false;
-        const shouldBreakWall = hasWall && invasionWallBreaks > 0;
-        
-        const updateData = { 
-            ownerId: currentUser.id, 
-            hasWall: shouldBreakWall ? false : hasWall,
-            ownerNickname: currentUser.nickname,
-            countryId: currentUser.countryId,
-            countryName: currentUserCountry.name,
-            countryColor: currentUserCountry.color,
-        };
-        
-        await updateDoc(tileRef, updateData)
-            .then(() => {
-                handleTerritoryCut(invasionTarget.originalOwnerId!, currentUser.id);
+    try {
+        if (invasionTarget.id) {
+            const tileRef = doc(firestore, "land_tiles", invasionTarget.id);
+            const hasWall = invasionTarget.hasWall ?? false;
+            const shouldBreakWall = hasWall && invasionWallBreaks > 0;
+            
+            const updateData = { 
+                ownerId: currentUser.id, 
+                hasWall: shouldBreakWall ? false : hasWall,
+                ownerNickname: currentUser.nickname,
+                countryId: currentUser.countryId,
+                countryName: currentUserCountry.name,
+                countryColor: currentUserCountry.color,
+            };
+            
+            await updateDoc(tileRef, updateData);
 
-                addDoc(collection(firestore, 'map_events'), {
-                    tileId: invasionTarget.id, x: invasionTarget.x, y: invasionTarget.y,
-                    newOwnerId: currentUser.id, newHasWall: updateData.hasWall,
-                    newOwnerNickname: currentUser.nickname, newCountryId: currentUser.countryId,
-                    newCountryName: currentUserCountry.name, newCountryColor: currentUserCountry.color,
-                    timestamp: serverTimestamp(),
-                });
-            })
-            .catch(error => {
-                 const permissionError = new FirestorePermissionError({ path: tileRef.path, operation: 'update', requestResourceData: updateData });
-                errorEmitter.emit('permission-error', permissionError);
-            })
-            .finally(() => {
-                setInvasionTarget(null);
-                setInvasionWallBreaks(0);
-                setIsProcessingClick(false);
+            handleTerritoryCut(invasionTarget.originalOwnerId!, currentUser.id);
+
+            await addDoc(collection(firestore, 'map_events'), {
+                tileId: invasionTarget.id, x: invasionTarget.x, y: invasionTarget.y,
+                newOwnerId: currentUser.id, newHasWall: updateData.hasWall,
+                newOwnerNickname: currentUser.nickname, newCountryId: currentUser.countryId,
+                newCountryName: currentUserCountry.name, newCountryColor: currentUserCountry.color,
+                timestamp: serverTimestamp(),
             });
 
-    } else {
-        console.error("Invasion target ID is missing.");
+        } else {
+            console.error("Invasion target ID is missing.");
+        }
+    } catch (error) {
+        if (invasionTarget.id) {
+            const permissionError = new FirestorePermissionError({ path: doc(firestore, "land_tiles", invasionTarget.id).path, operation: 'update', requestResourceData: {} });
+            errorEmitter.emit('permission-error', permissionError);
+        }
+    } finally {
+        setInvasionTarget(null);
+        setInvasionWallBreaks(0);
+        setIsModalOpen(false); // Close modal on success
         setIsProcessingClick(false);
     }
   };
@@ -337,6 +338,7 @@ export default function GameBoard({
             setInvasionWallBreaks(0);
             setCurrentProblem(generateMathProblem());
             setIsModalOpen(true);
+            setIsProcessingClick(false);
         })
         .catch((error) => {
             errorEmitter.emit('permission-error', new FirestorePermissionError({ path: userRef.path, operation: 'update', requestResourceData: { tokens: increment(-1) } }));
@@ -443,9 +445,10 @@ export default function GameBoard({
   }
 
   const handleProblemModalClose = (open: boolean) => {
+    setIsModalOpen(open);
     if (!open) {
-      // Don't refund token if the click is still being processed (i.e., successful invasion)
-      if (invasionTarget && !isProcessingClick) {
+      // This logic now only runs for explicit cancellations (e.g., closing with "X")
+      if (invasionTarget) {
         if (authUser && currentUser) {
             const userRef = doc(firestore, 'users', authUser.uid);
             updateDoc(userRef, { tokens: increment(1) })
@@ -457,9 +460,7 @@ export default function GameBoard({
         setInvasionWallBreaks(0);
         toast({ title: "침략 취소", description: "사용한 토큰이 반환되었습니다.", variant: "default" });
       }
-      setIsProcessingClick(false);
     }
-    setIsModalOpen(open);
   }
 
 

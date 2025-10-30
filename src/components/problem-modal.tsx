@@ -151,21 +151,23 @@ export default function ProblemModal({
       if (correct) {
         let toastTitle = '정답입니다!';
         let toastDescription = '확장 토큰을 획득했습니다.';
-        let shouldCloseModal = true;
-  
+        
         if (isInvasion) {
           if (hasWall && invasionWallBreaks < 1) {
             toastTitle = '성벽 돌파!';
             toastDescription = '첫 번째 방어를 뚫었습니다! 한 문제 더 남았습니다.';
-            shouldCloseModal = false; 
-            await onCorrectAnswer(problem);
+            await onCorrectAnswer(problem); // This might trigger a state change to show a new problem.
+            setAnswers(Array(numInputs).fill('')); 
+            setIsSubmitting(false);
+            return; // Important: Don't close the modal yet.
           } else {
             toastTitle = '침략 성공!';
             toastDescription = '적의 영토를 획득했습니다.';
-            await onCorrectAnswer(problem);
+            await onCorrectAnswer(problem); // This will close the modal in GameBoard.
           }
         } else {
            await onCorrectAnswer(problem);
+           onOpenChange(false); // Close for non-invasion correct answer
         }
   
         toast({
@@ -175,13 +177,6 @@ export default function ProblemModal({
             'border-green-500 bg-green-50 text-green-700 dark:bg-green-900/50 dark:text-green-300 dark:border-green-700',
           action: <CheckCircle className="text-green-500" />,
         });
-        
-        if (shouldCloseModal) {
-          onOpenChange(false);
-        } else {
-           setAnswers(Array(numInputs).fill('')); 
-           setIsSubmitting(false);
-        }
   
       } else {
         toast({
@@ -209,10 +204,10 @@ export default function ProblemModal({
       });
       onOpenChange(false);
     } finally {
-      // Only set isSubmitting to false if we are not in the middle of a wall break
-      if (!(isInvasion && hasWall && isAnswerCorrect(answers, problem.answer) && invasionWallBreaks < 1)) {
-        setIsSubmitting(false);
-      }
+        // Only set isSubmitting to false if it was not a successful action that closes the modal
+        if (!isAnswerCorrect(answers, problem?.answer || [])) {
+             setIsSubmitting(false);
+        }
     }
   };
   
