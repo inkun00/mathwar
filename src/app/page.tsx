@@ -7,7 +7,7 @@ import SignUpDetails from "@/components/signup-details";
 import { useUser, useFirestore, useDoc, useCollection, useMemoFirebase } from "@/firebase";
 import { doc, getDoc, collection, getDocs, query } from "firebase/firestore";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { User, Country, ClientTile, ProblemAttempt, WrongAnswer, MapAggregate } from "@/lib/types";
+import type { User, Country, ClientTile, ProblemAttempt, WrongAnswer } from "@/lib/types";
 
 export default function Home() {
   const { user: authUser, isUserLoading: isAuthUserLoading } = useUser();

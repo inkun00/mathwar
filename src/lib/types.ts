@@ -43,16 +43,9 @@ export interface AllianceRequest {
   createdAt: any; // Firestore ServerTimestamp
 }
 
-export interface MapAggregate {
-    id: string;
-    mapData: string;
-    lastUpdated: any;
-}
-
-
 // Represents a single tile's data, either from a direct doc or aggregate
 export interface ClientTile {
-  id?: string; // ID from land_tiles document
+  id: string; // ID from land_tiles document
   x: number;
   y: number;
   ownerId: string | null;

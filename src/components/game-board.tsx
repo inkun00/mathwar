@@ -6,7 +6,7 @@ import { generateMathProblem, isAdjacent, canConquer as canConquerLogic } from "
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { ZoomIn, ZoomOut } from "lucide-react";
-import { useFirestore, useUser, errorEmitter, FirestorePermissionError, useCollection, useMemoFirebase } from "@/firebase";
+import { useFirestore, useUser, errorEmitter, FirestorePermissionError } from "@/firebase";
 import { doc, updateDoc, writeBatch, increment, collection, arrayUnion, runTransaction, getDocs, addDoc, query, where, documentId, getDoc, serverTimestamp } from "firebase/firestore";
 import { addWrongAnswer } from "@/firebase/firestore/data";
 
@@ -22,6 +22,7 @@ interface GameBoardProps {
   initialLandTiles: ClientTile[];
   initialProblemAttempts: ProblemAttempt[];
   initialWrongAnswers: WrongAnswer[];
+  initialAllUsers: User[];
 }
 
 export default function GameBoard({ 
@@ -30,6 +31,7 @@ export default function GameBoard({
   initialLandTiles,
   initialProblemAttempts,
   initialWrongAnswers,
+  initialAllUsers
 }: GameBoardProps) {
   const firestore = useFirestore();
   const { user: authUser } = useUser();
@@ -55,8 +57,7 @@ export default function GameBoard({
     setProblemAttempts(initialProblemAttempts);
   }, [initialProblemAttempts]);
 
-  const allUsersQuery = useMemoFirebase(() => firestore ? collection(firestore, 'users') : null, [firestore]);
-  const { data: allUsers, isLoading: isAllUsersLoading } = useCollection<User>(allUsersQuery);
+  const allUsers = initialAllUsers;
 
   const flatLandTiles = initialLandTiles;
 
@@ -179,21 +180,32 @@ export default function GameBoard({
   
     setIsProcessingClick(true);
     
-    // TODO: Cloud Function을 호출하여 타일 소유자를 변경해야 합니다.
-    // 클라이언트에서 직접 문서를 업데이트하는 것은 보안 규칙에 의해 차단됩니다.
-    
-    // 예시: 
-    // const conquerTile = httpsCallable(functions, 'conquerTile');
-    // await conquerTile({ tileId: invasionTarget.id, breaksWall: invasionWallBreaks > 0 });
+    if (invasionTarget.id) {
+        const tileRef = doc(firestore, "land_tiles", invasionTarget.id);
+        const updateData = { ownerId: currentUser.id, hasWall: invasionTarget.hasWall && invasionWallBreaks > 0 ? false : invasionTarget.hasWall };
+        
+        updateDoc(tileRef, updateData)
+            .then(() => {
+                handleTerritoryCut(invasionTarget.originalOwnerId!, currentUser.id);
+            })
+            .catch(error => {
+                 const permissionError = new FirestorePermissionError({
+                    path: tileRef.path,
+                    operation: 'update',
+                    requestResourceData: updateData,
+                });
+                errorEmitter.emit('permission-error', permissionError);
+            })
+            .finally(() => {
+                setInvasionTarget(null);
+                setInvasionWallBreaks(0);
+                setIsProcessingClick(false);
+            });
 
-    toast({
-        title: "기능 비활성화됨",
-        description: "Cloud Function으로의 마이그레이션이 필요합니다.",
-        variant: "destructive"
-    });
-
-    setInvasionTarget(null);
-    setIsProcessingClick(false);
+    } else {
+        console.error("Invasion target ID is missing.");
+        setIsProcessingClick(false);
+    }
   };
 
   const handleTileClick = async (x: number, y: number) => {
@@ -214,15 +226,27 @@ export default function GameBoard({
           setIsProcessingClick(false);
           return;
       }
+      const tileRef = doc(firestore, "land_tiles", clickedTile.id!);
+      const userRef = doc(firestore, "users", currentUser.id);
       
-      // TODO: Cloud Function을 호출하여 성벽을 건설해야 합니다.
-      toast({
-          title: "기능 비활성화됨",
-          description: "Cloud Function으로의 마이그레이션이 필요합니다.",
-          variant: "destructive"
+      const batch = writeBatch(firestore);
+      batch.update(tileRef, { hasWall: true });
+      batch.update(userRef, { walls: increment(-1) });
+
+      batch.commit().then(() => {
+        toast({ title: "성벽 건설 완료!", description: "영토에 성벽이 건설되었습니다." });
+        setIsBuildingWall(false);
+      }).catch(error => {
+        const permissionError = new FirestorePermissionError({
+            path: tileRef.path,
+            operation: 'update',
+            requestResourceData: { hasWall: true },
+        });
+        errorEmitter.emit('permission-error', permissionError);
+        toast({ variant: "destructive", title: "오류", description: "성벽을 건설하는 중 오류가 발생했습니다."});
+      }).finally(() => {
+        setIsProcessingClick(false);
       });
-      setIsBuildingWall(false);
-      setIsProcessingClick(false);
       return;
     }
   
@@ -237,37 +261,37 @@ export default function GameBoard({
     }
     
     if (clickedTile) { // Conquering an existing tile
-      if (clickedTile.ownerId !== currentUser.id) {
-        const owner = allUsers.find(u => u.id === clickedTile.ownerId);
-        if (owner && owner.countryId === currentUser.countryId) {
-          toast({
-            title: "공격 불가",
-            description: "같은 국가 소속의 플레이어는 공격할 수 없습니다.",
-          });
-          setIsProcessingClick(false);
-        } else {
-          // This is an invasion
-          const tokenUpdateData = { tokens: increment(-1) };
-          updateDoc(userRef, tokenUpdateData)
-            .then(() => {
-                setCurrentUser(prev => ({ ...prev!, tokens: (prev?.tokens ?? 0) - 1 }));
-                setInvasionTarget({ x, y, id: clickedTile.id, originalOwnerId: clickedTile.ownerId, hasWall: clickedTile.hasWall });
-                setInvasionWallBreaks(0);
-                setCurrentProblem(generateMathProblem());
-                setIsModalOpen(true);
-            })
-            .catch((error) => {
-                errorEmitter.emit('permission-error', new FirestorePermissionError({ path: userRef.path, operation: 'update', requestResourceData: tokenUpdateData }));
-                toast({ variant: "destructive", title: "오류", description: "작업을 처리하는 중 오류가 발생했습니다."});
-                setIsProcessingClick(false);
-            });
-        }
+      if (clickedTile.ownerId === currentUser.id) {
+        setIsProcessingClick(false); // clicked own tile
+        return;
+      }
+      const owner = allUsers.find(u => u.id === clickedTile.ownerId);
+      if (owner && owner.countryId === currentUser.countryId) {
+        toast({
+          title: "공격 불가",
+          description: "같은 국가 소속의 플레이어는 공격할 수 없습니다.",
+        });
+        setIsProcessingClick(false);
       } else {
-          setIsProcessingClick(false); // clicked own tile
+        // This is an invasion
+        const tokenUpdateData = { tokens: increment(-1) };
+        updateDoc(userRef, tokenUpdateData)
+          .then(() => {
+              setCurrentUser(prev => ({ ...prev!, tokens: (prev?.tokens ?? 0) - 1 }));
+              setInvasionTarget({ x, y, id: clickedTile.id, originalOwnerId: clickedTile.ownerId, hasWall: clickedTile.hasWall });
+              setInvasionWallBreaks(0);
+              setCurrentProblem(generateMathProblem());
+              setIsModalOpen(true);
+          })
+          .catch((error) => {
+              errorEmitter.emit('permission-error', new FirestorePermissionError({ path: userRef.path, operation: 'update', requestResourceData: tokenUpdateData }));
+              toast({ variant: "destructive", title: "오류", description: "작업을 처리하는 중 오류가 발생했습니다."});
+              setIsProcessingClick(false);
+          });
       }
     } else { // Conquering an empty tile
       const canPlace = canConquerLogic(
-          { x, y, ownerId: null, hasWall: false },
+          { x, y, id: '', ownerId: null, hasWall: false },
           currentUser,
           allUsers,
           userCountryTiles,
@@ -279,20 +303,30 @@ export default function GameBoard({
            return;
       }
 
-      // TODO: Cloud Function을 호출하여 타일을 생성하고 토큰을 차감해야 합니다.
-      // 클라이언트에서 직접 트랜잭션을 실행하는 것은 보안 규칙에 의해 차단됩니다.
+      const tileRef = doc(collection(firestore, 'land_tiles'));
+      const userRef = doc(firestore, 'users', currentUser.id);
 
-      // 예시: 
-      // const expandTerritory = httpsCallable(functions, 'expandTerritory');
-      // await expandTerritory({ x, y });
+      try {
+        await runTransaction(firestore, async (transaction) => {
+            const userDoc = await transaction.get(userRef);
+            if (!userDoc.exists() || (userDoc.data().tokens ?? 0) <= 0) {
+                throw new Error("토큰이 부족합니다.");
+            }
+            transaction.set(tileRef, { x, y, ownerId: currentUser.id, hasWall: false });
+            transaction.update(userRef, { tokens: increment(-1) });
+        });
 
-      toast({
-          title: "기능 비활성화됨",
-          description: "Cloud Function으로의 마이그레이션이 필요합니다.",
-          variant: "destructive"
-      });
-
-      setIsProcessingClick(false);
+      } catch (e) {
+          console.error("타일 클릭 트랜잭션 실패:", e);
+          const permissionError = new FirestorePermissionError({
+            path: tileRef.path,
+            operation: 'create',
+            requestResourceData: { x, y, ownerId: currentUser.id, hasWall: false },
+          });
+          errorEmitter.emit('permission-error', permissionError);
+      } finally {
+        setIsProcessingClick(false);
+      }
     }
   };
   
@@ -377,7 +411,7 @@ export default function GameBoard({
     }
   };
 
-  if (!currentUser || isAllUsersLoading) {
+  if (!currentUser || !allUsers) {
      return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">

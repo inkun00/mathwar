@@ -35,19 +35,18 @@
       },
       "required": ["id", "name", "createdBy", "color"]
     },
-    "MapAggregate": {
-        "$schema": "http://json-schema.org/draft-07/schema#",
-        "title": "MapAggregate",
-        "type": "object",
-        "description": "A single document storing the entire game map state as a string.",
-        "properties": {
-            "mapData": {
-                "type": "string",
-                "description": "A string representing the entire map. Each tile owner is represented by a 32-character UID string. Empty tiles are 32 underscores."
-            },
-            "lastUpdated": { "type": "string", "format": "date-time" }
-        },
-        "required": ["mapData", "lastUpdated"]
+    "LandTile": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "LandTile",
+      "type": "object",
+      "description": "Represents a single land tile on the game map.",
+      "properties": {
+        "x": { "type": "number", "description": "X-coordinate of the land tile on the map." },
+        "y": { "type": "number", "description": "Y-coordinate of the land tile on the map." },
+        "ownerId": { "type": "string", "description": "Reference to the User who owns this land tile." },
+        "hasWall": { "type": "boolean", "description": "Indicates if a defensive wall is built on this tile." }
+      },
+      "required": ["x", "y", "ownerId"]
     },
     "ProblemAttempt": {
       "$schema": "http://json-schema.org/draft-07/schema#",
@@ -120,14 +119,14 @@
         "definition": { "entityName": "country", "schema": { "$ref": "#/backend/entities/Country" }, "description": "Stores all countries.", "allow": ["list", "get", "create", "update"] }
       },
        {
-        "path": "/map_aggregates/latest",
+        "path": "/land_tiles/{landTileId}",
         "definition": {
-          "entityName": "mapAggregate",
+          "entityName": "landTile",
           "schema": {
-            "$ref": "#/backend/entities/MapAggregate"
+            "$ref": "#/backend/entities/LandTile"
           },
-          "description": "Stores the entire game map state in a single document for efficient loading.",
-           "allow": ["get"]
+          "description": "Stores all land tiles on the game map. Accessible to all authenticated users for gameplay.",
+           "allow": ["list", "get", "create", "update"]
         }
       },
       {
