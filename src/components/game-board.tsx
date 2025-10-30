@@ -330,7 +330,6 @@ export default function GameBoard({
       const tokenUpdateData = { tokens: increment(-1) };
       updateDoc(userRef, tokenUpdateData)
         .then(() => {
-            setCurrentUser(prev => ({ ...prev!, tokens: (prev?.tokens ?? 0) - 1 }));
             setInvasionTarget({ x, y, id: clickedTile.id, originalOwnerId: clickedTile.ownerId, hasWall: clickedTile.hasWall });
             setInvasionWallBreaks(0);
             setCurrentProblem(generateMathProblem());
@@ -384,8 +383,6 @@ export default function GameBoard({
             });
         }
         
-        setCurrentUser(prev => ({ ...prev!, tokens: (prev?.tokens ?? 0) - 1 }));
-
       } catch (e: any) {
           console.error("타일 클릭 트랜잭션 실패:", e);
           const permissionError = new FirestorePermissionError({
@@ -460,9 +457,6 @@ export default function GameBoard({
             const userRef = doc(firestore, 'users', authUser.uid);
             const refundData = { tokens: increment(1) };
             updateDoc(userRef, refundData)
-              .then(() => {
-                setCurrentUser(prev => ({ ...prev!, tokens: (prev?.tokens ?? 0) + 1 }));
-              })
               .catch(error => {
                 errorEmitter.emit('permission-error', new FirestorePermissionError({ path: userRef.path, operation: 'update', requestResourceData: refundData }));
               });
