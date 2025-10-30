@@ -43,7 +43,10 @@ export default function Home() {
           getDocs(collection(firestore, 'users', authUser.uid, 'wrong_answers'))
         ]);
 
-        setInitialLandTiles(tilesSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as ClientTile[]);
+        const tilesData = tilesSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as ClientTile[];
+        console.log('[page.tsx] Fetched initial land tiles:', tilesData.length, 'tiles');
+        setInitialLandTiles(tilesData);
+        
         setInitialCountries(countriesSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as Country[]);
         setInitialAllUsers(usersSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as User[]);
         setProblemAttempts(attemptsSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as ProblemAttempt[]);

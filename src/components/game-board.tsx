@@ -50,6 +50,7 @@ export default function GameBoard({
   const [isRestarting, setIsRestarting] = useState(false);
   
   const [landTiles, setLandTiles] = useState(initialLandTiles);
+  console.log('[game-board.tsx] landTiles state updated. Count:', landTiles.length, 'from initial:', initialLandTiles.length);
   const [countries, setCountries] = useState(initialCountries);
   const [allUsers, setAllUsers] = useState(initialAllUsers);
   const [problemAttempts, setProblemAttempts] = useState(initialProblemAttempts);
@@ -58,14 +59,11 @@ export default function GameBoard({
   const { data: currentUser } = useDoc<User>(userDocRef, liveCurrentUser);
 
   useEffect(() => {
-    //
     // CRITICAL FIX: Do not process if mapEvents is null, undefined, or empty.
-    // This prevents the initial landTiles state from being overwritten by an empty
-    // array on the first render.
-    //
     if (!mapEvents || mapEvents.length === 0) {
       return;
     }
+    console.log('[game-board.tsx] Processing', mapEvents.length, 'map events.');
 
     setLandTiles(currentTiles => {
       const newTiles = [...currentTiles];
