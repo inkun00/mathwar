@@ -32,6 +32,7 @@ export default function Home() {
       if (!firestore || !authUser) return; // Wait for authentication and firestore
 
       try {
+        console.log("[page.tsx] Starting to fetch initial data...");
         setIsInitialDataLoading(true);
         
         const [tilesSnapshot, countriesSnapshot, usersSnapshot, attemptsSnapshot, wrongsSnapshot] = await Promise.all([
@@ -44,17 +45,29 @@ export default function Home() {
 
         const tilesData = tilesSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as ClientTile[];
         setInitialLandTiles(tilesData);
+        console.log('[page.tsx] Fetched Tiles. Count:', tilesData.length, 'First tile:', tilesData.length > 0 ? tilesData[0] : 'N/A');
+
+        const countriesData = countriesSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as Country[];
+        setInitialCountries(countriesData);
+        console.log('[page.tsx] Fetched Countries. Count:', countriesData.length, 'First country:', countriesData.length > 0 ? countriesData[0] : 'N/A');
         
-        setInitialCountries(countriesSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as Country[]);
-        setInitialAllUsers(usersSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as User[]);
-        setProblemAttempts(attemptsSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as ProblemAttempt[]);
-        setWrongAnswers(wrongsSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as WrongAnswer[]);
+        const usersData = usersSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as User[];
+        setInitialAllUsers(usersData);
+        console.log('[page.tsx] Fetched Users. Count:', usersData.length, 'First user:', usersData.length > 0 ? usersData[0] : 'N/A');
+
+        const attemptsData = attemptsSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as ProblemAttempt[];
+        setProblemAttempts(attemptsData);
+        
+        const wrongsData = wrongsSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as WrongAnswer[];
+        setWrongAnswers(wrongsData);
+
 
       } catch (error) {
         console.error("Error fetching initial game data: ", error);
         // Handle error state appropriately, maybe show a toast
       } finally {
         setIsInitialDataLoading(false);
+        console.log("[page.tsx] Finished fetching initial data.");
       }
     };
     
@@ -121,3 +134,5 @@ export default function Home() {
     </div>
   );
 }
+
+    

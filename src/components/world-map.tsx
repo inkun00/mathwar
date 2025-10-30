@@ -74,6 +74,10 @@ TileComponent.displayName = "TileComponent";
 
 export default function WorldMap({ landTiles, onTileClick, canConquer, canBuildWall, zoomLevel, currentUser }: WorldMapProps) {
   
+  if (landTiles.length > 0) {
+    console.log('[WorldMap] Rendering with landTiles. Count:', landTiles.length, 'First tile:', landTiles[0]);
+  }
+
   const tilesMap = useMemo(() => {
     const map = new Map<string, ClientTile>();
     landTiles.forEach(tile => {
@@ -114,10 +118,8 @@ export default function WorldMap({ landTiles, onTileClick, canConquer, canBuildW
           const y = Math.floor(index / MAP_WIDTH);
           const isLandTile = isLand(x, y);
 
-          // Get tile from map, or create a default "empty" tile if it's land but not in the map
           const tile = isLandTile 
             ? (tilesMap.get(`${x},${y}`) || { id: `${x}-${y}`, x, y, ownerId: null, hasWall: false, ownerNickname: null, countryId: null, countryName: null, countryColor: null })
-            // This is a water tile, we pass a "dummy" object so TileComponent doesn't get a null prop
             : { id: `${x}-${y}`, x, y, ownerId: null, hasWall: false, ownerNickname: null, countryId: null, countryName: null, countryColor: '#aadaff' };
 
           return (
@@ -136,3 +138,5 @@ export default function WorldMap({ landTiles, onTileClick, canConquer, canBuildW
     </div>
   );
 }
+
+    
