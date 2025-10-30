@@ -4,8 +4,6 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import { FirebaseClientProvider } from '@/firebase';
-import { useUser, useFirestore, useDoc, useCollection, useMemoFirebase } from "@/firebase";
-import { doc, collection } from "firebase/firestore";
 
 // Metadata cannot be defined in a client component.
 // We will move this to a server component if needed, or define it statically.

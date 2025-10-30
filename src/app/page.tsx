@@ -5,7 +5,7 @@ import GameBoard from "@/components/game-board";
 import Login from "@/components/login";
 import SignUpDetails from "@/components/signup-details";
 import { useUser, useFirestore, useDoc, useCollection, useMemoFirebase } from "@/firebase";
-import { doc, getDoc, collection, getDocs, query } from "firebase/firestore";
+import { doc, collection, getDocs, query } from "firebase/firestore";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { User, Country, ClientTile, ProblemAttempt, WrongAnswer } from "@/lib/types";
 
