@@ -51,14 +51,18 @@ export default function Header({
   
   const remainingProblems = useMemo(() => {
     if (!problemAttempts) return 10;
-    const twentyFourHoursAgo = Date.now() - 24 * 60 * 60 * 1000;
-    const recentAttempts = problemAttempts.filter(
-      (attempt) =>
-        attempt.timestamp &&
-        typeof attempt.timestamp.toDate === 'function' && // Ensure it's a Firestore Timestamp
-        attempt.timestamp.toDate().getTime() > twentyFourHoursAgo &&
-        !attempt.isReview
-    );
+  
+    const today = new Date();
+    const todayString = today.toDateString(); // e.g., "Mon Jul 29 2024"
+
+    const recentAttempts = problemAttempts.filter((attempt) => {
+      if (!attempt.timestamp || typeof attempt.timestamp.toDate !== 'function' || attempt.isReview) {
+        return false;
+      }
+      const attemptDate = attempt.timestamp.toDate();
+      return attemptDate.toDateString() === todayString;
+    });
+
     return 10 - recentAttempts.length;
   }, [problemAttempts]);
 
@@ -67,7 +71,7 @@ export default function Header({
       toast({
         variant: "destructive",
         title: "일일 한도 초과",
-        description: "오늘의 문제 풀이 횟수를 모두 사용했습니다. 24시간 후에 다시 시도해 주세요.",
+        description: "오늘의 문제 풀이 횟수를 모두 사용했습니다. 내일 다시 시도해 주세요.",
       });
     } else {
       onSolveProblemClick();
