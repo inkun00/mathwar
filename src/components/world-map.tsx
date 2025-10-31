@@ -94,6 +94,7 @@ export default function WorldMap({ landTiles, onTileClick, canConquer, canBuildW
 
     return (
         <div className="flex items-center gap-2">
+            {tile.countryFlag && <FlagDisplay flagData={tile.countryFlag} width={24} />}
             <p className="text-lg">{content}</p>
         </div>
     );
@@ -115,8 +116,8 @@ export default function WorldMap({ landTiles, onTileClick, canConquer, canBuildW
           const isLandTile = isLand(x, y);
 
           const tile = isLandTile 
-            ? (tilesMap.get(`${x},${y}`) || { id: `${x}-${y}`, x, y, ownerId: null, hasWall: false, ownerNickname: null, countryId: null, countryName: null, countryColor: null })
-            : { id: `${x}-${y}`, x, y, ownerId: null, hasWall: false, ownerNickname: null, countryId: null, countryName: null, countryColor: '#aadaff' };
+            ? (tilesMap.get(`${x},${y}`) || { id: `${x}-${y}`, x, y, ownerId: null, hasWall: false, ownerNickname: null, countryId: null, countryName: null, countryColor: null, countryFlag: undefined })
+            : { id: `${x}-${y}`, x, y, ownerId: null, hasWall: false, ownerNickname: null, countryId: null, countryName: null, countryColor: '#aadaff', countryFlag: undefined };
 
           return (
             <TileComponent

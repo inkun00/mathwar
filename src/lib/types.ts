@@ -55,6 +55,7 @@ export interface ClientTile {
   countryId?: string | null;
   countryName?: string | null;
   countryColor?: string | null;
+  countryFlag?: string[];
 }
 
 export interface MapEvent {

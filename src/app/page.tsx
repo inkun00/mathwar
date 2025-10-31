@@ -50,6 +50,7 @@ export default function Home() {
         countryId: owner?.countryId || null,
         countryName: country?.name || null,
         countryColor: country?.color || null,
+        countryFlag: country?.flag,
       };
     });
 
