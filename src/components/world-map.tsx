@@ -94,7 +94,7 @@ export default function WorldMap({ landTiles, onTileClick, canConquer, canBuildW
 
     return (
         <div className="flex items-center gap-2">
-            {tile.countryFlag && <FlagDisplay flagData={tile.countryFlag} width={24} />}
+            {tile.countryFlag && <FlagDisplay flagData={tile.countryFlag} width={48} />}
             <p className="text-lg">{content}</p>
         </div>
     );
