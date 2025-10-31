@@ -18,16 +18,19 @@ export default function Home() {
   const [countries, setCountries] = useState<Country[]>([]);
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [landTiles, setLandTiles] = useState<ClientTile[]>([]);
-  const [problemAttempts, setProblemAttempts] = useState<ProblemAttempt[]>([]);
   const [wrongAnswers, setWrongAnswers] = useState<WrongAnswer[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // --- Real-time Data for events only ---
+  // --- Real-time Data ---
   const mapEventsQuery = useMemoFirebase(() => (firestore) ? query(collection(firestore, 'map_events'), orderBy('timestamp', 'desc'), limit(100)) : null, [firestore]);
   const { data: mapEvents, isLoading: isMapEventsLoading } = useCollection<MapEvent>(mapEventsQuery);
 
   const userDocRef = useMemoFirebase(() => (firestore && authUser) ? doc(firestore, 'users', authUser.uid) : null, [firestore, authUser]);
   const { data: liveUserProfile, isLoading: isUserProfileLoading } = useDoc<User>(userDocRef);
+
+  const problemAttemptsQuery = useMemoFirebase(() => (firestore && authUser) ? query(collection(firestore, 'problem_attempts', authUser.uid, 'attempts'), orderBy('timestamp', 'desc')) : null, [firestore, authUser]);
+  const { data: problemAttempts, isLoading: isProblemAttemptsLoading } = useCollection<ProblemAttempt>(problemAttemptsQuery);
+
 
   useEffect(() => {
     setUserProfile(liveUserProfile);
@@ -44,12 +47,11 @@ export default function Home() {
     const fetchInitialData = async () => {
       setIsLoading(true);
       try {
-        const [countriesSnapshot, usersSnapshot, landTilesSnapshot, wrongAnswersSnapshot, problemAttemptsSnapshot] = await Promise.all([
+        const [countriesSnapshot, usersSnapshot, landTilesSnapshot, wrongAnswersSnapshot] = await Promise.all([
           getDocs(collection(firestore, 'countries')),
           getDocs(collection(firestore, 'users')),
           getDocs(collection(firestore, 'land_tiles')),
           getDocs(collection(firestore, 'users', authUser.uid, 'wrong_answers')),
-          getDocs(query(collection(firestore, 'problem_attempts', authUser.uid, 'attempts'), orderBy('timestamp', 'desc')))
         ]);
 
         if (isMounted) {
@@ -57,7 +59,6 @@ export default function Home() {
           setAllUsers(usersSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as User[]);
           setLandTiles(landTilesSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as ClientTile[]);
           setWrongAnswers(wrongAnswersSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as WrongAnswer[]);
-          setProblemAttempts(problemAttemptsSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as ProblemAttempt[]);
         }
       } catch (error) {
         console.error("Error fetching initial data:", error);
@@ -107,7 +108,7 @@ export default function Home() {
   }, [landTiles, allUsers, countries]);
 
 
-  const isCoreDataLoading = isAuthUserLoading || isLoading || isUserProfileLoading;
+  const isCoreDataLoading = isAuthUserLoading || isLoading || isUserProfileLoading || isProblemAttemptsLoading;
 
   if (isCoreDataLoading && !userProfile) { // Show loading skeleton only on initial app load
     return (
@@ -128,7 +129,7 @@ export default function Home() {
      return <SignUpDetails />;
   }
   
-  if (isLoading || isMapEventsLoading) {
+  if (isLoading || isMapEventsLoading || isProblemAttemptsLoading) {
       return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
