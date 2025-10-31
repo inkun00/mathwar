@@ -5,7 +5,7 @@ import GameBoard from "@/components/game-board";
 import Login from "@/components/login";
 import SignUpDetails from "@/components/signup-details";
 import { useUser, useFirestore, useDoc, useCollection, useMemoFirebase } from "@/firebase";
-import { doc, collection, query, orderBy, limit, getDocs } from "firebase/firestore";
+import { doc, collection, query, orderBy, limit, getDocs, runTransaction, increment } from "firebase/firestore";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { User, Country, ClientTile, ProblemAttempt, WrongAnswer, MapEvent } from "@/lib/types";
 
@@ -55,10 +55,16 @@ export default function Home() {
         ]);
 
         if (isMounted) {
+          const loadedLandTiles = landTilesSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as ClientTile[];
           setCountries(countriesSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as Country[]);
           setAllUsers(usersSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as User[]);
-          setLandTiles(landTilesSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as ClientTile[]);
+          setLandTiles(loadedLandTiles);
           setWrongAnswers(wrongAnswersSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as WrongAnswer[]);
+          
+          // Distribute points after initial data is loaded
+          if (liveUserProfile) {
+            handlePointDistribution(liveUserProfile, loadedLandTiles);
+          }
         }
       } catch (error) {
         console.error("Error fetching initial data:", error);
@@ -75,7 +81,45 @@ export default function Home() {
       isMounted = false;
     }
 
-  }, [firestore, authUser, isAuthUserLoading]);
+  }, [firestore, authUser, isAuthUserLoading, liveUserProfile]);
+
+
+  const handlePointDistribution = async (currentUser: User, currentLandTiles: ClientTile[]) => {
+    if (!firestore || !currentUser) return;
+  
+    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  
+    if (currentUser.lastPointDistribution !== today) {
+      const userRef = doc(firestore, 'users', currentUser.id);
+      try {
+        await runTransaction(firestore, async (transaction) => {
+          const userDoc = await transaction.get(userRef);
+          if (!userDoc.exists()) {
+            throw "User document does not exist!";
+          }
+          // Re-check date inside transaction to prevent race conditions
+          if (userDoc.data().lastPointDistribution === today) {
+            return; 
+          }
+          const userOwnedTileCount = currentLandTiles.filter(tile => tile.ownerId === currentUser.id).length;
+          if (userOwnedTileCount > 0) {
+            transaction.update(userRef, { 
+              gamePoints: increment(userOwnedTileCount),
+              lastPointDistribution: today 
+            });
+          } else {
+            // If user has no tiles, just update the date to prevent re-checking today
+            transaction.update(userRef, { lastPointDistribution: today });
+          }
+        });
+        console.log(`Distributed ${currentLandTiles.filter(tile => tile.ownerId === currentUser.id).length} points to ${currentUser.nickname}`);
+      } catch (e) {
+        console.error("Point distribution transaction failed: ", e);
+      }
+    }
+  };
+
+
   
   const [enrichedTiles, setEnrichedTiles] = useState<ClientTile[]>([]);
 
