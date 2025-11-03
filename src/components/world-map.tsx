@@ -1,7 +1,7 @@
 'use client';
 import type { ClientTile, User } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { isLand, MAP_WIDTH, MAP_HEIGHT } from "@/lib/world-map-shape";
+import { isLand as isLandGlobal } from "@/lib/world-map-shape";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import React from "react";
 import { useMemo } from 'react';
@@ -14,6 +14,8 @@ interface WorldMapProps {
   canBuildWall: (tile: ClientTile) => boolean;
   zoomLevel: number;
   currentUser: User;
+  mapWidth: number;
+  mapHeight: number;
 }
 
 const TileComponent = React.memo(({ 
@@ -72,7 +74,7 @@ const TileComponent = React.memo(({
 TileComponent.displayName = "TileComponent";
 
 
-export default function WorldMap({ landTiles, onTileClick, canConquer, canBuildWall, zoomLevel, currentUser }: WorldMapProps) {
+export default function WorldMap({ landTiles, onTileClick, canConquer, canBuildWall, zoomLevel, currentUser, mapWidth, mapHeight }: WorldMapProps) {
   
   const tilesMap = useMemo(() => {
     const map = new Map<string, ClientTile>();
@@ -81,8 +83,8 @@ export default function WorldMap({ landTiles, onTileClick, canConquer, canBuildW
     });
     return map;
   }, [landTiles]);
-  
-  const getTooltipContent = (tile: ClientTile | null): React.ReactNode => {
+
+  const getTooltipContent = (tile: ClientTile | null, continent: string): React.ReactNode => {
     if (!tile) return null;
     if (!tile.ownerId) return <p className="text-lg">미개척지</p>;
     
@@ -100,37 +102,43 @@ export default function WorldMap({ landTiles, onTileClick, canConquer, canBuildW
     );
   };
   
+  const memoizedMapTiles = useMemo(() => {
+    return Array.from({ length: mapHeight * mapWidth }).map((_, index) => {
+      const x = index % mapWidth;
+      const y = Math.floor(index / mapWidth);
+      const continent = "continent1"; // This will need to be dynamic if you have multiple continents
+      const isLandTile = isLandGlobal(x, y, continent);
+
+      const tile = isLandTile 
+        ? (tilesMap.get(`${x},${y}`) || { id: `${x}-${y}`, x, y, ownerId: null, hasWall: false, ownerNickname: null, countryId: null, countryName: null, countryColor: null, countryFlag: undefined })
+        : { id: `${x}-${y}`, x, y, ownerId: null, hasWall: false, ownerNickname: null, countryId: null, countryName: null, countryColor: '#aadaff', countryFlag: undefined };
+
+      return (
+        <TileComponent
+          key={`${continent}-${x}-${y}`}
+          tile={tile}
+          onClick={() => onTileClick(x, y)}
+          isConquerable={isLandTile ? canConquer(tile) : false}
+          isWallBuildable={isLandTile ? canBuildWall(tile) : false}
+          isLandTile={isLandTile}
+          tooltipContent={getTooltipContent(tile, continent)}
+        />
+      );
+    });
+  }, [landTiles, onTileClick, canConquer, canBuildWall, mapWidth, mapHeight, tilesMap]);
+
+
   return (
     <div className="relative h-full w-full max-w-7xl overflow-auto rounded-lg border bg-card/80 p-2 shadow-inner backdrop-blur-sm md:p-4">
       <div 
         className="grid touch-none select-none gap-0 transition-transform duration-300 ease-in-out"
         style={{
-          gridTemplateColumns: `repeat(${MAP_WIDTH}, minmax(0, 1fr))`,
+          gridTemplateColumns: `repeat(${mapWidth}, minmax(0, 1fr))`,
           transform: `scale(${zoomLevel})`,
           transformOrigin: 'center center',
         }}
       >
-        {Array.from({ length: MAP_HEIGHT * MAP_WIDTH }).map((_, index) => {
-          const x = index % MAP_WIDTH;
-          const y = Math.floor(index / MAP_WIDTH);
-          const isLandTile = isLand(x, y);
-
-          const tile = isLandTile 
-            ? (tilesMap.get(`${x},${y}`) || { id: `${x}-${y}`, x, y, ownerId: null, hasWall: false, ownerNickname: null, countryId: null, countryName: null, countryColor: null, countryFlag: undefined })
-            : { id: `${x}-${y}`, x, y, ownerId: null, hasWall: false, ownerNickname: null, countryId: null, countryName: null, countryColor: '#aadaff', countryFlag: undefined };
-
-          return (
-            <TileComponent
-              key={index}
-              tile={tile}
-              onClick={() => onTileClick(x, y)}
-              isConquerable={isLandTile ? canConquer(tile) : false}
-              isWallBuildable={isLandTile ? canBuildWall(tile) : false}
-              isLandTile={isLandTile}
-              tooltipContent={getTooltipContent(tile)}
-            />
-          );
-        })}
+        {memoizedMapTiles}
       </div>
     </div>
   );
