@@ -22,7 +22,8 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(true);
 
   // --- Real-time Data ---
-  const mapEventsQuery = useMemoFirebase(() => (firestore) ? query(collection(firestore, 'map_events'), orderBy('timestamp', 'desc'), limit(100)) : null, [firestore]);
+  // MODIFIED: Only query for map events if the user is authenticated.
+  const mapEventsQuery = useMemoFirebase(() => (firestore && authUser) ? query(collection(firestore, 'map_events'), orderBy('timestamp', 'desc'), limit(100)) : null, [firestore, authUser]);
   const { data: mapEvents, isLoading: isMapEventsLoading } = useCollection<MapEvent>(mapEventsQuery);
 
   const userDocRef = useMemoFirebase(() => (firestore && authUser) ? doc(firestore, 'users', authUser.uid) : null, [firestore, authUser]);
