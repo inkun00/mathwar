@@ -125,7 +125,7 @@ export default function WorldMap({ landTiles, onTileClick, canConquer, canBuildW
         />
       );
     });
-  }, [landTiles, onTileClick, canConquer, canBuildWall, mapWidth, mapHeight, tilesMap]);
+  }, [tilesMap, onTileClick, canConquer, canBuildWall, mapWidth, mapHeight]);
 
 
   return (
