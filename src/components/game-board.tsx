@@ -6,7 +6,7 @@ import { generateMathProblem, isAdjacent, canConquer as canConquerLogic } from "
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { ZoomIn, ZoomOut } from "lucide-react";
-import { useFirestore, useUser, errorEmitter, FirestorePermissionError, useDoc, useMemoFirebase } from "@/firebase";
+import { useFirestore, useUser, errorEmitter, FirestorePermissionError, useMemoFirebase } from "@/firebase";
 import { doc, updateDoc, writeBatch, increment, collection, arrayUnion, runTransaction, addDoc, serverTimestamp } from "firebase/firestore";
 import { addWrongAnswer } from "@/firebase/firestore/data";
 
@@ -27,7 +27,7 @@ interface GameBoardProps {
 }
 
 export default function GameBoard({ 
-  currentUser: liveCurrentUser, 
+  currentUser, 
   countries, 
   landTiles: initialLandTiles,
   problemAttempts,
@@ -51,9 +51,6 @@ export default function GameBoard({
   const [isRestarting, setIsRestarting] = useState(false);
   
   const [landTiles, setLandTiles] = useState<ClientTile[]>([]);
-  
-  const userDocRef = useMemoFirebase(() => (firestore && authUser) ? doc(firestore, 'users', authUser.uid) : null, [firestore, authUser]);
-  const { data: currentUser } = useDoc<User>(userDocRef, liveCurrentUser);
   
   useEffect(() => {
     // This effect synchronizes the initial prop data with the local state.
