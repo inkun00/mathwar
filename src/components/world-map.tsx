@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 import { isLand as isLandGlobal } from "@/lib/world-map-shape";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import React from "react";
-import { useMemo } from 'react';
+import { useMemo, useCallback } from 'react';
 import FlagDisplay from "./flag-display";
 
 interface WorldMapProps {
@@ -84,7 +84,7 @@ export default function WorldMap({ landTiles, onTileClick, canConquer, canBuildW
     return map;
   }, [landTiles]);
 
-  const getTooltipContent = (tile: ClientTile | null, continent: string): React.ReactNode => {
+  const getTooltipContent = useCallback((tile: ClientTile | null, continent: string): React.ReactNode => {
     if (!tile) return null;
     if (!tile.ownerId) return <p className="text-lg">미개척지</p>;
     
@@ -100,7 +100,7 @@ export default function WorldMap({ landTiles, onTileClick, canConquer, canBuildW
             <p className="text-lg">{content}</p>
         </div>
     );
-  };
+  }, []);
   
   const memoizedMapTiles = useMemo(() => {
     return Array.from({ length: mapHeight * mapWidth }).map((_, index) => {
@@ -125,7 +125,7 @@ export default function WorldMap({ landTiles, onTileClick, canConquer, canBuildW
         />
       );
     });
-  }, [tilesMap, onTileClick, canConquer, canBuildWall, mapWidth, mapHeight]);
+  }, [tilesMap, onTileClick, canConquer, canBuildWall, mapWidth, mapHeight, getTooltipContent]);
 
 
   return (

@@ -6,7 +6,7 @@ import { generateMathProblem, isAdjacent, canConquer as canConquerLogic } from "
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { ZoomIn, ZoomOut } from "lucide-react";
-import { useFirestore, useUser, errorEmitter, FirestorePermissionError, useMemoFirebase } from "@/firebase";
+import { useFirestore, useUser, errorEmitter, FirestorePermissionError } from "@/firebase";
 import { doc, updateDoc, writeBatch, increment, collection, arrayUnion, runTransaction, addDoc, serverTimestamp } from "firebase/firestore";
 import { addWrongAnswer } from "@/firebase/firestore/data";
 
@@ -50,7 +50,7 @@ export default function GameBoard({
   const [isBuildingWall, setIsBuildingWall] = useState(false);
   const [isRestarting, setIsRestarting] = useState(false);
   
-  const [landTiles, setLandTiles] = useState<ClientTile[]>([]);
+  const [landTiles, setLandTiles] = useState<ClientTile[]>(initialLandTiles);
   
   useEffect(() => {
     // This effect synchronizes the initial prop data with the local state.
@@ -507,6 +507,8 @@ export default function GameBoard({
             canBuildWall={canBuildWall}
             zoomLevel={zoomLevel} 
             currentUser={currentUser}
+            mapWidth={144}
+            mapHeight={120}
         />
         <div className="absolute bottom-4 right-4 flex gap-2">
           <Button size="icon" onClick={handleZoomIn} aria-label="확대">
