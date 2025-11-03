@@ -5,7 +5,7 @@ import GameBoard from "@/components/game-board";
 import Login from "@/components/login";
 import SignUpDetails from "@/components/signup-details";
 import { useUser, useFirestore, useDoc, useCollection, useMemoFirebase } from "@/firebase";
-import { doc, collection, query, orderBy, limit, getDocs, runTransaction, increment } from "firebase/firestore";
+import { doc, collection, query, orderBy, limit, runTransaction, increment } from "firebase/firestore";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { User, Country, ClientTile, ProblemAttempt, WrongAnswer, MapEvent } from "@/lib/types";
 
@@ -13,122 +13,74 @@ export default function Home() {
   const { user: authUser, isUserLoading: isAuthUserLoading } = useUser();
   const firestore = useFirestore();
 
-  // --- State for data ---
-  const [userProfile, setUserProfile] = useState<User | null>(null);
-  const [countries, setCountries] = useState<Country[]>([]);
-  const [allUsers, setAllUsers] = useState<User[]>([]);
-  const [landTiles, setLandTiles] = useState<ClientTile[]>([]);
-  const [wrongAnswers, setWrongAnswers] = useState<WrongAnswer[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  // --- Real-time Data using useCollection and useDoc ---
+  const userDocRef = useMemoFirebase(() => (firestore && authUser) ? doc(firestore, 'users', authUser.uid) : null, [firestore, authUser]);
+  const { data: userProfile, isLoading: isUserProfileLoading } = useDoc<User>(userDocRef);
 
-  // --- Real-time Data ---
-  // MODIFIED: Only query for map events if the user is authenticated.
+  const countriesQuery = useMemoFirebase(() => firestore ? collection(firestore, 'countries') : null, [firestore]);
+  const { data: countries, isLoading: areCountriesLoading } = useCollection<Country>(countriesQuery);
+
+  const allUsersQuery = useMemoFirebase(() => firestore ? collection(firestore, 'users') : null, [firestore]);
+  const { data: allUsers, isLoading: areAllUsersLoading } = useCollection<User>(allUsersQuery);
+
+  const landTilesQuery = useMemoFirebase(() => firestore ? collection(firestore, 'land_tiles') : null, [firestore]);
+  const { data: landTiles, isLoading: areLandTilesLoading } = useCollection<ClientTile>(landTilesQuery);
+  
+  const wrongAnswersQuery = useMemoFirebase(() => (firestore && authUser) ? collection(firestore, 'users', authUser.uid, 'wrong_answers') : null, [firestore, authUser]);
+  const { data: wrongAnswers, isLoading: areWrongAnswersLoading } = useCollection<WrongAnswer>(wrongAnswersQuery);
+
   const mapEventsQuery = useMemoFirebase(() => (firestore && authUser) ? query(collection(firestore, 'map_events'), orderBy('timestamp', 'desc'), limit(100)) : null, [firestore, authUser]);
   const { data: mapEvents, isLoading: isMapEventsLoading } = useCollection<MapEvent>(mapEventsQuery);
 
-  const userDocRef = useMemoFirebase(() => (firestore && authUser) ? doc(firestore, 'users', authUser.uid) : null, [firestore, authUser]);
-  const { data: liveUserProfile, isLoading: isUserProfileLoading } = useDoc<User>(userDocRef);
-
   const problemAttemptsQuery = useMemoFirebase(() => (firestore && authUser) ? query(collection(firestore, 'problem_attempts', authUser.uid, 'attempts'), orderBy('timestamp', 'desc')) : null, [firestore, authUser]);
   const { data: problemAttempts, isLoading: isProblemAttemptsLoading } = useCollection<ProblemAttempt>(problemAttemptsQuery);
-
-
+  
+  // Point distribution logic effect
   useEffect(() => {
-    setUserProfile(liveUserProfile);
-  }, [liveUserProfile]);
+    const handlePointDistribution = async () => {
+      if (!firestore || !userProfile || !landTiles) return;
 
-  useEffect(() => {
-    if (!firestore || !authUser) {
-      if (!isAuthUserLoading) setIsLoading(false);
-      return;
-    };
-    
-    let isMounted = true;
+      const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
 
-    const fetchInitialData = async () => {
-      setIsLoading(true);
-      try {
-        const [countriesSnapshot, usersSnapshot, landTilesSnapshot, wrongAnswersSnapshot] = await Promise.all([
-          getDocs(collection(firestore, 'countries')),
-          getDocs(collection(firestore, 'users')),
-          getDocs(collection(firestore, 'land_tiles')),
-          getDocs(collection(firestore, 'users', authUser.uid, 'wrong_answers')),
-        ]);
-
-        if (isMounted) {
-          const loadedLandTiles = landTilesSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as ClientTile[];
-          setCountries(countriesSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as Country[]);
-          setAllUsers(usersSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as User[]);
-          setLandTiles(loadedLandTiles);
-          setWrongAnswers(wrongAnswersSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as WrongAnswer[]);
-          
-          // Distribute points after initial data is loaded
-          if (liveUserProfile) {
-            handlePointDistribution(liveUserProfile, loadedLandTiles);
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching initial data:", error);
-      } finally {
-        if (isMounted) {
-          setIsLoading(false);
+      if (userProfile.lastPointDistribution !== today) {
+        const userRef = doc(firestore, 'users', userProfile.id);
+        try {
+          await runTransaction(firestore, async (transaction) => {
+            const userDoc = await transaction.get(userRef);
+            if (!userDoc.exists()) {
+              throw "User document does not exist!";
+            }
+            // Re-check date inside transaction to prevent race conditions
+            if (userDoc.data().lastPointDistribution === today) {
+              return;
+            }
+            const userOwnedTileCount = landTiles.filter(tile => tile.ownerId === userProfile.id).length;
+            if (userOwnedTileCount > 0) {
+              transaction.update(userRef, {
+                gamePoints: increment(userOwnedTileCount),
+                lastPointDistribution: today
+              });
+            } else {
+              // If user has no tiles, just update the date to prevent re-checking today
+              transaction.update(userRef, { lastPointDistribution: today });
+            }
+          });
+          console.log(`Distributed points for ${userProfile.nickname}`);
+        } catch (e) {
+          console.error("Point distribution transaction failed: ", e);
         }
       }
     };
-    
-    fetchInitialData();
-    
-    return () => {
-      isMounted = false;
-    }
 
-  }, [firestore, authUser, isAuthUserLoading, liveUserProfile]);
-
-
-  const handlePointDistribution = async (currentUser: User, currentLandTiles: ClientTile[]) => {
-    if (!firestore || !currentUser) return;
-  
-    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-  
-    if (currentUser.lastPointDistribution !== today) {
-      const userRef = doc(firestore, 'users', currentUser.id);
-      try {
-        await runTransaction(firestore, async (transaction) => {
-          const userDoc = await transaction.get(userRef);
-          if (!userDoc.exists()) {
-            throw "User document does not exist!";
-          }
-          // Re-check date inside transaction to prevent race conditions
-          if (userDoc.data().lastPointDistribution === today) {
-            return; 
-          }
-          const userOwnedTileCount = currentLandTiles.filter(tile => tile.ownerId === currentUser.id).length;
-          if (userOwnedTileCount > 0) {
-            transaction.update(userRef, { 
-              gamePoints: increment(userOwnedTileCount),
-              lastPointDistribution: today 
-            });
-          } else {
-            // If user has no tiles, just update the date to prevent re-checking today
-            transaction.update(userRef, { lastPointDistribution: today });
-          }
-        });
-        console.log(`Distributed ${currentLandTiles.filter(tile => tile.ownerId === currentUser.id).length} points to ${currentUser.nickname}`);
-      } catch (e) {
-        console.error("Point distribution transaction failed: ", e);
-      }
-    }
-  };
-
+    handlePointDistribution();
+  }, [userProfile, landTiles, firestore]);
 
   
   const [enrichedTiles, setEnrichedTiles] = useState<ClientTile[]>([]);
 
   useEffect(() => {
-    if (landTiles.length === 0 || allUsers.length === 0 || countries.length === 0) {
-        if (landTiles.length > 0) { // If tiles are loaded but users/countries are not, show un-owned tiles
-            setEnrichedTiles(landTiles);
-        }
+    if (!landTiles || !allUsers || !countries) {
+        if(landTiles) setEnrichedTiles(landTiles); // Show un-owned tiles if tiles are loaded
         return;
     }
 
@@ -153,9 +105,9 @@ export default function Home() {
   }, [landTiles, allUsers, countries]);
 
 
-  const isCoreDataLoading = isAuthUserLoading || isLoading || isUserProfileLoading || isProblemAttemptsLoading;
+  const isCoreDataLoading = isAuthUserLoading || isUserProfileLoading;
 
-  if (isCoreDataLoading && !userProfile) { // Show loading skeleton only on initial app load
+  if (isCoreDataLoading) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
@@ -174,7 +126,9 @@ export default function Home() {
      return <SignUpDetails />;
   }
   
-  if (isLoading || isMapEventsLoading || isProblemAttemptsLoading) {
+  const isGameDataLoading = areCountriesLoading || areAllUsersLoading || areLandTilesLoading || areWrongAnswersLoading || isMapEventsLoading || isProblemAttemptsLoading;
+
+  if (isGameDataLoading) {
       return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
@@ -185,7 +139,7 @@ export default function Home() {
     );
   }
   
-  if (userProfile && enrichedTiles.length > 0 && problemAttempts && countries && allUsers && wrongAnswers) {
+  if (userProfile && enrichedTiles && problemAttempts && countries && allUsers && wrongAnswers && mapEvents) {
     return (
       <div className="relative flex h-screen w-full flex-col items-center bg-background p-4 sm:p-6 md:p-8">
         <GameBoard 
