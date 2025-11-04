@@ -170,7 +170,7 @@ export default function GameBoard({
       }
     };
     handleTokenPenalty();
-  }, [currentUser?.tokens, firestore, currentUser, landTiles, toast, isRestarting]);
+  }, [currentUser?.tokens, currentUser?.id, firestore, isRestarting]);
 
   const handleSolveProblemForToken = () => {
     setIsBuildingWall(false);
@@ -557,3 +557,5 @@ export default function GameBoard({
     </div>
   );
 }
+
+    
