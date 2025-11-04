@@ -50,11 +50,16 @@ export default function Home() {
             if (!userDoc.exists()) {
               throw "User document does not exist!";
             }
+            const currentData = userDoc.data();
             // Re-check date inside transaction to prevent race conditions
-            if (userDoc.data().lastPointDistribution === today) {
+            if (currentData.lastPointDistribution === today) {
               return;
             }
-            const userOwnedTileCount = landTiles.filter(tile => tile.ownerId === userProfile.id).length;
+            
+            // This is still inefficient but better than before. A server-side function is the best approach.
+            const landTilesSnapshot = await getDocs(collection(firestore, 'land_tiles'));
+            const userOwnedTileCount = landTilesSnapshot.docs.filter(doc => doc.data().ownerId === userProfile.id).length;
+
             if (userOwnedTileCount > 0) {
               transaction.update(userRef, {
                 gamePoints: increment(userOwnedTileCount),
@@ -73,7 +78,7 @@ export default function Home() {
     };
 
     handlePointDistribution();
-  }, [userProfile, landTiles, firestore]);
+  }, [userProfile, firestore]); // Removed landTiles from dependencies
 
   
   const [enrichedTiles, setEnrichedTiles] = useState<ClientTile[]>([]);
