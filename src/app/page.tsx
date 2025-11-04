@@ -1,11 +1,11 @@
 'use client';
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import GameBoard from "@/components/game-board";
 import Login from "@/components/login";
 import SignUpDetails from "@/components/signup-details";
 import { useUser, useFirestore, useDoc, useCollection, useMemoFirebase } from "@/firebase";
-import { doc, collection, query, orderBy, limit, runTransaction, increment, getDocs } from "firebase/firestore";
+import { doc, collection, query, orderBy, limit, runTransaction, increment } from "firebase/firestore";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { User, Country, ClientTile, ProblemAttempt, WrongAnswer, MapEvent } from "@/lib/types";
 
@@ -38,30 +38,24 @@ export default function Home() {
   // Point distribution logic effect
   useEffect(() => {
     const handlePointDistribution = async () => {
-      // This function needs both firestore and the user's profile to be loaded.
-      if (!firestore || !userProfile) return;
+      if (!firestore || !userProfile || !landTiles) return;
   
-      const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+      const today = new Date().toISOString().slice(0, 10);
   
       if (userProfile.lastPointDistribution !== today) {
         const userRef = doc(firestore, 'users', userProfile.id);
         try {
-          // This transaction now relies on client-side data (`landTiles`) which might be stale at the exact moment of execution,
-          // but it avoids a full collection read. For 100% accuracy, a server-side function is the best approach.
-          // This is a trade-off for client-side performance.
           await runTransaction(firestore, async (transaction) => {
             const userDoc = await transaction.get(userRef);
             if (!userDoc.exists()) {
               throw "User document does not exist!";
             }
             const currentData = userDoc.data();
-            // Re-check date inside the transaction to prevent race conditions.
             if (currentData.lastPointDistribution === today) {
               return;
             }
   
-            // Use the already-loaded `landTiles` from the `useCollection` hook.
-            const userOwnedTileCount = landTiles ? landTiles.filter(tile => tile.ownerId === userProfile.id).length : 0;
+            const userOwnedTileCount = landTiles.filter(tile => tile.ownerId === userProfile.id).length;
             
             if (userOwnedTileCount > 0) {
               transaction.update(userRef, {
@@ -69,7 +63,6 @@ export default function Home() {
                 lastPointDistribution: today
               });
             } else {
-              // If the user has no tiles, just update the date to prevent re-checking today.
               transaction.update(userRef, { lastPointDistribution: today });
             }
           });
@@ -80,22 +73,18 @@ export default function Home() {
       }
     };
   
-    // Run the distribution check.
     handlePointDistribution();
-  }, [firestore, userProfile?.id]); // Depend only on firestore and the user's ID to run once per user session.
+  }, [firestore, userProfile?.id]); // Depend on user ID to run once per user session.
   
-  const [enrichedTiles, setEnrichedTiles] = useState<ClientTile[]>([]);
-
-  useEffect(() => {
+  const enrichedTiles = useMemo(() => {
     if (!landTiles || !allUsers || !countries) {
-        if(landTiles) setEnrichedTiles(landTiles); // Show un-owned tiles if tiles are loaded
-        return;
+        return landTiles || []; 
     }
 
     const userMap = new Map(allUsers.map(user => [user.id, user]));
     const countryMap = new Map(countries.map(country => [country.id, country]));
 
-    const newEnrichedTiles = landTiles.map(tile => {
+    return landTiles.map(tile => {
       const owner = tile.ownerId ? userMap.get(tile.ownerId) : null;
       const country = owner?.countryId ? countryMap.get(owner.countryId) : null;
       return {
@@ -107,9 +96,6 @@ export default function Home() {
         countryFlag: country?.flag,
       };
     });
-
-    setEnrichedTiles(newEnrichedTiles);
-
   }, [landTiles, allUsers, countries]);
 
 
