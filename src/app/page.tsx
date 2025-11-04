@@ -5,23 +5,21 @@ import GameBoard from "@/components/game-board";
 import Login from "@/components/login";
 import SignUpDetails from "@/components/signup-details";
 import { useUser, useFirestore, useDoc, useCollection, useMemoFirebase } from "@/firebase";
-import { doc, collection, query, orderBy, limit, runTransaction, increment } from "firebase/firestore";
+import { doc, collection, query, orderBy, limit, runTransaction, increment, getDocs } from "firebase/firestore";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { User, Country, ClientTile, ProblemAttempt, WrongAnswer, MapEvent } from "@/lib/types";
 
 export default function Home() {
   const { user: authUser, isUserLoading: isAuthUserLoading } = useUser();
   const firestore = useFirestore();
+  
+  const [countries, setCountries] = useState<Country[]>([]);
+  const [allUsers, setAllUsers] = useState<User[]>([]);
+  const [areStaticDataLoading, setAreStaticDataLoading] = useState(true);
 
   // --- Real-time Data using useCollection and useDoc ---
   const userDocRef = useMemoFirebase(() => (firestore && authUser) ? doc(firestore, 'users', authUser.uid) : null, [firestore, authUser]);
   const { data: userProfile, isLoading: isUserProfileLoading } = useDoc<User>(userDocRef);
-
-  const countriesQuery = useMemoFirebase(() => firestore ? collection(firestore, 'countries') : null, [firestore]);
-  const { data: countries, isLoading: areCountriesLoading } = useCollection<Country>(countriesQuery);
-
-  const allUsersQuery = useMemoFirebase(() => firestore ? collection(firestore, 'users') : null, [firestore]);
-  const { data: allUsers, isLoading: areAllUsersLoading } = useCollection<User>(allUsersQuery);
 
   const landTilesQuery = useMemoFirebase(() => firestore ? collection(firestore, 'land_tiles') : null, [firestore]);
   const { data: landTiles, isLoading: areLandTilesLoading } = useCollection<ClientTile>(landTilesQuery);
@@ -35,6 +33,32 @@ export default function Home() {
   const problemAttemptsQuery = useMemoFirebase(() => (firestore && authUser) ? query(collection(firestore, 'problem_attempts', authUser.uid, 'attempts'), orderBy('timestamp', 'desc')) : null, [firestore, authUser]);
   const { data: problemAttempts, isLoading: isProblemAttemptsLoading } = useCollection<ProblemAttempt>(problemAttemptsQuery);
   
+  // Fetch static data (users and countries) only once
+  useEffect(() => {
+    if (!firestore) return;
+
+    const fetchStaticData = async () => {
+      setAreStaticDataLoading(true);
+      try {
+        const [countriesSnapshot, usersSnapshot] = await Promise.all([
+          getDocs(collection(firestore, 'countries')),
+          getDocs(collection(firestore, 'users'))
+        ]);
+        const countriesData = countriesSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as Country[];
+        const usersData = usersSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as User[];
+        setCountries(countriesData);
+        setAllUsers(usersData);
+      } catch (error) {
+        console.error("Error fetching static data:", error);
+      } finally {
+        setAreStaticDataLoading(false);
+      }
+    };
+
+    fetchStaticData();
+  }, [firestore]);
+
+
   // Point distribution logic effect
   useEffect(() => {
     const handlePointDistribution = async () => {
@@ -77,7 +101,7 @@ export default function Home() {
   }, [firestore, userProfile?.id]); // Depend on user ID to run once per user session.
   
   const enrichedTiles = useMemo(() => {
-    if (!landTiles || !allUsers || !countries) {
+    if (!landTiles || allUsers.length === 0 || countries.length === 0) {
         return landTiles || []; 
     }
 
@@ -120,7 +144,7 @@ export default function Home() {
      return <SignUpDetails />;
   }
   
-  const isGameDataLoading = areCountriesLoading || areAllUsersLoading || areLandTilesLoading || areWrongAnswersLoading || isMapEventsLoading || isProblemAttemptsLoading;
+  const isGameDataLoading = areStaticDataLoading || areLandTilesLoading || areWrongAnswersLoading || isMapEventsLoading || isProblemAttemptsLoading;
 
   if (isGameDataLoading) {
       return (
