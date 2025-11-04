@@ -57,48 +57,6 @@ export default function Home() {
 
     fetchStaticData();
   }, [firestore]);
-
-
-  // Point distribution logic effect
-  useEffect(() => {
-    const handlePointDistribution = async () => {
-      if (!firestore || !userProfile || !landTiles) return;
-  
-      const today = new Date().toISOString().slice(0, 10);
-  
-      if (userProfile.lastPointDistribution !== today) {
-        const userRef = doc(firestore, 'users', userProfile.id);
-        try {
-          await runTransaction(firestore, async (transaction) => {
-            const userDoc = await transaction.get(userRef);
-            if (!userDoc.exists()) {
-              throw "User document does not exist!";
-            }
-            const currentData = userDoc.data();
-            if (currentData.lastPointDistribution === today) {
-              return;
-            }
-  
-            const userOwnedTileCount = landTiles.filter(tile => tile.ownerId === userProfile.id).length;
-            
-            if (userOwnedTileCount > 0) {
-              transaction.update(userRef, {
-                gamePoints: increment(userOwnedTileCount),
-                lastPointDistribution: today
-              });
-            } else {
-              transaction.update(userRef, { lastPointDistribution: today });
-            }
-          });
-          console.log(`Distributed points for ${userProfile.nickname}`);
-        } catch (e) {
-          console.error("Point distribution transaction failed: ", e);
-        }
-      }
-    };
-  
-    handlePointDistribution();
-  }, [firestore, userProfile?.id]); // Depend on user ID to run once per user session.
   
   const enrichedTiles = useMemo(() => {
     if (!landTiles || allUsers.length === 0 || countries.length === 0) {
