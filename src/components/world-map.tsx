@@ -107,7 +107,7 @@ export default function WorldMap({ landTiles, onTileClick, canConquer, canBuildW
       const x = index % mapWidth;
       const y = Math.floor(index / mapWidth);
       const continent = "continent1"; // This will need to be dynamic if you have multiple continents
-      const isLandTile = isLandGlobal(x, y, continent);
+      const isLandTile = isLandGlobal(x, y);
 
       const tile = isLandTile 
         ? (tilesMap.get(`${x},${y}`) || { id: `${x}-${y}`, x, y, ownerId: null, hasWall: false, ownerNickname: null, countryId: null, countryName: null, countryColor: null, countryFlag: undefined })

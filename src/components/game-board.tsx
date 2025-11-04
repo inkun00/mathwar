@@ -50,15 +50,20 @@ export default function GameBoard({
   const [isBuildingWall, setIsBuildingWall] = useState(false);
   const [isRestarting, setIsRestarting] = useState(false);
   
+  // The landTiles state is now the single source of truth for the map on the client.
+  // It's initialized with data from props and then updated by real-time events.
   const [landTiles, setLandTiles] = useState<ClientTile[]>(initialLandTiles);
   
   useEffect(() => {
     // This effect synchronizes the initial prop data with the local state.
+    // It runs only when the initial data from the server changes.
     setLandTiles(initialLandTiles);
   }, [initialLandTiles]);
 
 
   useEffect(() => {
+    // This effect processes real-time map events to update the local map state
+    // without needing to re-fetch the entire map.
     if (!mapEvents || mapEvents.length === 0) {
       return;
     }
@@ -66,9 +71,13 @@ export default function GameBoard({
     setLandTiles(currentTiles => {
       const tileMap = new Map(currentTiles.map(t => [t.id, t]));
       
-      for (const event of mapEvents) {
+      // Process events in chronological order (oldest first)
+      const sortedEvents = [...mapEvents].sort((a, b) => a.timestamp?.toMillis() - b.timestamp?.toMillis());
+      
+      for (const event of sortedEvents) {
         if (!event.tileId) continue;
         
+        // Prepare the updated tile data from the event
         const eventData = {
           ownerId: event.newOwnerId,
           hasWall: event.newHasWall,
@@ -79,15 +88,18 @@ export default function GameBoard({
         };
 
         const existingTile = tileMap.get(event.tileId);
+
         if (existingTile) {
+          // If the tile exists, update it with the new data
           tileMap.set(event.tileId, { ...existingTile, ...eventData });
         } else {
+          // If it's a new tile, create it
           tileMap.set(event.tileId, { id: event.tileId, x: event.x, y: event.y, ...eventData });
         }
       }
       return Array.from(tileMap.values());
     });
-  }, [mapEvents]);
+  }, [mapEvents]); // This effect now correctly depends on `mapEvents`.
 
   const currentUserCountry = useMemo(() => countries.find(c => c.id === currentUser?.countryId), [countries, currentUser]);
   
@@ -185,11 +197,15 @@ export default function GameBoard({
  const handleTerritoryCut = async (originalOwnerId: string, conquerorId: string | null) => {
     if (!firestore || !currentUser) return;
 
+    // After a successful invasion, we check the state from the *client's* perspective.
+    // The `landTiles` state has already been optimistically updated by the successful write.
     const remainingTiles = landTiles.filter(tile => tile.ownerId === originalOwnerId).length;
-
+    
+    // We check if the owner has only one tile *left*. This is a simplification.
+    // A more robust check might need to query Firestore for the count before the update.
     if (remainingTiles === 1 && conquerorId) {
       const originalOwner = allUsers.find(u => u.id === originalOwnerId);
-      if (!originalOwner) return;
+      if (!originalOwner || !originalOwner.countryId) return;
 
       const conqueror = allUsers.find(u => u.id === conquerorId);
       if (!conqueror || !conqueror.countryId) return;
@@ -197,6 +213,7 @@ export default function GameBoard({
       const conquerorCountry = countries.find(c => c.id === conqueror.countryId);
       if (!conquerorCountry) return;
 
+      // This logic remains a transaction as it modifies multiple documents atomically.
       const countryRef = doc(firestore, "countries", originalOwner.countryId);
       const conquerorUserRef = doc(firestore, "users", conqueror.id);
       
@@ -241,6 +258,7 @@ export default function GameBoard({
 
             handleTerritoryCut(invasionTarget.originalOwnerId!, currentUser.id);
 
+            // Create a map_event document to broadcast this change to other clients.
             await addDoc(collection(firestore, 'map_events'), {
                 tileId: invasionTarget.id, x: invasionTarget.x, y: invasionTarget.y,
                 newOwnerId: currentUser.id, newHasWall: updateData.hasWall,
@@ -300,6 +318,7 @@ export default function GameBoard({
       batch.commit().then(() => {
         toast({ title: "성벽 건설 완료!", description: "영토에 성벽이 건설되었습니다." });
         setIsBuildingWall(false);
+        // Create a map_event for wall construction
         addDoc(collection(firestore, 'map_events'), {
             tileId: clickedTile.id, x: clickedTile.x, y: clickedTile.y,
             newOwnerId: clickedTile.ownerId, newHasWall: true,
@@ -383,6 +402,7 @@ export default function GameBoard({
         });
 
         if (newTileId) {
+            // Create a map_event for the new tile
             await addDoc(collection(firestore, 'map_events'), {
                 tileId: newTileId, x: x, y: y,
                 newOwnerId: currentUser.id, newHasWall: false,

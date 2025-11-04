@@ -5,7 +5,7 @@ import GameBoard from "@/components/game-board";
 import Login from "@/components/login";
 import SignUpDetails from "@/components/signup-details";
 import { useUser, useFirestore, useDoc, useCollection, useMemoFirebase } from "@/firebase";
-import { doc, collection, query, orderBy, limit, runTransaction, increment } from "firebase/firestore";
+import { doc, collection, query, orderBy, limit, runTransaction, increment, getDocs } from "firebase/firestore";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { User, Country, ClientTile, ProblemAttempt, WrongAnswer, MapEvent } from "@/lib/types";
 
@@ -38,47 +38,53 @@ export default function Home() {
   // Point distribution logic effect
   useEffect(() => {
     const handlePointDistribution = async () => {
-      if (!firestore || !userProfile || !landTiles) return;
+      if (!firestore || !userProfile) return;
 
       const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
 
       if (userProfile.lastPointDistribution !== today) {
         const userRef = doc(firestore, 'users', userProfile.id);
         try {
-          await runTransaction(firestore, async (transaction) => {
-            const userDoc = await transaction.get(userRef);
-            if (!userDoc.exists()) {
-              throw "User document does not exist!";
-            }
-            const currentData = userDoc.data();
-            // Re-check date inside transaction to prevent race conditions
-            if (currentData.lastPointDistribution === today) {
-              return;
-            }
-            
-            // This is still inefficient but better than before. A server-side function is the best approach.
-            const landTilesSnapshot = await getDocs(collection(firestore, 'land_tiles'));
-            const userOwnedTileCount = landTilesSnapshot.docs.filter(doc => doc.data().ownerId === userProfile.id).length;
+            // This transaction now relies on client-side data (`landTiles`) which might be stale,
+            // but it avoids a full collection read on every execution.
+            // For 100% accuracy, a server-side function is the best approach.
+            // This is a trade-off for client-side performance.
+            await runTransaction(firestore, async (transaction) => {
+                const userDoc = await transaction.get(userRef);
+                if (!userDoc.exists()) {
+                    throw "User document does not exist!";
+                }
+                const currentData = userDoc.data();
+                // Re-check date inside transaction to prevent race conditions
+                if (currentData.lastPointDistribution === today) {
+                    return;
+                }
 
-            if (userOwnedTileCount > 0) {
-              transaction.update(userRef, {
-                gamePoints: increment(userOwnedTileCount),
-                lastPointDistribution: today
-              });
-            } else {
-              // If user has no tiles, just update the date to prevent re-checking today
-              transaction.update(userRef, { lastPointDistribution: today });
-            }
-          });
-          console.log(`Distributed points for ${userProfile.nickname}`);
+                // This is the critical change: Use the already-loaded `landTiles` from state
+                // instead of re-fetching the entire collection.
+                const userOwnedTileCount = landTiles ? landTiles.filter(tile => tile.ownerId === userProfile.id).length : 0;
+                
+                if (userOwnedTileCount > 0) {
+                    transaction.update(userRef, {
+                        gamePoints: increment(userOwnedTileCount),
+                        lastPointDistribution: today
+                    });
+                } else {
+                    // If user has no tiles, just update the date to prevent re-checking today
+                    transaction.update(userRef, { lastPointDistribution: today });
+                }
+            });
+            console.log(`Distributed points for ${userProfile.nickname}`);
         } catch (e) {
-          console.error("Point distribution transaction failed: ", e);
+            console.error("Point distribution transaction failed: ", e);
         }
       }
     };
 
+    // Run only when the user profile is loaded.
     handlePointDistribution();
-  }, [userProfile, firestore]); // Removed landTiles from dependencies
+  }, [userProfile, firestore]); // landTiles is removed from dependencies to prevent re-running on every tile change
+
 
   
   const [enrichedTiles, setEnrichedTiles] = useState<ClientTile[]>([]);
