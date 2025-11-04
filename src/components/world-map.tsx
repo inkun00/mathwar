@@ -1,7 +1,7 @@
 'use client';
 import type { ClientTile, User } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { isLand as isLandGlobal } from "@/lib/world-map-shape";
+import { isLand } from "@/lib/world-map-shape";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import React from "react";
 import { useMemo, useCallback } from 'react';
@@ -107,7 +107,7 @@ export default function WorldMap({ landTiles, onTileClick, canConquer, canBuildW
       const x = index % mapWidth;
       const y = Math.floor(index / mapWidth);
       const continent = "continent1"; // This will need to be dynamic if you have multiple continents
-      const isLandTile = isLandGlobal(x, y);
+      const isLandTile = isLand(x, y);
 
       const tile = isLandTile 
         ? (tilesMap.get(`${x},${y}`) || { id: `${x}-${y}`, x, y, ownerId: null, hasWall: false, ownerNickname: null, countryId: null, countryName: null, countryColor: null, countryFlag: undefined })
