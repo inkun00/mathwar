@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState, useMemo } from "react";
@@ -5,9 +6,10 @@ import GameBoard from "@/components/game-board";
 import Login from "@/components/login";
 import SignUpDetails from "@/components/signup-details";
 import { useUser, useFirestore, useDoc, useCollection, useMemoFirebase } from "@/firebase";
-import { doc, collection, query, orderBy, limit, runTransaction, increment, getDocs } from "firebase/firestore";
+import { doc, collection, query, orderBy, limit, runTransaction, increment, getDocs, writeBatch, serverTimestamp } from "firebase/firestore";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { User, Country, ClientTile, ProblemAttempt, WrongAnswer, MapEvent } from "@/lib/types";
+import { differenceInCalendarDays, parseISO } from 'date-fns';
 
 export default function Home() {
   const { user: authUser, isUserLoading: isAuthUserLoading } = useUser();
@@ -58,6 +60,59 @@ export default function Home() {
     fetchStaticData();
   }, [firestore]);
   
+  // Daily point distribution logic
+  useEffect(() => {
+    const handlePointDistribution = async () => {
+        if (!firestore || !userProfile || !landTiles) return;
+
+        const today = new Date();
+        const lastDistributionDateStr = userProfile.lastPointDistribution;
+
+        if (!lastDistributionDateStr) {
+            console.log("No last distribution date found, skipping point distribution.");
+            return;
+        }
+
+        const lastDistributionDate = parseISO(lastDistributionDateStr);
+        const daysMissed = differenceInCalendarDays(today, lastDistributionDate);
+
+        if (daysMissed > 0) {
+            const userTiles = landTiles.filter(tile => tile.ownerId === userProfile.id);
+            const pointsToAdd = userTiles.length * daysMissed;
+
+            if (pointsToAdd > 0) {
+                const userRef = doc(firestore, "users", userProfile.id);
+                try {
+                    await runTransaction(firestore, async (transaction) => {
+                        // Re-read user doc inside transaction to prevent race conditions
+                        const freshUserDoc = await transaction.get(userRef);
+                        if (!freshUserDoc.exists()) {
+                          throw "User document does not exist!";
+                        }
+                        
+                        transaction.update(userRef, {
+                            gamePoints: increment(pointsToAdd),
+                            lastPointDistribution: today.toISOString().split('T')[0] // YYYY-MM-DD
+                        });
+                    });
+                    console.log(`Awarded ${pointsToAdd} points for ${daysMissed} missed days.`);
+                } catch (error) {
+                    console.error("Point distribution transaction failed: ", error);
+                }
+            } else {
+                 const userRef = doc(firestore, "users", userProfile.id);
+                 // Even if no points are added, update the date to prevent re-checking
+                 await writeBatch(firestore).update(userRef, { lastPointDistribution: today.toISOString().split('T')[0] }).commit();
+            }
+        }
+    };
+
+    // Run this logic only when the necessary data is loaded.
+    if (!isAuthUserLoading && !isUserProfileLoading && !areLandTilesLoading) {
+      handlePointDistribution();
+    }
+  }, [firestore, userProfile, landTiles, isAuthUserLoading, isUserProfileLoading, areLandTilesLoading]);
+
   const enrichedTiles = useMemo(() => {
     if (!landTiles || allUsers.length === 0 || countries.length === 0) {
         return landTiles || []; 
