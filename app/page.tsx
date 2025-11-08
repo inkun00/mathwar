@@ -6,7 +6,7 @@ import GameBoard from "@/components/game-board";
 import Login from "@/components/login";
 import SignUpDetails from "@/components/signup-details";
 import { useUser, useFirestore, useDoc, useCollection, useMemoFirebase } from "@/firebase";
-import { doc, collection, query, orderBy, getDocs, runTransaction, writeBatch, updateDoc } from "firebase/firestore";
+import { doc, collection, query, orderBy, getDocs, runTransaction, updateDoc } from "firebase/firestore";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { User, Country, ClientTile, ProblemAttempt, WrongAnswer, MapEvent } from "@/lib/types";
 import { differenceInCalendarDays, parseISO } from 'date-fns';
@@ -20,7 +20,6 @@ export default function Home() {
   const [countries, setCountries] = useState<Country[]>([]);
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [areStaticDataLoading, setAreStaticDataLoading] = useState(true);
-  const [hasRunPointDistribution, setHasRunPointDistribution] = useState(false);
 
   // --- Real-time Data using useCollection and useDoc ---
   const userDocRef = useMemoFirebase(() => (firestore && authUser) ? doc(firestore, 'users', authUser.uid) : null, [firestore, authUser]);
@@ -60,27 +59,24 @@ export default function Home() {
     fetchStaticData();
   }, [firestore]);
   
-  // Daily point distribution logic
+  // Daily point distribution logic - runs only ONCE when user profile and tiles are loaded.
   useEffect(() => {
-    if (hasRunPointDistribution || !firestore || !userProfile || !landTiles) {
+    if (!firestore || !userProfile || !landTiles) {
       return;
     }
   
     const handlePointDistribution = async () => {
-      setHasRunPointDistribution(true); // Mark as running to prevent re-entry for this session
-  
       const today = new Date();
       const lastDistributionDateStr = userProfile.lastPointDistribution;
       const userRef = doc(firestore, "users", userProfile.id);
   
+      // If there's no distribution date, this is the first login. Set the date and exit.
       if (!lastDistributionDateStr) {
-        console.log("No last distribution date found, setting it for the first time.");
         try {
-            // Only update the date. No points on the first day.
             await updateDoc(userRef, { lastPointDistribution: today.toISOString().split('T')[0] });
+            console.log("First login: Last point distribution date set for today.");
         } catch (e) {
             console.error("Error setting initial distribution date:", e);
-            setHasRunPointDistribution(false); // Allow retry if initial setup fails
         }
         return;
       }
@@ -106,45 +102,39 @@ export default function Home() {
                 lastPointDistribution: today.toISOString().split('T')[0]
             });
           });
+
           if (pointsToAdd > 0) {
             console.log(`Awarded ${pointsToAdd} points for ${daysMissed} missed day(s).`);
           } else {
-            console.log("Point distribution date updated, no points to add.");
+             console.log("Point distribution date updated, but no tiles to award points for.");
           }
         } catch (error) {
           console.error("Point distribution transaction failed: ", error);
-          // Do not set hasRunPointDistribution to false. We don't want to retry in the same session.
-          // Let it retry on next app load.
+          // Let it retry on the next app load/refresh, not in the same session.
         }
       } else {
           console.log("Point distribution is up to date for today.");
       }
     };
   
-    // Execute the logic only when all necessary data is available.
     handlePointDistribution();
 
-  // This effect runs only when the necessary data is loaded.
-  // It won't re-run just because the data changes, thanks to hasRunPointDistribution flag.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [firestore, userProfile, landTiles, hasRunPointDistribution]);
+  }, [firestore, userProfile?.id, userProfile?.lastPointDistribution, landTiles]); // Depends on stable values
 
   // One-time point adjustment logic
   useEffect(() => {
-    // Exit if no user, no firestore, or if the flag is already true
     if (!firestore || !userProfile || userProfile.hasPointsAdjusted) {
       return;
     }
 
     const adjustPoints = async () => {
       const userRef = doc(firestore, 'users', userProfile.id);
-      // Prepare the update object. It will always set the flag to true.
       const updates: { hasPointsAdjusted: boolean; gamePoints?: number } = {
         hasPointsAdjusted: true,
       };
       
       let pointsAdjusted = false;
-      // If points are over 300, also set gamePoints to 300 in the update object.
       if ((userProfile.gamePoints ?? 0) > 300) {
         updates.gamePoints = 300;
         pointsAdjusted = true;
@@ -166,7 +156,7 @@ export default function Home() {
 
     adjustPoints();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [firestore, userProfile?.id]); // Depend on userProfile.id to run once per user.
+  }, [firestore, userProfile?.id, userProfile?.hasPointsAdjusted]); // Run once per user
 
 
   const enrichedTiles = useMemo(() => {
