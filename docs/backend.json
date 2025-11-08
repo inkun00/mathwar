@@ -108,6 +108,18 @@
         },
         "required": ["requestingCountryId", "requestingCountryName", "targetCountryId", "status", "createdAt"]
     },
+    "Alliance": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Alliance",
+      "type": "object",
+      "description": "Represents an alliance between two countries.",
+      "properties": {
+          "id": { "type": "string" },
+          "countryIds": { "type": "array", "description": "An array containing the two IDs of the allied countries.", "items": { "type": "string" } },
+          "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["countryIds", "createdAt"]
+    },
     "MapEvent": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "MapEvent",
@@ -170,6 +182,10 @@
       {
           "path": "/alliance_requests/{requestId}",
           "definition": { "entityName": "allianceRequest", "schema": { "$ref": "#/entities/AllianceRequest" }, "description": "Requests from countries to form an alliance.", "allow": ["list", "get", "create", "update", "delete"] }
+      },
+       {
+          "path": "/alliances/{allianceId}",
+          "definition": { "entityName": "alliance", "schema": { "$ref": "#/entities/Alliance" }, "description": "Stores active alliances between countries.", "allow": ["list", "get", "create"] }
       },
       {
         "path": "/map_events/{eventId}",

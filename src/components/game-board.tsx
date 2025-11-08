@@ -1,13 +1,13 @@
 'use client';
 
 import { useState, useMemo, useEffect } from "react";
-import type { ClientTile, MathProblem, Country, User, ProblemAttempt, InvasionTarget, WrongAnswer, MapEvent } from "@/lib/types";
+import type { ClientTile, MathProblem, Country, User, ProblemAttempt, InvasionTarget, WrongAnswer, MapEvent, Alliance } from "@/lib/types";
 import { generateMathProblem, isAdjacent, canConquer as canConquerLogic } from "@/lib/game-logic";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { ZoomIn, ZoomOut } from "lucide-react";
-import { useFirestore, useUser, errorEmitter, FirestorePermissionError } from "@/firebase";
-import { doc, updateDoc, writeBatch, increment, collection, arrayUnion, runTransaction, addDoc, serverTimestamp } from "firebase/firestore";
+import { useFirestore, useUser, errorEmitter, FirestorePermissionError, useCollection, useMemoFirebase } from "@/firebase";
+import { doc, updateDoc, writeBatch, increment, collection, arrayUnion, runTransaction, addDoc, serverTimestamp, query, where } from "firebase/firestore";
 import { addWrongAnswer } from "@/firebase/firestore/data";
 
 import Header from "./header";
@@ -53,6 +53,9 @@ export default function GameBoard({
   // The landTiles state is now the single source of truth for the map on the client.
   // It's initialized with data from props and then updated by real-time events.
   const [landTiles, setLandTiles] = useState<ClientTile[]>(initialLandTiles);
+  
+  const alliancesQuery = useMemoFirebase(() => firestore ? query(collection(firestore, 'alliances')) : null, [firestore]);
+  const { data: alliances, isLoading: areAlliancesLoading } = useCollection<Alliance>(alliancesQuery);
   
   useEffect(() => {
     // This effect synchronizes the initial prop data with the local state.
@@ -283,7 +286,7 @@ export default function GameBoard({
   };
 
   const handleTileClick = async (x: number, y: number) => {
-    if (!currentUser || !firestore || isProcessingClick || !authUser || !currentUserCountry) return;
+    if (!currentUser || !firestore || isProcessingClick || !authUser || !currentUserCountry || !alliances) return;
     
     if ((currentUser.tokens ?? 0) <= 0 && !isBuildingWall) {
       toast({
@@ -347,6 +350,20 @@ export default function GameBoard({
         toast({ variant: "default", title: "공격 불가", description: "같은 국가의 영토는 공격할 수 없습니다." });
         setIsProcessingClick(false);
         return;
+      }
+
+      // Check for alliance
+      const ownerCountryId = owner?.countryId;
+      if (currentUser.countryId && ownerCountryId) {
+        const isAllied = alliances.some(alliance => 
+          alliance.countryIds.includes(currentUser.countryId) &&
+          alliance.countryIds.includes(ownerCountryId)
+        );
+        if (isAllied) {
+          toast({ variant: "default", title: "공격 불가", description: "동맹 관계의 국가 영토는 공격할 수 없습니다." });
+          setIsProcessingClick(false);
+          return;
+        }
       }
       
       const userRef = doc(firestore, 'users', authUser.uid);
@@ -452,7 +469,7 @@ export default function GameBoard({
   }
 
   const canConquer = (tile: ClientTile) => {
-    if (!currentUser || (currentUser.tokens ?? 0) <= 0 || isProcessingClick || isBuildingWall) {
+    if (!currentUser || (currentUser.tokens ?? 0) <= 0 || isProcessingClick || isBuildingWall || !alliances) {
       return false;
     }
     return canConquerLogic(tile, currentUser, allUsers, userCountryTiles, landTiles);
@@ -498,7 +515,7 @@ export default function GameBoard({
     );
   }
 
-  if (!currentUser) {
+  if (!currentUser || areAlliancesLoading) {
      return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
@@ -557,5 +574,3 @@ export default function GameBoard({
     </div>
   );
 }
-
-    

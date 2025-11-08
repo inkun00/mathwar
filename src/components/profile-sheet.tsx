@@ -1,13 +1,13 @@
 'use client';
 
 import React from "react";
-import type { User, Country, ProblemAttempt, ProblemSubType, WrongAnswer, StorableProblem, ClientTile, RankedUser, RankedCountry, JoinRequest, AllianceRequest } from "@/lib/types";
+import type { User, Country, ProblemAttempt, ProblemSubType, WrongAnswer, StorableProblem, ClientTile, JoinRequest, AllianceRequest, Alliance } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useMemo, useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { LogOut, BookOpen, ChevronsUpDown, Check, Crown, Handshake, Flag, Swords, Pencil, UserPlus, ShieldCheck, X, RefreshCw } from "lucide-react";
-import { useAuth, useFirestore, useDoc, useMemoFirebase, errorEmitter, FirestorePermissionError, useCollection } from "@/firebase";
+import { LogOut, BookOpen, ChevronsUpDown, Check, Crown, Handshake, Flag, Swords, Pencil, ShieldCheck, X, Users } from "lucide-react";
+import { useAuth, useFirestore, useCollection, useMemoFirebase, errorEmitter, FirestorePermissionError } from "@/firebase";
 import { signOut } from "firebase/auth";
 import ProblemModal from "./problem-modal";
 import { deleteWrongAnswer } from "@/firebase/firestore/data";
@@ -83,47 +83,15 @@ export default function ProfileSheet({ currentUser, allUsers, allCountries, land
   const [isProcessing, setIsProcessing] = useState(false);
   const [isFlagEditorOpen, setFlagEditorOpen] = useState(false);
 
-  // --- Real-time data for requests ---
-  const joinRequestsQuery = useMemoFirebase(() => (firestore && currentUser.countryId) ? query(collection(firestore, "join_requests"), where("targetCountryId", "==", currentUser.countryId), where("status", "==", "pending")) : null, [firestore, currentUser.countryId]);
+  // --- Real-time data for requests and alliances ---
+  const joinRequestsQuery = useMemoFirebase(() => (firestore && currentUser.isCountryOwner && currentUser.countryId) ? query(collection(firestore, "join_requests"), where("targetCountryId", "==", currentUser.countryId), where("status", "==", "pending")) : null, [firestore, currentUser.isCountryOwner, currentUser.countryId]);
   const { data: joinRequests, isLoading: isLoadingJoinRequests } = useCollection<JoinRequest>(joinRequestsQuery);
 
-  const allianceRequestsQuery = useMemoFirebase(() => (firestore && currentUser.countryId) ? query(collection(firestore, "alliance_requests"), where("targetCountryId", "==", currentUser.countryId), where("status", "==", "pending")) : null, [firestore, currentUser.countryId]);
+  const allianceRequestsQuery = useMemoFirebase(() => (firestore && currentUser.isCountryOwner && currentUser.countryId) ? query(collection(firestore, "alliance_requests"), where("targetCountryId", "==", currentUser.countryId), where("status", "==", "pending")) : null, [firestore, currentUser.isCountryOwner, currentUser.countryId]);
   const { data: allianceRequests, isLoading: isLoadingAllianceRequests } = useCollection<AllianceRequest>(allianceRequestsQuery);
   
-  const myApprovedJoinRequestQuery = useMemoFirebase(() => (firestore && !currentUser.countryId) ? query(collection(firestore, "join_requests"), where("requesterId", "==", currentUser.id), where("status", "==", "approved")) : null, [firestore, currentUser]);
-  const { data: approvedJoinRequest } = useCollection<JoinRequest>(myApprovedJoinRequestQuery);
-
-
-  // Effect to handle self-update after a join request is approved
-  useEffect(() => {
-    const handleJoinCountry = async () => {
-        if (approvedJoinRequest && approvedJoinRequest.length > 0 && firestore && currentUser) {
-            const request = approvedJoinRequest[0];
-            const userRef = doc(firestore, "users", currentUser.id);
-            const requestRef = doc(firestore, "join_requests", request.id);
-
-            try {
-                await runTransaction(firestore, async (transaction) => {
-                    transaction.update(userRef, { countryId: request.targetCountryId });
-                    transaction.delete(requestRef);
-                });
-                toast({
-                    title: "국가 가입 완료!",
-                    description: `이제 국가의 일원이 되었습니다.`,
-                });
-            } catch (e: any) {
-                console.error("국가 가입 처리 중 오류 발생:", e);
-                toast({
-                    variant: "destructive",
-                    title: "오류",
-                    description: e.message || "국가 가입 처리 중 오류가 발생했습니다.",
-                });
-            }
-        }
-    };
-
-    handleJoinCountry();
-  }, [approvedJoinRequest, firestore, currentUser, toast]);
+  const alliancesQuery = useMemoFirebase(() => firestore ? collection(firestore, 'alliances') : null, [firestore]);
+  const { data: alliancesData, isLoading: isLoadingAlliances } = useCollection<Alliance>(alliancesQuery);
 
 
   const handleLogout = () => {
@@ -152,25 +120,8 @@ export default function ProfileSheet({ currentUser, allUsers, allCountries, land
 
   const userCountry = useMemo(() => allCountries.find(c => c.id === currentUser.countryId), [allCountries, currentUser.countryId]);
 
-  const { unitStats, areaStats, userRank, countryRank } = useMemo(() => {
-    if (!problemAttempts || !allUsers || !allCountries || !landTiles) return { unitStats: [], areaStats: [], userRank: null, countryRank: null };
-    
-    const stats = {
-      unit: { decimal: { total: 0, correct: 0 }, fraction: { total: 0, correct: 0 }, conversion: { total: 0, correct: 0 } },
-      area: {} as Record<string, { total: number, correct: number, subType: ProblemSubType }>
-    };
-    problemAttempts.forEach(attempt => {
-      if (!stats.unit[attempt.unit]) stats.unit[attempt.unit] = { total: 0, correct: 0 };
-      stats.unit[attempt.unit].total++;
-      if (attempt.correct) stats.unit[attempt.unit].correct++;
-      if (attempt.area) {
-        if (!stats.area[attempt.area]) stats.area[attempt.area] = { total: 0, correct: 0, subType: attempt.area as ProblemSubType };
-        stats.area[attempt.area].total++;
-        if (attempt.correct) stats.area[attempt.area].correct++;
-      }
-    });
-    const unitStats = Object.entries(stats.unit).map(([key, value]) => ({ name: { decimal: '소수', fraction: '분수', conversion: '변환' }[key] || key, ...value, accuracy: value.total > 0 ? (value.correct / value.total) * 100 : 0 }));
-    const areaStats = Object.values(stats.area).map(data => ({ name: areaLabels[data.subType] || data.subType, subType: data.subType, total: data.total, correct: data.correct, accuracy: data.total > 0 ? (data.correct / data.total) * 100 : 0, })).sort((a,b) => b.total - a.total);
+  const { userRank, countryRank } = useMemo(() => {
+    if (!allUsers || !allCountries || !landTiles) return { userRank: null, countryRank: null };
 
     const userTileCount = allUsers.reduce((acc, user) => ({ ...acc, [user.id]: 0 }), {} as Record<string, number>);
     landTiles.forEach(tile => { if (tile.ownerId && userTileCount[tile.ownerId] !== undefined) userTileCount[tile.ownerId]++; });
@@ -186,8 +137,8 @@ export default function ProfileSheet({ currentUser, allUsers, allCountries, land
     const userRank = { rank: userRankIndex !== -1 ? userRankIndex + 1 : 0, id: currentUser.id, nickname: currentUser.nickname, tileCount: userTileCount[currentUser.id] || 0 };
     const countryRank = userCountry ? { rank: countryRankIndex !== -1 ? countryRankIndex + 1 : 0, id: currentUser.countryId, name: userCountry.name, color: '', tileCount: countryTileCount[currentUser.countryId] || 0} : null;
 
-    return { unitStats, areaStats, userRank, countryRank };
-  }, [problemAttempts, allUsers, allCountries, landTiles, currentUser, userCountry]);
+    return { userRank, countryRank };
+  }, [allUsers, allCountries, landTiles, currentUser, userCountry]);
 
   
   const conqueredCountryNames = useMemo(() => {
@@ -203,25 +154,47 @@ export default function ProfileSheet({ currentUser, allUsers, allCountries, land
     return allUsers.filter(u => u.countryId === userCountry?.id);
   }, [userCountry, allUsers]);
 
+  const myAlliances = useMemo(() => {
+    if (!alliancesData || !currentUser.countryId) return [];
+    return alliancesData.filter(a => a.countryIds.includes(currentUser.countryId));
+  }, [alliancesData, currentUser.countryId]);
 
-  const adjacentCountries = useMemo(() => {
-    if (!currentUser || !landTiles || !allUsers || !allCountries) return [];
-    const myTiles = landTiles.filter(t => t.ownerId === currentUser.id);
+  const alliedCountryIds = useMemo(() => {
+      const ids = new Set<string>();
+      myAlliances.forEach(alliance => {
+          alliance.countryIds.forEach(id => {
+              if (id !== currentUser.countryId) {
+                  ids.add(id);
+              }
+          });
+      });
+      return ids;
+  }, [myAlliances, currentUser.countryId]);
+
+
+  const adjacentCountriesForAlliance = useMemo(() => {
+    if (!userCountry || !landTiles || !allUsers || !allCountries) return [];
+    
+    const countryMemberIds = new Set(allUsers.filter(u => u.countryId === userCountry.id).map(u => u.id));
+    const myTiles = landTiles.filter(t => t.ownerId && countryMemberIds.has(t.ownerId));
     const adjacentCountryIds = new Set<string>();
+    const userMap = new Map(allUsers.map(u => [u.id, u]));
 
     for (const tile of myTiles) {
       [[0, -1], [0, 1], [-1, 0], [1, 0]].forEach(([dx, dy]) => {
         const neighbor = landTiles.find(t => t.x === tile.x + dx && t.y === tile.y + dy);
-        if (neighbor && neighbor.ownerId && neighbor.ownerId !== currentUser.id) {
-          const neighborUser = allUsers.find(u => u.id === neighbor.ownerId);
-          if (neighborUser && neighborUser.countryId !== currentUser.countryId) {
+        if (neighbor && neighbor.ownerId) {
+          const neighborUser = userMap.get(neighbor.ownerId);
+          if (neighborUser && neighborUser.countryId && neighborUser.countryId !== userCountry.id) {
             adjacentCountryIds.add(neighborUser.countryId);
           }
         }
       });
     }
-    return allCountries.filter(c => adjacentCountryIds.has(c.id));
-  }, [landTiles, allUsers, allCountries, currentUser]);
+
+    // Filter out countries that are already in an alliance with the current user's country
+    return allCountries.filter(c => adjacentCountryIds.has(c.id) && !alliedCountryIds.has(c.id) && !c.demised);
+  }, [landTiles, allUsers, allCountries, userCountry, alliedCountryIds]);
   
   const handleRequestAlliance = async (targetCountryId: string) => {
     if (!firestore || !currentUser || !userCountry) return;
@@ -296,29 +269,24 @@ export default function ProfileSheet({ currentUser, allUsers, allCountries, land
     
     try {
       if (action === 'approve') {
+        const batch = writeBatch(firestore);
         if (type === 'join') {
-            await updateDoc(requestRef, updateData).catch(err => {
-                errorEmitter.emit('permission-error', new FirestorePermissionError({ path: requestRef.path, operation: 'update', requestResourceData: updateData }));
-                throw err;
-            });
-          toast({ title: "가입 수락", description: `${(request as JoinRequest).requesterNickname}님의 가입 요청을 수락했습니다. 가입자가 다음 접속 시 처리됩니다.` });
+            const joinReq = request as JoinRequest;
+            const memberUserRef = doc(firestore, "users", joinReq.requesterId);
+            batch.update(memberUserRef, { countryId: joinReq.targetCountryId });
+            batch.delete(requestRef);
+            toast({ title: "가입 수락", description: `${joinReq.requesterNickname}님의 가입을 수락했습니다.` });
         } else { // 'alliance'
             const allianceReq = request as AllianceRequest;
-            const batch = writeBatch(firestore);
-            
-            const q = query(collection(firestore, "users"), where("countryId", "==", allianceReq.requestingCountryId));
-            const membersSnapshot = await getDocs(q);
-          
-            membersSnapshot.forEach(memberDoc => {
-                batch.update(memberDoc.ref, { countryId: allianceReq.targetCountryId, isCountryOwner: false });
+            const newAllianceRef = doc(collection(firestore, "alliances"));
+            batch.set(newAllianceRef, {
+                countryIds: [allianceReq.requestingCountryId, allianceReq.targetCountryId],
+                createdAt: serverTimestamp()
             });
-          
-            batch.update(doc(firestore, "countries", allianceReq.requestingCountryId), { demised: true });
             batch.update(requestRef, { status: 'approved' });
-            
-            await batch.commit();
-            toast({ title: "동맹 체결 (합병)!", description: `${allianceReq.requestingCountryName} 국가가 우리 국가로 합병되었습니다.` });
+            toast({ title: "동맹 체결!", description: `${allianceReq.requestingCountryName} 국가와 동맹을 맺었습니다.` });
         }
+        await batch.commit();
       } else { // reject
         await updateDoc(requestRef, updateData).catch(err => {
             errorEmitter.emit('permission-error', new FirestorePermissionError({ path: requestRef.path, operation: 'update', requestResourceData: updateData }));
@@ -336,6 +304,7 @@ export default function ProfileSheet({ currentUser, allUsers, allCountries, land
     }
   };
 
+  const isLoading = isLoadingJoinRequests || isLoadingAllianceRequests || isLoadingAlliances;
 
   if (!currentUser) {
     return (
@@ -379,7 +348,7 @@ export default function ProfileSheet({ currentUser, allUsers, allCountries, land
           
            {userCountry && (
              <div className="space-y-4">
-                <h3 className="text-lg font-semibold tracking-tight">국가 구성원</h3>
+                <h3 className="text-lg font-semibold tracking-tight">국가 구성원 ({countryMembers.length}명)</h3>
                 <Card>
                     <CardContent className="pt-6 space-y-2">
                         {countryMembers.length > 0 ? (
@@ -411,7 +380,7 @@ export default function ProfileSheet({ currentUser, allUsers, allCountries, land
            {conqueredCountryNames.length > 0 && (
             <div className="space-y-4">
               <h3 className="text-lg font-semibold tracking-tight">정복 기록</h3>
-              <Card><CardContent className="pt-4 flex flex-wrap gap-2">{conqueredCountryNames.map(name => <Badge key={name} variant="destructive"><Crown className="mr-1 h-3 w-3" />{name}</Badge>)}</CardContent></Card>
+              <Card><CardContent className="pt-4 flex flex-wrap gap-2">{conqueredCountryNames.map(name => <Badge key={name} variant="destructive"><Swords className="mr-1 h-3 w-3" />{name}</Badge>)}</CardContent></Card>
             </div>
           )}
 
@@ -419,28 +388,41 @@ export default function ProfileSheet({ currentUser, allUsers, allCountries, land
             <h3 className="text-lg font-semibold tracking-tight">외교</h3>
             <Card>
               <CardContent className="pt-6 space-y-4">
-                {currentUser.isCountryOwner ? (
-                    <div>
+                {isLoading ? <Skeleton className="h-20 w-full" /> : 
+                currentUser.isCountryOwner ? (
+                    <div className="space-y-4">
+                        {myAlliances.length > 0 && (
+                           <div className="space-y-2">
+                             <h4 className="font-semibold text-sm">현재 동맹</h4>
+                             <div className="flex flex-wrap gap-2">
+                               {myAlliances.map(alliance => {
+                                 const otherCountryId = alliance.countryIds.find(id => id !== currentUser.countryId);
+                                 const otherCountry = allCountries.find(c => c.id === otherCountryId);
+                                 return otherCountry ? <Badge key={alliance.id} variant="secondary" style={{ backgroundColor: otherCountry.color }}>{otherCountry.name}</Badge> : null;
+                               })}
+                             </div>
+                           </div>
+                        )}
                         {(joinRequests && joinRequests.length > 0) || (allianceRequests && allianceRequests.length > 0) ? (
                             <>
                                 {joinRequests && joinRequests.length > 0 && (
                                     <div className="space-y-2">
-                                        <h4 className="font-semibold">가입 요청</h4>
+                                        <h4 className="font-semibold text-sm flex items-center gap-2"><Users className="h-4 w-4" /> 가입 요청</h4>
                                         {joinRequests.map(req => (
                                             <div key={req.id} className="flex items-center justify-between p-2 rounded-md bg-muted">
                                                 <span>{req.requesterNickname}</span>
-                                                <div className="space-x-1"><Button size="icon" variant="ghost" onClick={() => handleRequestResponse(req, 'join', 'approve')}><Check className="h-4 w-4 text-green-500"/></Button><Button size="icon" variant="ghost" onClick={() => handleRequestResponse(req, 'join', 'reject')}><X className="h-4 w-4 text-red-500"/></Button></div>
+                                                <div className="space-x-1"><Button size="icon" variant="ghost" disabled={isProcessing} onClick={() => handleRequestResponse(req, 'join', 'approve')}><Check className="h-4 w-4 text-green-500"/></Button><Button size="icon" variant="ghost" disabled={isProcessing} onClick={() => handleRequestResponse(req, 'join', 'reject')}><X className="h-4 w-4 text-red-500"/></Button></div>
                                             </div>
                                         ))}
                                     </div>
                                 )}
                                 {allianceRequests && allianceRequests.length > 0 && (
                                     <div className="space-y-2 mt-4">
-                                        <h4 className="font-semibold">동맹 요청 (상대 국가가 우리 국가로 합병됩니다)</h4>
+                                        <h4 className="font-semibold text-sm flex items-center gap-2"><Handshake className="h-4 w-4" /> 동맹 요청</h4>
                                         {allianceRequests.map(req => (
                                             <div key={req.id} className="flex items-center justify-between p-2 rounded-md bg-muted">
                                                 <span>{req.requestingCountryName}</span>
-                                                <div className="space-x-1"><Button size="icon" variant="ghost" onClick={() => handleRequestResponse(req, 'alliance', 'approve')}><Check className="h-4 w-4 text-green-500"/></Button><Button size="icon" variant="ghost" onClick={() => handleRequestResponse(req, 'alliance', 'reject')}><X className="h-4 w-4 text-red-500"/></Button></div>
+                                                <div className="space-x-1"><Button size="icon" variant="ghost" disabled={isProcessing} onClick={() => handleRequestResponse(req, 'alliance', 'approve')}><Check className="h-4 w-4 text-green-500"/></Button><Button size="icon" variant="ghost" disabled={isProcessing} onClick={() => handleRequestResponse(req, 'alliance', 'reject')}><X className="h-4 w-4 text-red-500"/></Button></div>
                                             </div>
                                         ))}
                                     </div>
@@ -451,10 +433,10 @@ export default function ProfileSheet({ currentUser, allUsers, allCountries, land
                         )}
                          <Popover open={isAllianceComboboxOpen} onOpenChange={setAllianceComboboxOpen}>
                             <PopoverTrigger asChild>
-                                <Button variant="outline" role="combobox" className="w-full justify-between mt-4"><Handshake className="mr-2 h-4 w-4" /> 동맹 요청<ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" /></Button>
+                                <Button variant="outline" role="combobox" className="w-full justify-between mt-4" disabled={isProcessing}><Handshake className="mr-2 h-4 w-4" /> 동맹 요청하기<ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" /></Button>
                             </PopoverTrigger>
                             <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
-                                <Command><CommandInput placeholder="국가 검색..." /><CommandEmpty>인접한 국가가 없습니다.</CommandEmpty><CommandGroup><CommandList>{adjacentCountries.map(c => <CommandItem key={c.id} value={c.name} onSelect={() => handleRequestAlliance(c.id)} disabled={isProcessing}>{c.name}</CommandItem>)}</CommandList></CommandGroup></Command>
+                                <Command><CommandInput placeholder="국가 검색..." /><CommandEmpty>동맹을 맺을 수 있는 인접 국가가 없습니다.</CommandEmpty><CommandGroup><CommandList>{adjacentCountriesForAlliance.map(c => <CommandItem key={c.id} value={c.name} onSelect={() => handleRequestAlliance(c.id)} disabled={isProcessing}>{c.name}</CommandItem>)}</CommandList></CommandGroup></Command>
                             </PopoverContent>
                         </Popover>
                     </div>
@@ -474,19 +456,6 @@ export default function ProfileSheet({ currentUser, allUsers, allCountries, land
             </Card>
            </div>
           
-          <div className="space-y-4">
-             <h3 className="text-lg font-semibold tracking-tight">정답률 현황</h3>
-             <Card><CardHeader><CardTitle className="text-base">단원별 정답률</CardTitle></CardHeader><CardContent className="space-y-2 text-sm">{unitStats.map(stat => stat.total > 0 && <div key={stat.name} className="flex justify-between"><span>{stat.name}</span><span className="font-medium">{stat.correct}/{stat.total} ({Math.round(stat.accuracy)}%)</span></div>)}</CardContent></Card>
-             <Card>
-                <CardHeader><CardTitle className="text-base">문제 영역별 정답률</CardTitle></CardHeader>
-                <CardContent className="space-y-2 text-sm">
-                   <TooltipProvider>
-                    {areaStats.length > 0 ? ( areaStats.map(stat => (<Tooltip key={stat.subType} delayDuration={100}><TooltipTrigger asChild><div className="flex justify-between cursor-help p-1 rounded-md hover:bg-muted"><span>{stat.name}</span><span className="font-medium">{stat.correct}/{stat.total} ({Math.round(stat.accuracy)}%)</span></div></TooltipTrigger><TooltipContent side="top" align="center" className="z-50"><p className="font-semibold mb-2">대표 문제</p><div className="text-base font-semibold font-code tracking-wider bg-muted p-4 rounded-md min-h-[60px] flex items-center justify-center leading-relaxed">{generateProblemFromData({ subType: stat.subType, type: 'decimal', operands: [], operator: 'calculate' }).problem}</div></TooltipContent></Tooltip>)) ) : ( <p className="text-muted-foreground">아직 푼 문제가 없습니다.</p> )}
-                   </TooltipProvider>
-                </CardContent>
-             </Card>
-          </div>
-
            <div className="space-y-4">
             <h3 className="text-lg font-semibold tracking-tight">오답노트</h3>
             <Card>

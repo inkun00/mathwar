@@ -14,6 +14,7 @@
  * - /problem_attempts/{userId}/attempts/{attemptId}: Stores problem attempts, accessible only to the owning user.
  * - /join_requests/{joinRequestId}: Stores join requests.
  * - /alliance_requests/{allianceRequestId}: Stores alliance requests.
+ * - /alliances/{allianceId}: Stores active alliances.
  * - /map_events/{eventId}: Stores map event data. Public read and create only.
  *
  * Key Security Decisions:
@@ -230,6 +231,23 @@ service cloud.firestore {
       allow create: if isSignedIn();
       allow update: if isSignedIn();
       allow delete: if isSignedIn();
+    }
+    
+    /**
+     * @description Controls access to alliances.
+     * @path /alliances/{allianceId}
+     * @allow (get, list) Any user can read alliances.
+     * @allow (create) Authenticated users can create alliances.
+     * @deny (update, delete) No one can modify or delete alliances.
+     */
+    match /alliances/{allianceId} {
+       function isSignedIn() {
+        return request.auth != null;
+      }
+      
+      allow get, list: if true;
+      allow create: if isSignedIn();
+      allow update, delete: if false;
     }
 
     /**

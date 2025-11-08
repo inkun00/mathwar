@@ -43,6 +43,12 @@ export interface AllianceRequest {
   createdAt: any; // Firestore ServerTimestamp
 }
 
+export interface Alliance {
+  id: string;
+  countryIds: string[]; // array of 2 country IDs
+  createdAt: any; // Firestore ServerTimestamp
+}
+
 // Represents a single tile's data, either from a direct doc or aggregate
 export interface ClientTile {
   id: string; // ID from land_tiles document
