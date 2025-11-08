@@ -67,9 +67,10 @@ export default function Home() {
     }
   
     const handlePointDistribution = async () => {
-      if (!userProfile) return; // Extra guard
+      // This is the most crucial guard. If userProfile is not loaded, just exit.
+      if (!userProfile) return;
 
-      setHasRunPointDistribution(true); // Mark as running to prevent re-entry
+      setHasRunPointDistribution(true); // Mark as running to prevent re-entry for this session
   
       const today = new Date();
       const lastDistributionDateStr = userProfile.lastPointDistribution;
@@ -78,10 +79,10 @@ export default function Home() {
         console.log("No last distribution date found, setting it for the first time.");
         const userRef = doc(firestore, "users", userProfile.id);
         try {
+            // Only update the date. No points on the first day.
             await writeBatch(firestore).update(userRef, { lastPointDistribution: today.toISOString().split('T')[0] }).commit();
         } catch (e) {
             console.error("Error setting initial distribution date:", e);
-            setHasRunPointDistribution(false); // Allow retry
         }
         return;
       }
@@ -92,11 +93,12 @@ export default function Home() {
       if (daysMissed > 0) {
         const userTiles = landTiles.filter(tile => tile.ownerId === userProfile.id);
         const pointsToAdd = userTiles.length * daysMissed;
+        
         if (pointsToAdd === 0) {
-            console.log("No tiles owned, no points to add.");
-            // Still update the date to prevent re-running this logic today
-             const userRef = doc(firestore, "users", userProfile.id);
+            console.log("No tiles owned, no points to add. Updating date.");
+            const userRef = doc(firestore, "users", userProfile.id);
              try {
+                // Still update the date to prevent re-running this logic today
                 await runTransaction(firestore, async (transaction) => {
                     transaction.update(userRef, {
                         lastPointDistribution: today.toISOString().split('T')[0]
@@ -104,7 +106,6 @@ export default function Home() {
                 });
              } catch (error) {
                  console.error("Point distribution date update failed: ", error);
-                 setHasRunPointDistribution(false);
              }
             return;
         };
@@ -128,30 +129,38 @@ export default function Home() {
           console.log(`Awarded ${pointsToAdd} points for ${daysMissed} missed day(s).`);
         } catch (error) {
           console.error("Point distribution transaction failed: ", error);
-          setHasRunPointDistribution(false);
+          // Do not set hasRunPointDistribution to false. We don't want to retry in the same session.
         }
       } else {
-          console.log("Point distribution is up to date.");
+          console.log("Point distribution is up to date for today.");
       }
     };
   
+    // Execute the logic.
     handlePointDistribution();
+
+  // This dependency array is critical. It runs when the CORE data is loaded, but NOT when it changes.
+  // We use `userProfile?.id` because the ID is stable after login, unlike the userProfile object itself.
+  // `landTiles` is included because we need it to calculate points.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [firestore, userProfile?.id, landTiles, hasRunPointDistribution]);
+  }, [firestore, userProfile?.id, landTiles]);
 
   // One-time point adjustment logic
   useEffect(() => {
+    // Exit if no user, no firestore, or if the flag is already true
     if (!firestore || !userProfile || userProfile.hasPointsAdjusted) {
       return;
     }
 
     const adjustPoints = async () => {
       const userRef = doc(firestore, 'users', userProfile.id);
+      // Prepare the update object. It will always set the flag to true.
       const updates: { hasPointsAdjusted: boolean; gamePoints?: number } = {
         hasPointsAdjusted: true,
       };
       
       let pointsAdjusted = false;
+      // If points are over 300, also set gamePoints to 300 in the update object.
       if ((userProfile.gamePoints ?? 0) > 300) {
         updates.gamePoints = 300;
         pointsAdjusted = true;
@@ -165,15 +174,15 @@ export default function Home() {
             description: "계정의 포인트가 300으로 조정되었습니다.",
           });
         }
-        console.log(`User ${userProfile.id} points adjusted.`);
+        console.log(`User ${userProfile.id} points adjustment check complete.`);
       } catch (error) {
         console.error("Error adjusting points:", error);
       }
     };
 
     adjustPoints();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [firestore, userProfile?.id, userProfile?.hasPointsAdjusted, userProfile?.gamePoints]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [firestore, userProfile?.id]); // Depend on userProfile.id to run once per user.
 
 
   const enrichedTiles = useMemo(() => {
