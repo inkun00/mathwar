@@ -202,11 +202,14 @@ service cloud.firestore {
       function isSignedIn() {
         return request.auth != null;
       }
+      
+      function isOwner(req) {
+        return request.auth.uid == req.requesterId;
+      }
 
       allow get, list: if isSignedIn();
-      allow create: if isSignedIn() && request.resource.data.requesterId == request.auth.uid;
-      allow update: if isSignedIn();
-      allow delete: if isSignedIn();
+      allow create: if isSignedIn() && isOwner(request.resource.data);
+      allow update, delete: if isSignedIn();
     }
 
     /**
