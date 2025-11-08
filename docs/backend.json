@@ -16,6 +16,7 @@
         "lastPointDistribution": { "type": "string", "description": "The date (YYYY-MM-DD) when the last points were distributed." },
         "walls": { "type": "number", "description": "The number of wall items the user possesses." },
         "isCountryOwner": { "type": "boolean", "description": "Whether the user is the owner of their country." },
+        "hasPointsAdjusted": { "type": "boolean", "description": "Whether the user's points have been adjusted for the one-time fix." },
         "createdAt": { "type": "string", "format": "date-time", "description": "The timestamp when the user was created." }
       },
       "required": ["id", "email", "nickname"]
@@ -194,3 +195,5 @@
     ]
   }
 }
+
+    

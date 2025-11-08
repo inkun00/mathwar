@@ -15,6 +15,7 @@ export interface User {
   gamePoints?: number;
   lastPointDistribution?: string; // YYYY-MM-DD
   isCountryOwner?: boolean;
+  hasPointsAdjusted?: boolean;
 }
 
 export interface Country {
@@ -176,3 +177,5 @@ export interface RankedCountry {
   color: string;
   tileCount: number;
 }
+
+    

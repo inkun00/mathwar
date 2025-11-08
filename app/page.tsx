@@ -6,14 +6,16 @@ import GameBoard from "@/components/game-board";
 import Login from "@/components/login";
 import SignUpDetails from "@/components/signup-details";
 import { useUser, useFirestore, useDoc, useCollection, useMemoFirebase } from "@/firebase";
-import { doc, collection, query, orderBy, getDocs, runTransaction, writeBatch } from "firebase/firestore";
+import { doc, collection, query, orderBy, getDocs, runTransaction, writeBatch, updateDoc } from "firebase/firestore";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { User, Country, ClientTile, ProblemAttempt, WrongAnswer, MapEvent } from "@/lib/types";
 import { differenceInCalendarDays, parseISO } from 'date-fns';
+import { useToast } from "@/hooks/use-toast";
 
 export default function Home() {
   const { user: authUser, isUserLoading: isAuthUserLoading } = useUser();
   const firestore = useFirestore();
+  const { toast } = useToast();
   
   const [countries, setCountries] = useState<Country[]>([]);
   const [allUsers, setAllUsers] = useState<User[]>([]);
@@ -137,6 +139,42 @@ export default function Home() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [firestore, userProfile?.id, landTiles, hasRunPointDistribution]);
 
+  // One-time point adjustment logic
+  useEffect(() => {
+    if (!firestore || !userProfile || userProfile.hasPointsAdjusted) {
+      return;
+    }
+
+    const adjustPoints = async () => {
+      const userRef = doc(firestore, 'users', userProfile.id);
+      const updates: { hasPointsAdjusted: boolean; gamePoints?: number } = {
+        hasPointsAdjusted: true,
+      };
+      
+      let pointsAdjusted = false;
+      if ((userProfile.gamePoints ?? 0) > 300) {
+        updates.gamePoints = 300;
+        pointsAdjusted = true;
+      }
+
+      try {
+        await updateDoc(userRef, updates);
+        if (pointsAdjusted) {
+          toast({
+            title: "포인트 조정 안내",
+            description: "계정의 포인트가 300으로 조정되었습니다.",
+          });
+        }
+        console.log(`User ${userProfile.id} points adjusted.`);
+      } catch (error) {
+        console.error("Error adjusting points:", error);
+      }
+    };
+
+    adjustPoints();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [firestore, userProfile?.id, userProfile?.hasPointsAdjusted, userProfile?.gamePoints]);
+
 
   const enrichedTiles = useMemo(() => {
     if (!landTiles || allUsers.length === 0 || countries.length === 0) {
@@ -221,3 +259,5 @@ export default function Home() {
     </div>
   );
 }
+
+    
