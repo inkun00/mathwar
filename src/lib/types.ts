@@ -1,3 +1,4 @@
+
 'use client';
 import type { ReactNode } from "react";
 
@@ -77,6 +78,7 @@ export interface MapEvent {
   newCountryId?: string | null;
   newCountryName?: string | null;
   newCountryColor?: string | null;
+  newCountryFlag?: string[];
 }
 
 

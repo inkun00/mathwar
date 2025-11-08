@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo, useEffect } from "react";
@@ -7,7 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { ZoomIn, ZoomOut } from "lucide-react";
 import { useFirestore, useUser, errorEmitter, FirestorePermissionError, useCollection, useMemoFirebase } from "@/firebase";
-import { doc, updateDoc, writeBatch, increment, collection, arrayUnion, runTransaction, addDoc, serverTimestamp, query, where } from "firebase/firestore";
+import { doc, updateDoc, writeBatch, increment, collection, arrayUnion, runTransaction, addDoc, serverTimestamp, query, where, getDocs, onSnapshot } from "firebase/firestore";
 import { addWrongAnswer } from "@/firebase/firestore/data";
 
 import Header from "./header";
@@ -33,7 +34,6 @@ export default function GameBoard({
   problemAttempts,
   wrongAnswers,
   allUsers,
-  mapEvents,
 }: GameBoardProps) {
   const firestore = useFirestore();
   const { user: authUser } = useUser();
@@ -65,44 +65,47 @@ export default function GameBoard({
 
 
   useEffect(() => {
-    // This effect processes real-time map events to update the local map state
-    // without needing to re-fetch the entire map.
-    if (!mapEvents || mapEvents.length === 0) {
-      return;
-    }
-
-    setLandTiles(currentTiles => {
-      const tileMap = new Map(currentTiles.map(t => [t.id, t]));
-      
-      // Process events in chronological order (oldest first)
-      const sortedEvents = [...mapEvents].sort((a, b) => a.timestamp?.toMillis() - b.timestamp?.toMillis());
-      
-      for (const event of sortedEvents) {
-        if (!event.tileId) continue;
+    if (!firestore) return;
+    const q = query(collection(firestore, "map_events"), where("timestamp", ">", new Date()));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+        const events: MapEvent[] = [];
+        snapshot.docChanges().forEach((change) => {
+            if (change.type === "added") {
+                events.push({ id: change.doc.id, ...change.doc.data() } as MapEvent);
+            }
+        });
         
-        // Prepare the updated tile data from the event
-        const eventData = {
-          ownerId: event.newOwnerId,
-          hasWall: event.newHasWall,
-          ownerNickname: event.newOwnerNickname,
-          countryId: event.newCountryId,
-          countryName: event.newCountryName,
-          countryColor: event.newCountryColor,
-        };
+        if (events.length > 0) {
+            setLandTiles(currentTiles => {
+                const tileMap = new Map(currentTiles.map(t => [t.id, t]));
+                
+                for (const event of events) {
+                    if (!event.tileId) continue;
+                    
+                    const eventData = {
+                        ownerId: event.newOwnerId,
+                        hasWall: event.newHasWall,
+                        ownerNickname: event.newOwnerNickname,
+                        countryId: event.newCountryId,
+                        countryName: event.newCountryName,
+                        countryColor: event.newCountryColor,
+                    };
 
-        const existingTile = tileMap.get(event.tileId);
-
-        if (existingTile) {
-          // If the tile exists, update it with the new data
-          tileMap.set(event.tileId, { ...existingTile, ...eventData });
-        } else {
-          // If it's a new tile, create it
-          tileMap.set(event.tileId, { id: event.tileId, x: event.x, y: event.y, ...eventData });
+                    const existingTile = tileMap.get(event.tileId);
+                    if (existingTile) {
+                        tileMap.set(event.tileId, { ...existingTile, ...eventData });
+                    } else {
+                        tileMap.set(event.tileId, { id: event.tileId, x: event.x, y: event.y, ...eventData });
+                    }
+                }
+                return Array.from(tileMap.values());
+            });
         }
-      }
-      return Array.from(tileMap.values());
     });
-  }, [mapEvents]); // This effect now correctly depends on `mapEvents`.
+
+    return () => unsubscribe();
+}, [firestore]);
+
 
   const currentUserCountry = useMemo(() => countries.find(c => c.id === currentUser?.countryId), [countries, currentUser]);
   

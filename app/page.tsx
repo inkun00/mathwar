@@ -29,9 +29,6 @@ export default function Home() {
   const wrongAnswersQuery = useMemoFirebase(() => (firestore && authUser) ? collection(firestore, 'users', authUser.uid, 'wrong_answers') : null, [firestore, authUser]);
   const { data: wrongAnswers, isLoading: areWrongAnswersLoading } = useCollection<WrongAnswer>(wrongAnswersQuery);
 
-  const mapEventsQuery = useMemoFirebase(() => (firestore && authUser) ? query(collection(firestore, 'map_events'), orderBy('timestamp', 'desc'), limit(100)) : null, [firestore, authUser]);
-  const { data: mapEvents, isLoading: isMapEventsLoading } = useCollection<MapEvent>(mapEventsQuery);
-
   const problemAttemptsQuery = useMemoFirebase(() => (firestore && authUser) ? query(collection(firestore, 'problem_attempts', authUser.uid, 'attempts'), orderBy('timestamp', 'desc')) : null, [firestore, authUser]);
   const { data: problemAttempts, isLoading: isProblemAttemptsLoading } = useCollection<ProblemAttempt>(problemAttemptsQuery);
   
@@ -70,6 +67,8 @@ export default function Home() {
 
         if (!lastDistributionDateStr) {
             console.log("No last distribution date found, skipping point distribution.");
+            const userRef = doc(firestore, "users", userProfile.id);
+            await writeBatch(firestore).update(userRef, { lastPointDistribution: today.toISOString().split('T')[0] }).commit();
             return;
         }
 
@@ -80,8 +79,8 @@ export default function Home() {
             const userTiles = landTiles.filter(tile => tile.ownerId === userProfile.id);
             const pointsToAdd = userTiles.length * daysMissed;
 
+            const userRef = doc(firestore, "users", userProfile.id);
             if (pointsToAdd > 0) {
-                const userRef = doc(firestore, "users", userProfile.id);
                 try {
                     await runTransaction(firestore, async (transaction) => {
                         // Re-read user doc inside transaction to prevent race conditions
@@ -100,14 +99,13 @@ export default function Home() {
                     console.error("Point distribution transaction failed: ", error);
                 }
             } else {
-                 const userRef = doc(firestore, "users", userProfile.id);
                  // Even if no points are added, update the date to prevent re-checking
                  await writeBatch(firestore).update(userRef, { lastPointDistribution: today.toISOString().split('T')[0] }).commit();
             }
         }
     };
 
-    // Run this logic only when the necessary data is loaded.
+    // Run this logic only when the necessary data is loaded and only once.
     if (!isAuthUserLoading && !isUserProfileLoading && !areLandTilesLoading) {
       handlePointDistribution();
     }
@@ -157,7 +155,7 @@ export default function Home() {
      return <SignUpDetails />;
   }
   
-  const isGameDataLoading = areStaticDataLoading || areLandTilesLoading || areWrongAnswersLoading || isMapEventsLoading || isProblemAttemptsLoading;
+  const isGameDataLoading = areStaticDataLoading || areLandTilesLoading || areWrongAnswersLoading || isProblemAttemptsLoading;
 
   if (isGameDataLoading) {
       return (
@@ -170,7 +168,7 @@ export default function Home() {
     );
   }
   
-  if (userProfile && enrichedTiles && problemAttempts && countries && allUsers && wrongAnswers && mapEvents) {
+  if (userProfile && enrichedTiles && problemAttempts && countries && allUsers && wrongAnswers) {
     return (
       <div className="relative flex h-screen w-full flex-col items-center bg-background p-4 sm:p-6 md:p-8">
         <GameBoard 
@@ -180,7 +178,7 @@ export default function Home() {
           problemAttempts={problemAttempts}
           wrongAnswers={wrongAnswers}
           allUsers={allUsers}
-          mapEvents={mapEvents}
+          mapEvents={[]}
         />
       </div>
     );
