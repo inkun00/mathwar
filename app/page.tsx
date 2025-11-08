@@ -67,22 +67,20 @@ export default function Home() {
     }
   
     const handlePointDistribution = async () => {
-      // This is the most crucial guard. If userProfile is not loaded, just exit.
-      if (!userProfile) return;
-
       setHasRunPointDistribution(true); // Mark as running to prevent re-entry for this session
   
       const today = new Date();
       const lastDistributionDateStr = userProfile.lastPointDistribution;
+      const userRef = doc(firestore, "users", userProfile.id);
   
       if (!lastDistributionDateStr) {
         console.log("No last distribution date found, setting it for the first time.");
-        const userRef = doc(firestore, "users", userProfile.id);
         try {
             // Only update the date. No points on the first day.
-            await writeBatch(firestore).update(userRef, { lastPointDistribution: today.toISOString().split('T')[0] }).commit();
+            await updateDoc(userRef, { lastPointDistribution: today.toISOString().split('T')[0] });
         } catch (e) {
             console.error("Error setting initial distribution date:", e);
+            setHasRunPointDistribution(false); // Allow retry if initial setup fails
         }
         return;
       }
@@ -94,24 +92,6 @@ export default function Home() {
         const userTiles = landTiles.filter(tile => tile.ownerId === userProfile.id);
         const pointsToAdd = userTiles.length * daysMissed;
         
-        if (pointsToAdd === 0) {
-            console.log("No tiles owned, no points to add. Updating date.");
-            const userRef = doc(firestore, "users", userProfile.id);
-             try {
-                // Still update the date to prevent re-running this logic today
-                await runTransaction(firestore, async (transaction) => {
-                    transaction.update(userRef, {
-                        lastPointDistribution: today.toISOString().split('T')[0]
-                    });
-                });
-             } catch (error) {
-                 console.error("Point distribution date update failed: ", error);
-             }
-            return;
-        };
-
-        const userRef = doc(firestore, "users", userProfile.id);
-  
         try {
           await runTransaction(firestore, async (transaction) => {
             const freshUserDoc = await transaction.get(userRef);
@@ -126,24 +106,28 @@ export default function Home() {
                 lastPointDistribution: today.toISOString().split('T')[0]
             });
           });
-          console.log(`Awarded ${pointsToAdd} points for ${daysMissed} missed day(s).`);
+          if (pointsToAdd > 0) {
+            console.log(`Awarded ${pointsToAdd} points for ${daysMissed} missed day(s).`);
+          } else {
+            console.log("Point distribution date updated, no points to add.");
+          }
         } catch (error) {
           console.error("Point distribution transaction failed: ", error);
           // Do not set hasRunPointDistribution to false. We don't want to retry in the same session.
+          // Let it retry on next app load.
         }
       } else {
           console.log("Point distribution is up to date for today.");
       }
     };
   
-    // Execute the logic.
+    // Execute the logic only when all necessary data is available.
     handlePointDistribution();
 
-  // This dependency array is critical. It runs when the CORE data is loaded, but NOT when it changes.
-  // We use `userProfile?.id` because the ID is stable after login, unlike the userProfile object itself.
-  // `landTiles` is included because we need it to calculate points.
+  // This effect runs only when the necessary data is loaded.
+  // It won't re-run just because the data changes, thanks to hasRunPointDistribution flag.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [firestore, userProfile?.id, landTiles]);
+  }, [firestore, userProfile, landTiles, hasRunPointDistribution]);
 
   // One-time point adjustment logic
   useEffect(() => {
