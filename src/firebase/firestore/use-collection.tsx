@@ -72,7 +72,13 @@ export function useCollection<T = any>(
     setIsLoading(true);
     setError(null);
 
-    // Directly use memoizedTargetRefOrQuery as it's assumed to be the final query
+    // This is a safeguard. If the memoized target doesn't have a `path` (because it's not a valid ref/query),
+    // we should not proceed.
+    if (memoizedTargetRefOrQuery.type !== 'collection' && !(memoizedTargetRefOrQuery as unknown as InternalQuery)._query?.path) {
+        setIsLoading(false);
+        return;
+    }
+
     const unsubscribe = onSnapshot(
       memoizedTargetRefOrQuery,
       (snapshot: QuerySnapshot<DocumentData>) => {

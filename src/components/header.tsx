@@ -44,7 +44,7 @@ export default function Header({
 
   // --- Real-time data for sheets ---
   const landTilesQuery = useMemoFirebase(() => firestore ? collection(firestore, 'land_tiles') : null, [firestore]);
-  const wrongAnswersQuery = useMemoFirebase(() => (firestore && currentUser) ? collection(firestore, 'users', currentUser.id, 'wrong_answers') : null, [firestore, currentUser]);
+  const wrongAnswersQuery = useMemoFirebase(() => (firestore && currentUser?.id) ? collection(firestore, 'users', currentUser.id, 'wrong_answers') : null, [firestore, currentUser?.id]);
 
   const { data: landTiles, isLoading: isLandTilesLoading } = useCollection(landTilesQuery);
   const { data: wrongAnswers, isLoading: isWrongAnswersLoading } = useCollection(wrongAnswersQuery);
