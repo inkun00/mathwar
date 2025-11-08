@@ -176,6 +176,7 @@ export default function GameBoard({
       }
     };
     handleTokenPenalty();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser?.tokens, currentUser?.id, firestore, isRestarting]);
 
   const handleSolveProblemForToken = () => {
