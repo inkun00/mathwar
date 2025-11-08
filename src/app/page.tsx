@@ -111,7 +111,7 @@ export default function Home() {
     if (!isAuthUserLoading && !isUserProfileLoading && !areLandTilesLoading) {
       handlePointDistribution();
     }
-  }, [firestore, userProfile, landTiles, isAuthUserLoading, isUserProfileLoading, areLandTilesLoading]);
+  }, [firestore, userProfile, isAuthUserLoading, isUserProfileLoading, areLandTilesLoading]);
 
   const enrichedTiles = useMemo(() => {
     if (!landTiles || allUsers.length === 0 || countries.length === 0) {
