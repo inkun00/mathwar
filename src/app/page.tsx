@@ -18,6 +18,7 @@ export default function Home() {
   const [countries, setCountries] = useState<Country[]>([]);
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [areStaticDataLoading, setAreStaticDataLoading] = useState(true);
+  const [hasRunPointDistribution, setHasRunPointDistribution] = useState(false);
 
   // --- Real-time Data using useCollection and useDoc ---
   const userDocRef = useMemoFirebase(() => (firestore && authUser) ? doc(firestore, 'users', authUser.uid) : null, [firestore, authUser]);
@@ -28,9 +29,6 @@ export default function Home() {
   
   const wrongAnswersQuery = useMemoFirebase(() => (firestore && authUser) ? collection(firestore, 'users', authUser.uid, 'wrong_answers') : null, [firestore, authUser]);
   const { data: wrongAnswers, isLoading: areWrongAnswersLoading } = useCollection<WrongAnswer>(wrongAnswersQuery);
-
-  const mapEventsQuery = useMemoFirebase(() => (firestore && authUser) ? query(collection(firestore, 'map_events'), orderBy('timestamp', 'desc'), limit(100)) : null, [firestore, authUser]);
-  const { data: mapEvents, isLoading: isMapEventsLoading } = useCollection<MapEvent>(mapEventsQuery);
 
   const problemAttemptsQuery = useMemoFirebase(() => (firestore && authUser) ? query(collection(firestore, 'problem_attempts', authUser.uid, 'attempts'), orderBy('timestamp', 'desc')) : null, [firestore, authUser]);
   const { data: problemAttempts, isLoading: isProblemAttemptsLoading } = useCollection<ProblemAttempt>(problemAttemptsQuery);
@@ -62,56 +60,68 @@ export default function Home() {
   
   // Daily point distribution logic
   useEffect(() => {
+    if (hasRunPointDistribution || !firestore || !userProfile || !landTiles) {
+      return;
+    }
+  
     const handlePointDistribution = async () => {
-        if (!firestore || !userProfile || !landTiles) return;
+      // Add an extra guard inside the async function
+      if (!userProfile) return;
 
-        const today = new Date();
-        const lastDistributionDateStr = userProfile.lastPointDistribution;
-
-        if (!lastDistributionDateStr) {
-            console.log("No last distribution date found, skipping point distribution.");
-            return;
-        }
-
-        const lastDistributionDate = parseISO(lastDistributionDateStr);
-        const daysMissed = differenceInCalendarDays(today, lastDistributionDate);
-
-        if (daysMissed > 0) {
-            const userTiles = landTiles.filter(tile => tile.ownerId === userProfile.id);
-            const pointsToAdd = userTiles.length * daysMissed;
-
-            if (pointsToAdd > 0) {
-                const userRef = doc(firestore, "users", userProfile.id);
-                try {
-                    await runTransaction(firestore, async (transaction) => {
-                        // Re-read user doc inside transaction to prevent race conditions
-                        const freshUserDoc = await transaction.get(userRef);
-                        if (!freshUserDoc.exists()) {
-                          throw "User document does not exist!";
-                        }
-                        
-                        transaction.update(userRef, {
-                            gamePoints: increment(pointsToAdd),
-                            lastPointDistribution: today.toISOString().split('T')[0] // YYYY-MM-DD
-                        });
-                    });
-                    console.log(`Awarded ${pointsToAdd} points for ${daysMissed} missed days.`);
-                } catch (error) {
-                    console.error("Point distribution transaction failed: ", error);
-                }
-            } else {
-                 const userRef = doc(firestore, "users", userProfile.id);
-                 // Even if no points are added, update the date to prevent re-checking
-                 await writeBatch(firestore).update(userRef, { lastPointDistribution: today.toISOString().split('T')[0] }).commit();
+      setHasRunPointDistribution(true); // Mark as running to prevent re-entry
+  
+      const today = new Date();
+      const lastDistributionDateStr = userProfile.lastPointDistribution;
+  
+      if (!lastDistributionDateStr) {
+        console.log("No last distribution date found, setting it for the first time.");
+        const userRef = doc(firestore, "users", userProfile.id);
+        // Just set the date, don't award points on the very first login.
+        await writeBatch(firestore).update(userRef, { lastPointDistribution: today.toISOString().split('T')[0] }).commit();
+        return;
+      }
+  
+      const lastDistributionDate = parseISO(lastDistributionDateStr);
+      const daysMissed = differenceInCalendarDays(today, lastDistributionDate);
+  
+      if (daysMissed > 0) {
+        const userTiles = landTiles.filter(tile => tile.ownerId === userProfile.id);
+        const pointsToAdd = userTiles.length * daysMissed;
+        const userRef = doc(firestore, "users", userProfile.id);
+  
+        try {
+          // A transaction is robust for this kind of update.
+          await runTransaction(firestore, async (transaction) => {
+            const freshUserDoc = await transaction.get(userRef);
+            if (!freshUserDoc.exists()) {
+              throw "User document does not exist!";
             }
-        }
-    };
+            
+            const newPoints = (freshUserDoc.data().gamePoints || 0) + pointsToAdd;
 
-    // Run this logic only when the necessary data is loaded.
+            transaction.update(userRef, {
+                gamePoints: newPoints,
+                lastPointDistribution: today.toISOString().split('T')[0]
+            });
+          });
+          console.log(`Awarded ${pointsToAdd} points for ${daysMissed} missed day(s).`);
+        } catch (error) {
+          console.error("Point distribution transaction failed: ", error);
+           // If transaction fails, revert the state to allow retrying on next load
+          setHasRunPointDistribution(false);
+        }
+      } else {
+          console.log("Point distribution is up to date.");
+      }
+    };
+  
+    // This condition ensures the logic runs only once when all data is ready.
     if (!isAuthUserLoading && !isUserProfileLoading && !areLandTilesLoading) {
       handlePointDistribution();
     }
-  }, [firestore, userProfile, isAuthUserLoading, isUserProfileLoading, areLandTilesLoading]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [firestore, userProfile?.id, landTiles, isAuthUserLoading, isUserProfileLoading, areLandTilesLoading, hasRunPointDistribution]);
+
 
   const enrichedTiles = useMemo(() => {
     if (!landTiles || allUsers.length === 0 || countries.length === 0) {
@@ -157,7 +167,7 @@ export default function Home() {
      return <SignUpDetails />;
   }
   
-  const isGameDataLoading = areStaticDataLoading || areLandTilesLoading || areWrongAnswersLoading || isMapEventsLoading || isProblemAttemptsLoading;
+  const isGameDataLoading = areStaticDataLoading || areLandTilesLoading || areWrongAnswersLoading || isProblemAttemptsLoading;
 
   if (isGameDataLoading) {
       return (
@@ -170,7 +180,7 @@ export default function Home() {
     );
   }
   
-  if (userProfile && enrichedTiles && problemAttempts && countries && allUsers && wrongAnswers && mapEvents) {
+  if (userProfile && enrichedTiles && problemAttempts && countries && allUsers && wrongAnswers) {
     return (
       <div className="relative flex h-screen w-full flex-col items-center bg-background p-4 sm:p-6 md:p-8">
         <GameBoard 
@@ -180,7 +190,7 @@ export default function Home() {
           problemAttempts={problemAttempts}
           wrongAnswers={wrongAnswers}
           allUsers={allUsers}
-          mapEvents={mapEvents || []}
+          mapEvents={[]}
         />
       </div>
     );
