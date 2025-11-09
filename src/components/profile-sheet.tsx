@@ -90,8 +90,8 @@ export default function ProfileSheet({ currentUser, allUsers, allCountries, land
   const allianceRequestsQuery = useMemoFirebase(() => (firestore && currentUser.isCountryOwner && currentUser.countryId) ? query(collection(firestore, "alliance_requests"), where("targetCountryId", "==", currentUser.countryId), where("status", "==", "pending")) : null, [firestore, currentUser.isCountryOwner, currentUser.countryId]);
   const { data: allianceRequests, isLoading: isLoadingAllianceRequests } = useCollection<AllianceRequest>(allianceRequestsQuery);
   
-  const alliancesQuery = useMemoFirebase(() => firestore ? collection(firestore, 'alliances') : null, [firestore]);
-  const { data: alliancesData, isLoading: isLoadingAlliances } = useCollection<Alliance>(alliancesQuery);
+  const alliancesQuery = useMemoFirebase(() => (firestore && currentUser.countryId) ? query(collection(firestore, 'alliances'), where('countryIds', 'array-contains', currentUser.countryId)) : null, [firestore, currentUser.countryId]);
+  const { data: myAlliances, isLoading: isLoadingAlliances } = useCollection<Alliance>(alliancesQuery);
 
 
   const handleLogout = () => {
@@ -154,12 +154,8 @@ export default function ProfileSheet({ currentUser, allUsers, allCountries, land
     return allUsers.filter(u => u.countryId === userCountry?.id);
   }, [userCountry, allUsers]);
 
-  const myAlliances = useMemo(() => {
-    if (!alliancesData || !currentUser.countryId) return [];
-    return alliancesData.filter(a => a.countryIds.includes(currentUser.countryId));
-  }, [alliancesData, currentUser.countryId]);
-
   const alliedCountryIds = useMemo(() => {
+      if (!myAlliances) return new Set<string>();
       const ids = new Set<string>();
       myAlliances.forEach(alliance => {
           alliance.countryIds.forEach(id => {
@@ -173,10 +169,12 @@ export default function ProfileSheet({ currentUser, allUsers, allCountries, land
 
 
   const adjacentCountriesForAlliance = useMemo(() => {
-    if (!userCountry || !landTiles || !allCountries) return [];
+    if (!userCountry || !landTiles || !allCountries || !allUsers) return [];
 
-    // 1. Find all tiles belonging to the current user's country
-    const myCountryMemberIds = allUsers.filter(u => u.countryId === userCountry.id).map(u => u.id);
+    const myCountryMemberIds = allUsers
+        .filter(u => u.countryId === userCountry.id)
+        .map(u => u.id);
+
     const myCountryTiles = landTiles.filter(t => t.ownerId && myCountryMemberIds.includes(t.ownerId));
 
     if (myCountryTiles.length === 0) return [];
@@ -185,17 +183,16 @@ export default function ProfileSheet({ currentUser, allUsers, allCountries, land
     const landTilesMap = new Map(landTiles.map(t => [`${t.x},${t.y}`, t]));
 
     for (const tile of myCountryTiles) {
-        // Check neighbors (up, down, left, right)
         [[0, -1], [0, 1], [-1, 0], [1, 0]].forEach(([dx, dy]) => {
-            const neighbor = landTilesMap.get(`${tile.x + dx},${tile.y + dy}`);
-            // Check if neighbor exists, has a country, and is not my country
+            const neighborKey = `${tile.x + dx},${tile.y + dy}`;
+            const neighbor = landTilesMap.get(neighborKey);
+            
             if (neighbor && neighbor.countryId && neighbor.countryId !== userCountry.id) {
                 adjacentCountryIds.add(neighbor.countryId);
             }
         });
     }
 
-    // Return the full country objects that are adjacent, not allied, and not demised
     return allCountries.filter(c => 
         adjacentCountryIds.has(c.id) && 
         !alliedCountryIds.has(c.id) && 
@@ -398,7 +395,7 @@ export default function ProfileSheet({ currentUser, allUsers, allCountries, land
                 {isLoading ? <Skeleton className="h-20 w-full" /> : 
                 currentUser.isCountryOwner ? (
                     <div className="space-y-4">
-                        {myAlliances.length > 0 && (
+                        {myAlliances && myAlliances.length > 0 && (
                            <div className="space-y-2">
                              <h4 className="font-semibold text-sm">현재 동맹</h4>
                              <div className="flex flex-wrap gap-2">

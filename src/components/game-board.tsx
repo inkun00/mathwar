@@ -290,35 +290,21 @@ export default function GameBoard({
 
   const handleTileClick = async (x: number, y: number) => {
     if (!currentUser || !firestore || isProcessingClick || !authUser || !currentUserCountry || !alliances) return;
-    
-    if ((currentUser.tokens ?? 0) <= 0 && !isBuildingWall) {
-      toast({
-        variant: "destructive",
-        title: "토큰이 없습니다!",
-        description: "문제를 풀어 더 많은 확장 토큰을 획득하세요.",
-      });
-      return;
-    }
+  
     setIsProcessingClick(true);
   
     const clickedTile = landTiles.find(t => t.x === x && t.y === y);
   
     if (isBuildingWall) {
-      if (!clickedTile) { // Should not happen for land tiles, but a good guard
-          setIsProcessingClick(false);
-          return;
-      }
-      
-      const isMyTile = clickedTile.ownerId === currentUser.id;
-      if (!isMyTile || clickedTile.hasWall || (currentUser.walls ?? 0) <= 0) {
-          toast({
-            variant: "destructive",
-            title: "건설 불가",
-            description: "자신의 영토에만 성벽을 건설할 수 있습니다. 성벽이 이미 있거나, 보유한 성벽이 없습니다.",
-          });
-          setIsBuildingWall(false);
-          setIsProcessingClick(false);
-          return;
+      if (!clickedTile || !clickedTile.ownerId || clickedTile.ownerId !== currentUser.id || clickedTile.hasWall || (currentUser.walls ?? 0) <= 0) {
+        toast({
+          variant: "destructive",
+          title: "건설 불가",
+          description: "자신의 영토에만 성벽을 건설할 수 있습니다. 성벽이 이미 있거나, 보유한 성벽이 없습니다.",
+        });
+        setIsBuildingWall(false);
+        setIsProcessingClick(false);
+        return;
       }
 
       const tileRef = doc(firestore, "land_tiles", clickedTile.id!);
@@ -346,6 +332,16 @@ export default function GameBoard({
       }).finally(() => {
         setIsProcessingClick(false);
       });
+      return;
+    }
+    
+    if ((currentUser.tokens ?? 0) <= 0) {
+      toast({
+        variant: "destructive",
+        title: "토큰이 없습니다!",
+        description: "문제를 풀어 더 많은 확장 토큰을 획득하세요.",
+      });
+      setIsProcessingClick(false);
       return;
     }
   
@@ -486,8 +482,10 @@ export default function GameBoard({
   };
   
   const canBuildWall = (tile: ClientTile) => {
-      if (!currentUser || isProcessingClick || !isBuildingWall) return false;
-      return tile.ownerId === currentUser.id && !tile.hasWall;
+    if (!currentUser || isProcessingClick || !isBuildingWall || !tile || !tile.ownerId) {
+      return false;
+    }
+    return tile.ownerId === currentUser.id && !tile.hasWall;
   }
 
   const handleProblemModalClose = (open: boolean) => {
