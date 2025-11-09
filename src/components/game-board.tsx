@@ -304,7 +304,8 @@ export default function GameBoard({
     const clickedTile = landTiles.find(t => t.x === x && t.y === y);
   
     if (isBuildingWall) {
-      if (!clickedTile || clickedTile.ownerId !== currentUser.id || clickedTile.hasWall || (currentUser.walls ?? 0) <= 0) {
+      const isMyTile = clickedTile && clickedTile.ownerId !== null && clickedTile.ownerId === currentUser.id;
+      if (!isMyTile || clickedTile.hasWall || (currentUser.walls ?? 0) <= 0) {
           toast({
             variant: "destructive",
             title: "건설 불가",
