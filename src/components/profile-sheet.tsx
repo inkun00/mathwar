@@ -174,26 +174,31 @@ export default function ProfileSheet({ currentUser, allUsers, allCountries, land
 
   const adjacentCountriesForAlliance = useMemo(() => {
     if (!userCountry || !landTiles || !allUsers || !allCountries) return [];
-    
-    const countryMemberIds = new Set(allUsers.filter(u => u.countryId === userCountry.id).map(u => u.id));
-    const myTiles = landTiles.filter(t => t.ownerId && countryMemberIds.has(t.ownerId));
+  
+    // Correctly get all tiles belonging to the current user's country
+    const myCountryTiles = landTiles.filter(t => t.countryId === userCountry.id);
+  
     const adjacentCountryIds = new Set<string>();
-    const userMap = new Map(allUsers.map(u => [u.id, u]));
-
-    for (const tile of myTiles) {
+    const landTilesMap = new Map(landTiles.map(t => [`${t.x},${t.y}`, t]));
+  
+    for (const tile of myCountryTiles) {
+      // Check neighbors (up, down, left, right)
       [[0, -1], [0, 1], [-1, 0], [1, 0]].forEach(([dx, dy]) => {
-        const neighbor = landTiles.find(t => t.x === tile.x + dx && t.y === tile.y + dy);
-        if (neighbor && neighbor.ownerId) {
-          const neighborUser = userMap.get(neighbor.ownerId);
-          if (neighborUser && neighborUser.countryId && neighborUser.countryId !== userCountry.id) {
-            adjacentCountryIds.add(neighborUser.countryId);
-          }
+        const neighbor = landTilesMap.get(`${tile.x + dx},${tile.y + dy}`);
+        
+        // Check if neighbor exists, has an owner, and belongs to a different country
+        if (neighbor && neighbor.countryId && neighbor.countryId !== userCountry.id) {
+          adjacentCountryIds.add(neighbor.countryId);
         }
       });
     }
-
-    // Filter out countries that are already in an alliance with the current user's country
-    return allCountries.filter(c => adjacentCountryIds.has(c.id) && !alliedCountryIds.has(c.id) && !c.demised);
+  
+    // Filter out countries that are already in an alliance or have been demised
+    return allCountries.filter(c => 
+      adjacentCountryIds.has(c.id) && 
+      !alliedCountryIds.has(c.id) && 
+      !c.demised
+    );
   }, [landTiles, allUsers, allCountries, userCountry, alliedCountryIds]);
   
   const handleRequestAlliance = async (targetCountryId: string) => {
