@@ -174,28 +174,34 @@ export default function ProfileSheet({ currentUser, allUsers, allCountries, land
 
   const adjacentCountriesForAlliance = useMemo(() => {
     if (!userCountry || !landTiles || !allCountries) return [];
-  
-    const myCountryTiles = landTiles.filter(t => t.countryId === userCountry.id);
+
+    // 1. Find all tiles belonging to the current user's country
+    const myCountryMemberIds = allUsers.filter(u => u.countryId === userCountry.id).map(u => u.id);
+    const myCountryTiles = landTiles.filter(t => t.ownerId && myCountryMemberIds.includes(t.ownerId));
+
     if (myCountryTiles.length === 0) return [];
-    
+
     const adjacentCountryIds = new Set<string>();
     const landTilesMap = new Map(landTiles.map(t => [`${t.x},${t.y}`, t]));
-  
+
     for (const tile of myCountryTiles) {
-      [[0, -1], [0, 1], [-1, 0], [1, 0]].forEach(([dx, dy]) => {
-        const neighbor = landTilesMap.get(`${tile.x + dx},${tile.y + dy}`);
-        if (neighbor && neighbor.countryId && neighbor.countryId !== userCountry.id) {
-          adjacentCountryIds.add(neighbor.countryId);
-        }
-      });
+        // Check neighbors (up, down, left, right)
+        [[0, -1], [0, 1], [-1, 0], [1, 0]].forEach(([dx, dy]) => {
+            const neighbor = landTilesMap.get(`${tile.x + dx},${tile.y + dy}`);
+            // Check if neighbor exists, has a country, and is not my country
+            if (neighbor && neighbor.countryId && neighbor.countryId !== userCountry.id) {
+                adjacentCountryIds.add(neighbor.countryId);
+            }
+        });
     }
-  
+
+    // Return the full country objects that are adjacent, not allied, and not demised
     return allCountries.filter(c => 
-      adjacentCountryIds.has(c.id) && 
-      !alliedCountryIds.has(c.id) && 
-      !c.demised
+        adjacentCountryIds.has(c.id) && 
+        !alliedCountryIds.has(c.id) && 
+        !c.demised
     );
-  }, [landTiles, allCountries, userCountry, alliedCountryIds]);
+}, [landTiles, allUsers, allCountries, userCountry, alliedCountryIds]);
   
   const handleRequestAlliance = async (targetCountryId: string) => {
     if (!firestore || !currentUser || !userCountry) return;

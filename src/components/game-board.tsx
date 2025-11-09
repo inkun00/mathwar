@@ -304,7 +304,12 @@ export default function GameBoard({
     const clickedTile = landTiles.find(t => t.x === x && t.y === y);
   
     if (isBuildingWall) {
-      const isMyTile = clickedTile && clickedTile.ownerId !== null && clickedTile.ownerId === currentUser.id;
+      if (!clickedTile) { // Should not happen for land tiles, but a good guard
+          setIsProcessingClick(false);
+          return;
+      }
+      
+      const isMyTile = clickedTile.ownerId === currentUser.id;
       if (!isMyTile || clickedTile.hasWall || (currentUser.walls ?? 0) <= 0) {
           toast({
             variant: "destructive",
@@ -315,6 +320,7 @@ export default function GameBoard({
           setIsProcessingClick(false);
           return;
       }
+
       const tileRef = doc(firestore, "land_tiles", clickedTile.id!);
       const userRef = doc(firestore, "users", currentUser.id);
       
@@ -360,7 +366,7 @@ export default function GameBoard({
       const ownerCountryId = owner?.countryId;
       if (currentUser.countryId && ownerCountryId) {
         const isAllied = alliances.some(alliance => 
-          alliance.countryIds.includes(currentUser.countryId) &&
+          alliance.countryIds.includes(currentUser.countryId!) &&
           alliance.countryIds.includes(ownerCountryId)
         );
         if (isAllied) {
