@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo, useEffect } from "react";
@@ -539,6 +538,7 @@ export default function GameBoard({
         onToggleWallBuilding={handleToggleWallBuilding}
         allUsers={allUsers}
         countries={countries}
+        landTiles={landTiles}
       />
       <div className="relative h-full w-full max-w-7xl flex-grow">
         <WorldMap 

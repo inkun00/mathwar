@@ -3,7 +3,7 @@
 import { Logo } from "@/components/icons/logo";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import type { User, Country, ProblemAttempt } from "@/lib/types";
+import type { User, Country, ProblemAttempt, ClientTile } from "@/lib/types";
 import { UserCircle, HelpCircle, User as UserIcon, Trophy, Store, Shield, AlertTriangle } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import ProfileSheet from "./profile-sheet";
@@ -26,6 +26,7 @@ interface HeaderProps {
   onToggleWallBuilding: () => void;
   allUsers: User[];
   countries: Country[];
+  landTiles: ClientTile[];
 }
 
 export default function Header({ 
@@ -35,7 +36,8 @@ export default function Header({
   isBuildingWall,
   onToggleWallBuilding,
   allUsers,
-  countries
+  countries,
+  landTiles,
 }: HeaderProps) {
   const { toast } = useToast();
   const firestore = useFirestore();
@@ -43,10 +45,8 @@ export default function Header({
   const [isProfileOpen, setIsProfileOpen] = useState(false);
 
   // --- Real-time data for sheets ---
-  const landTilesQuery = useMemoFirebase(() => firestore ? collection(firestore, 'land_tiles') : null, [firestore]);
   const wrongAnswersQuery = useMemoFirebase(() => (firestore && currentUser?.id) ? collection(firestore, 'users', currentUser.id, 'wrong_answers') : null, [firestore, currentUser?.id]);
-
-  const { data: landTiles, isLoading: isLandTilesLoading } = useCollection(landTilesQuery);
+  
   const { data: wrongAnswers, isLoading: isWrongAnswersLoading } = useCollection(wrongAnswersQuery);
   
   const remainingProblems = useMemo(() => {
@@ -83,7 +83,7 @@ export default function Header({
   }
 
   const continents = ["대륙 1", "대륙 2", "대륙 3", "대륙 4", "대륙 5"];
-  const isSheetDataLoading = isLandTilesLoading || isWrongAnswersLoading;
+  const isSheetDataLoading = isWrongAnswersLoading;
 
   return (
     <header className="w-full max-w-full rounded-lg border bg-card/80 p-4 shadow-md backdrop-blur-sm">
