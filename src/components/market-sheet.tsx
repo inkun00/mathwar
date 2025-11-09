@@ -60,25 +60,23 @@ export default function MarketSheet({ currentUser }: MarketSheetProps) {
             gamePoints: increment(-price),
             tokens: increment(1),
           };
-          toast({
-            title: "구매 완료!",
-            description: "확장 토큰 1개를 획득했습니다.",
-          });
         } else if (itemId === 'wall') {
           updateData = {
             gamePoints: increment(-price),
             walls: increment(1),
           };
-          toast({
-            title: "구매 완료!",
-            description: "성벽 1개를 획득했습니다.",
-          });
         } else {
             throw new Error("알 수 없는 아이템입니다.");
         }
-
         transaction.update(userRef, updateData);
       });
+
+      // Transaction successful
+      toast({
+        title: "구매 완료!",
+        description: `${marketItems.find(item => item.id === itemId)?.name} 1개를 획득했습니다.`,
+      });
+
     } catch (error: any) {
       console.error("아이템 구매 오류:", error);
       toast({
@@ -126,7 +124,7 @@ export default function MarketSheet({ currentUser }: MarketSheetProps) {
                  <Coins className="h-4 w-4 text-yellow-500" />
                  <span className="font-bold">{item.price} 포인트</span>
               </div>
-              <Button onClick={() => handlePurchase(item.id, item.price)} disabled={isProcessing}>
+              <Button onClick={() => handlePurchase(item.id, item.price)} disabled={isProcessing || (currentUser.gamePoints ?? 0) < item.price}>
                 {isProcessing ? '처리 중...' : '구매'}
               </Button>
             </CardFooter>
