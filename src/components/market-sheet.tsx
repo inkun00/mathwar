@@ -4,9 +4,10 @@ import type { User } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useFirestore } from "@/firebase";
-import { doc, updateDoc, increment } from "firebase/firestore";
+import { doc, runTransaction, increment } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
 import { Coins, HelpCircle, Shield } from "lucide-react";
+import { useState } from "react";
 
 interface MarketSheetProps {
   currentUser: User;
@@ -32,48 +33,61 @@ const marketItems = [
 export default function MarketSheet({ currentUser }: MarketSheetProps) {
   const firestore = useFirestore();
   const { toast } = useToast();
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const handlePurchase = async (itemId: string, price: number) => {
-    if (!firestore || !currentUser) return;
+    if (!firestore || !currentUser || isProcessing) return;
 
-    if ((currentUser.gamePoints ?? 0) < price) {
-      toast({
-        variant: "destructive",
-        title: "포인트 부족",
-        description: "아이템을 구매하기에 포인트가 충분하지 않습니다.",
-      });
-      return;
-    }
-
+    setIsProcessing(true);
     const userRef = doc(firestore, "users", currentUser.id);
 
     try {
-      if (itemId === 'expansion-token') {
-        await updateDoc(userRef, {
-          gamePoints: increment(-price),
-          tokens: increment(1),
-        });
-        toast({
-          title: "구매 완료!",
-          description: "확장 토큰 1개를 획득했습니다.",
-        });
-      } else if (itemId === 'wall') {
-         await updateDoc(userRef, {
-          gamePoints: increment(-price),
-          walls: increment(1),
-        });
-        toast({
-          title: "구매 완료!",
-          description: "성벽 1개를 획득했습니다.",
-        });
-      }
-    } catch (error) {
+      await runTransaction(firestore, async (transaction) => {
+        const userDoc = await transaction.get(userRef);
+        if (!userDoc.exists()) {
+          throw new Error("사용자 정보를 찾을 수 없습니다.");
+        }
+
+        const currentPoints = userDoc.data().gamePoints ?? 0;
+        if (currentPoints < price) {
+          throw new Error("포인트가 부족합니다.");
+        }
+
+        let updateData: { gamePoints: any; tokens?: any; walls?: any; };
+
+        if (itemId === 'expansion-token') {
+          updateData = {
+            gamePoints: increment(-price),
+            tokens: increment(1),
+          };
+          toast({
+            title: "구매 완료!",
+            description: "확장 토큰 1개를 획득했습니다.",
+          });
+        } else if (itemId === 'wall') {
+          updateData = {
+            gamePoints: increment(-price),
+            walls: increment(1),
+          };
+          toast({
+            title: "구매 완료!",
+            description: "성벽 1개를 획득했습니다.",
+          });
+        } else {
+            throw new Error("알 수 없는 아이템입니다.");
+        }
+
+        transaction.update(userRef, updateData);
+      });
+    } catch (error: any) {
       console.error("아이템 구매 오류:", error);
       toast({
         variant: "destructive",
         title: "구매 실패",
-        description: "아이템을 구매하는 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
+        description: error.message || "아이템을 구매하는 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
       });
+    } finally {
+        setIsProcessing(false);
     }
   };
 
@@ -112,8 +126,8 @@ export default function MarketSheet({ currentUser }: MarketSheetProps) {
                  <Coins className="h-4 w-4 text-yellow-500" />
                  <span className="font-bold">{item.price} 포인트</span>
               </div>
-              <Button onClick={() => handlePurchase(item.id, item.price)}>
-                구매
+              <Button onClick={() => handlePurchase(item.id, item.price)} disabled={isProcessing}>
+                {isProcessing ? '처리 중...' : '구매'}
               </Button>
             </CardFooter>
           </Card>
