@@ -169,7 +169,7 @@ export default function ProfileSheet({ currentUser, allUsers, allCountries, land
 
 
   const adjacentCountriesForAlliance = useMemo(() => {
-    if (!userCountry || !landTiles || !allCountries || !allUsers) return [];
+    if (!userCountry || !landTiles || !allCountries || !allUsers || !currentUser.isCountryOwner) return [];
 
     const myCountryMemberIds = new Set(allUsers
         .filter(u => u.countryId === userCountry.id)
@@ -180,15 +180,19 @@ export default function ProfileSheet({ currentUser, allUsers, allCountries, land
     if (myCountryTiles.length === 0) return [];
 
     const adjacentCountryIds = new Set<string>();
+    const userToCountryMap = new Map(allUsers.map(u => [u.id, u.countryId]));
     const landTilesMap = new Map(landTiles.map(t => [`${t.x},${t.y}`, t]));
 
     for (const tile of myCountryTiles) {
         [[0, -1], [0, 1], [-1, 0], [1, 0]].forEach(([dx, dy]) => {
             const neighborKey = `${tile.x + dx},${tile.y + dy}`;
-            const neighbor = landTilesMap.get(neighborKey);
+            const neighborTile = landTilesMap.get(neighborKey);
             
-            if (neighbor && neighbor.countryId && neighbor.countryId !== userCountry.id) {
-                adjacentCountryIds.add(neighbor.countryId);
+            if (neighborTile && neighborTile.ownerId) {
+                const neighborCountryId = userToCountryMap.get(neighborTile.ownerId);
+                if (neighborCountryId && neighborCountryId !== userCountry.id) {
+                    adjacentCountryIds.add(neighborCountryId);
+                }
             }
         });
     }
@@ -198,7 +202,7 @@ export default function ProfileSheet({ currentUser, allUsers, allCountries, land
         !alliedCountryIds.has(c.id) && 
         !c.demised
     );
-}, [landTiles, allUsers, allCountries, userCountry, alliedCountryIds]);
+}, [landTiles, allUsers, allCountries, userCountry, alliedCountryIds, currentUser.isCountryOwner]);
   
   const handleRequestAlliance = async (targetCountryId: string) => {
     if (!firestore || !currentUser || !userCountry) return;
