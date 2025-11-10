@@ -269,7 +269,6 @@ export default function ProfileSheet({ currentUser, allUsers, allCountries, land
     setIsProcessing(true);
   
     const requestRef = doc(firestore, `${type}_requests`, request.id);
-    let updateData = { status: action };
   
     try {
       if (action === 'approve') {
@@ -307,6 +306,7 @@ export default function ProfileSheet({ currentUser, allUsers, allCountries, land
           toast({ title: "동맹 체결!", description: `${allianceReq.requestingCountryName} 국가와 동맹을 맺었습니다.` });
         }
       } else { // 'reject'
+        const updateData = { status: action };
         await updateDoc(requestRef, updateData).catch(err => {
           errorEmitter.emit('permission-error', new FirestorePermissionError({
             path: requestRef.path,

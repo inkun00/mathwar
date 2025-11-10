@@ -38,7 +38,7 @@ service cloud.firestore {
     
     // Function to check if the requester is the owner of a given country
     function isCountryOwner(countryId) {
-        return exists(/databases/$(database)/documents/countries/$(countryId)) &&
+        return isSignedIn() && exists(/databases/$(database)/documents/countries/$(countryId)) &&
                get(/databases/$(database)/documents/countries/$(countryId)).data.createdBy == request.auth.uid;
     }
 
@@ -51,8 +51,8 @@ service cloud.firestore {
      * @allow (get, list) Any authenticated user can read a user profile.
      *   - auth.uid: 'user456'
      * @allow (update) User with ID 'user123' can update their own profile OR a country owner can update a user's countryId.
-     *   - auth.uid: 'user123'
-     *   - resource.data.id: 'user123'
+     *   - auth.uid: 'countryOwner1'
+     *   - request.resource.data.countryId: 'country123'
      * @deny (create) User with ID 'user123' cannot create a profile with a mismatched ID.
      *   - auth.uid: 'user123'
      *   - request.resource.data.id: 'user456'
@@ -64,9 +64,10 @@ service cloud.firestore {
     match /users/{userId} {
       allow get, list: if true;
       allow create: if isSignedIn() && isOwner(userId) && request.resource.data.id == userId;
+      // Allow user to update their own doc, OR allow a country owner to update the countryId of a user.
       allow update: if isSignedIn() && 
                       (isOwner(userId) || 
-                       (isCountryOwner(request.resource.data.countryId) && request.resource.data.countryId == resource.data.countryId));
+                       isCountryOwner(request.resource.data.countryId));
       allow delete: if false;
     }
 
