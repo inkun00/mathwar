@@ -6,10 +6,12 @@ import GameBoard from "@/components/game-board";
 import Login from "@/components/login";
 import SignUpDetails from "@/components/signup-details";
 import { useUser, useFirestore, useDoc, useCollection, useMemoFirebase } from "@/firebase";
-import { doc, collection, query, orderBy, limit, runTransaction, increment, getDocs, writeBatch, serverTimestamp } from "firebase/firestore";
+import { doc, collection, query, orderBy, getDocs, runTransaction, updateDoc, writeBatch } from "firebase/firestore";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { User, Country, ClientTile, ProblemAttempt, WrongAnswer, MapEvent } from "@/lib/types";
 import { differenceInCalendarDays, parseISO } from 'date-fns';
+import { isLand } from "@/lib/world-map-shape";
+import { MAP_WIDTH, MAP_HEIGHT } from "@/lib/world-map-shape";
 
 export default function Home() {
   const { user: authUser, isUserLoading: isAuthUserLoading } = useUser();
@@ -18,7 +20,6 @@ export default function Home() {
   const [countries, setCountries] = useState<Country[]>([]);
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [areStaticDataLoading, setAreStaticDataLoading] = useState(true);
-  const [hasRunPointDistribution, setHasRunPointDistribution] = useState(false);
 
   // --- Real-time Data using useCollection and useDoc ---
   const userDocRef = useMemoFirebase(() => (firestore && authUser) ? doc(firestore, 'users', authUser.uid) : null, [firestore, authUser]);
@@ -33,6 +34,52 @@ export default function Home() {
   const problemAttemptsQuery = useMemoFirebase(() => (firestore && authUser) ? query(collection(firestore, 'problem_attempts', authUser.uid, 'attempts'), orderBy('timestamp', 'desc')) : null, [firestore, authUser]);
   const { data: problemAttempts, isLoading: isProblemAttemptsLoading } = useCollection<ProblemAttempt>(problemAttemptsQuery);
   
+  // Initialize map data if it doesn't exist
+  useEffect(() => {
+    const initializeMap = async () => {
+      if (!firestore) return;
+
+      const landTilesCollection = collection(firestore, 'land_tiles');
+      const snapshot = await getDocs(query(landTilesCollection));
+
+      if (snapshot.empty) {
+        console.log("No land tiles found, initializing map...");
+        const batch = writeBatch(firestore);
+        let tileCount = 0;
+
+        for (let y = 0; y < MAP_HEIGHT; y++) {
+          for (let x = 0; x < MAP_WIDTH; x++) {
+            if (isLand(x, y)) {
+              const tileRef = doc(landTilesCollection);
+              batch.set(tileRef, {
+                x,
+                y,
+                ownerId: null,
+                hasWall: false,
+                ownerNickname: null,
+                countryId: null,
+                countryName: null,
+                countryColor: null,
+              });
+              tileCount++;
+              if (tileCount % 499 === 0) { // Batches can handle up to 500 writes
+                await batch.commit();
+                // batch = writeBatch(firestore); // re-initialize batch
+              }
+            }
+          }
+        }
+        if (tileCount % 499 !== 0) {
+            await batch.commit(); // commit the remaining writes
+        }
+        console.log(`Initialized ${tileCount} land tiles.`);
+      }
+    };
+
+    initializeMap();
+  }, [firestore]);
+
+
   // Fetch static data (users and countries) only once
   useEffect(() => {
     if (!firestore) return;
@@ -58,26 +105,25 @@ export default function Home() {
     fetchStaticData();
   }, [firestore]);
   
-  // Daily point distribution logic
+  // Daily point distribution logic - runs only ONCE when user profile and tiles are loaded.
   useEffect(() => {
-    if (hasRunPointDistribution || !firestore || !userProfile || !landTiles) {
+    if (!firestore || !userProfile || !landTiles) {
       return;
     }
   
     const handlePointDistribution = async () => {
-      // Add an extra guard inside the async function
-      if (!userProfile) return;
-
-      setHasRunPointDistribution(true); // Mark as running to prevent re-entry
-  
       const today = new Date();
       const lastDistributionDateStr = userProfile.lastPointDistribution;
+      const userRef = doc(firestore, "users", userProfile.id);
   
+      // If there's no distribution date, this is the first login. Set the date and exit.
       if (!lastDistributionDateStr) {
-        console.log("No last distribution date found, setting it for the first time.");
-        const userRef = doc(firestore, "users", userProfile.id);
-        // Just set the date, don't award points on the very first login.
-        await writeBatch(firestore).update(userRef, { lastPointDistribution: today.toISOString().split('T')[0] }).commit();
+        try {
+            await updateDoc(userRef, { lastPointDistribution: today.toISOString().split('T')[0] });
+            console.log("First login: Last point distribution date set for today.");
+        } catch (e) {
+            console.error("Error setting initial distribution date:", e);
+        }
         return;
       }
   
@@ -87,10 +133,8 @@ export default function Home() {
       if (daysMissed > 0) {
         const userTiles = landTiles.filter(tile => tile.ownerId === userProfile.id);
         const pointsToAdd = userTiles.length * daysMissed;
-        const userRef = doc(firestore, "users", userProfile.id);
-  
+        
         try {
-          // A transaction is robust for this kind of update.
           await runTransaction(firestore, async (transaction) => {
             const freshUserDoc = await transaction.get(userRef);
             if (!freshUserDoc.exists()) {
@@ -104,23 +148,25 @@ export default function Home() {
                 lastPointDistribution: today.toISOString().split('T')[0]
             });
           });
-          console.log(`Awarded ${pointsToAdd} points for ${daysMissed} missed day(s).`);
+
+          if (pointsToAdd > 0) {
+            console.log(`Awarded ${pointsToAdd} points for ${daysMissed} missed day(s).`);
+          } else {
+             console.log("Point distribution date updated, but no tiles to award points for.");
+          }
         } catch (error) {
           console.error("Point distribution transaction failed: ", error);
-           // If transaction fails, revert the state to allow retrying on next load
-          setHasRunPointDistribution(false);
+          // Let it retry on the next app load/refresh, not in the same session.
         }
       } else {
-          console.log("Point distribution is up to date.");
+          console.log("Point distribution is up to date for today.");
       }
     };
   
-    // This condition ensures the logic runs only once when all data is ready.
-    if (!isAuthUserLoading && !isUserProfileLoading && !areLandTilesLoading) {
-      handlePointDistribution();
-    }
+    handlePointDistribution();
+
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [firestore, userProfile?.id, landTiles, isAuthUserLoading, isUserProfileLoading, areLandTilesLoading, hasRunPointDistribution]);
+  }, [firestore, userProfile?.id, userProfile?.lastPointDistribution, landTiles]); // Depends on stable values
 
 
   const enrichedTiles = useMemo(() => {
