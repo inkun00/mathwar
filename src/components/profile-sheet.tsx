@@ -269,40 +269,67 @@ export default function ProfileSheet({ currentUser, allUsers, allCountries, land
     setIsProcessing(true);
   
     const requestRef = doc(firestore, `${type}_requests`, request.id);
-    const updateData = { status: action };
-    
+    let updateData = { status: action };
+  
     try {
       if (action === 'approve') {
         const batch = writeBatch(firestore);
         if (type === 'join') {
-            const joinReq = request as JoinRequest;
-            const memberUserRef = doc(firestore, "users", joinReq.requesterId);
-            batch.update(memberUserRef, { countryId: joinReq.targetCountryId });
-            batch.delete(requestRef);
-            toast({ title: "가입 수락", description: `${joinReq.requesterNickname}님의 가입을 수락했습니다.` });
+          const joinReq = request as JoinRequest;
+          const memberUserRef = doc(firestore, 'users', joinReq.requesterId);
+          const memberUpdateData = { countryId: joinReq.targetCountryId };
+  
+          // This is the operation that needs permission
+          batch.update(memberUserRef, memberUpdateData);
+          batch.delete(requestRef);
+  
+          // Commit the batch
+          await batch.commit().catch(error => {
+            // If the batch fails, emit a specific permission error for debugging
+            errorEmitter.emit('permission-error', new FirestorePermissionError({
+              path: memberUserRef.path,
+              operation: 'update',
+              requestResourceData: memberUpdateData,
+            }));
+            throw error; // Re-throw the original error to be caught below
+          });
+  
+          toast({ title: "가입 수락", description: `${joinReq.requesterNickname}님의 가입을 수락했습니다.` });
         } else { // 'alliance'
-            const allianceReq = request as AllianceRequest;
-            const newAllianceRef = doc(collection(firestore, "alliances"));
-            batch.set(newAllianceRef, {
-                countryIds: [allianceReq.requestingCountryId, allianceReq.targetCountryId],
-                createdAt: serverTimestamp()
-            });
-            batch.update(requestRef, { status: 'approved' });
-            toast({ title: "동맹 체결!", description: `${allianceReq.requestingCountryName} 국가와 동맹을 맺었습니다.` });
+          const allianceReq = request as AllianceRequest;
+          const newAllianceRef = doc(collection(firestore, 'alliances'));
+          batch.set(newAllianceRef, {
+            countryIds: [allianceReq.requestingCountryId, allianceReq.targetCountryId],
+            createdAt: serverTimestamp(),
+          });
+          batch.update(requestRef, { status: 'approved' });
+          await batch.commit(); // No special permissions needed here usually
+          toast({ title: "동맹 체결!", description: `${allianceReq.requestingCountryName} 국가와 동맹을 맺었습니다.` });
         }
-        await batch.commit();
-      } else { // reject
+      } else { // 'reject'
         await updateDoc(requestRef, updateData).catch(err => {
-            errorEmitter.emit('permission-error', new FirestorePermissionError({ path: requestRef.path, operation: 'update', requestResourceData: updateData }));
-            throw err;
+          errorEmitter.emit('permission-error', new FirestorePermissionError({
+            path: requestRef.path,
+            operation: 'update',
+            requestResourceData: updateData
+          }));
+          throw err;
         });
         toast({ title: "요청 거절", description: `요청을 거절했습니다.` });
       }
     } catch (e: any) {
+      // The error emitter will have already been called for permission errors.
+      // This generic catch is for other potential issues or to inform the user.
       if (!(e instanceof FirestorePermissionError)) {
-          console.error(`Error processing ${type} request:`, e);
-          toast({ variant: "destructive", title: "처리 오류", description: e.message || "요청을 처리하는 중 오류가 발생했습니다." });
+        console.error(`Error processing ${type} request:`, e);
       }
+      toast({
+        variant: "destructive",
+        title: "처리 오류",
+        description: e.message?.includes('permission') 
+          ? "권한이 없습니다. 보안 규칙을 확인하세요."
+          : (e.message || "요청을 처리하는 중 오류가 발생했습니다.")
+      });
     } finally {
       setIsProcessing(false);
     }

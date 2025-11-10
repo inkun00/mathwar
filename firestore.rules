@@ -28,6 +28,20 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+    
+    // Function to check if the requester is the owner of a given country
+    function isCountryOwner(countryId) {
+        return exists(/databases/$(database)/documents/countries/$(countryId)) &&
+               get(/databases/$(database)/documents/countries/$(countryId)).data.createdBy == request.auth.uid;
+    }
+
     /**
      * @description Controls access to user profiles.
      * @path /users/{userId}
@@ -36,28 +50,23 @@ service cloud.firestore {
      *   - request.resource.data.id: 'user123'
      * @allow (get, list) Any authenticated user can read a user profile.
      *   - auth.uid: 'user456'
-     * @allow (update) User with ID 'user123' can update their own profile.
+     * @allow (update) User with ID 'user123' can update their own profile OR a country owner can update a user's countryId.
      *   - auth.uid: 'user123'
      *   - resource.data.id: 'user123'
      * @deny (create) User with ID 'user123' cannot create a profile with a mismatched ID.
      *   - auth.uid: 'user123'
      *   - request.resource.data.id: 'user456'
-     * @deny (update) User with ID 'user456' cannot update user 'user123' profile.
+     * @deny (update) User with ID 'user456' cannot update user 'user123' profile unless they are the country owner.
      *   - auth.uid: 'user456'
      *   - resource.data.id: 'user123'
      * @principle Enforces document ownership for writes, self-creation, and validates relational integrity.
      */
     match /users/{userId} {
-      function isSignedIn() {
-        return request.auth != null;
-      }
-      function isOwner(userId) {
-        return request.auth.uid == userId;
-      }
-
       allow get, list: if true;
       allow create: if isSignedIn() && isOwner(userId) && request.resource.data.id == userId;
-      allow update: if isSignedIn() && isOwner(userId);
+      allow update: if isSignedIn() && 
+                      (isOwner(userId) || 
+                       (isCountryOwner(request.resource.data.countryId) && request.resource.data.countryId == resource.data.countryId));
       allow delete: if false;
     }
 
@@ -82,12 +91,6 @@ service cloud.firestore {
      * @principle Restricts access to a user's own data tree, enforces document ownership for writes.
      */
     match /users/{userId}/wrong_answers/{wrongAnswerId} {
-      function isSignedIn() {
-        return request.auth != null;
-      }
-      function isOwner(userId) {
-        return request.auth.uid == userId;
-      }
       function isExistingOwner(userId) {
           return isOwner(userId) && existsAfter(/databases/$(database)/documents/users/$(userId));
       }
@@ -118,16 +121,9 @@ service cloud.firestore {
      * @principle Enforces document ownership for writes.
      */
     match /countries/{countryId} {
-      function isSignedIn() {
-        return request.auth != null;
-      }
-      function isOwner() {
-        return resource.data.createdBy == request.auth.uid;
-      }
-
       allow get, list: if true;
       allow create: if isSignedIn() && request.resource.data.createdBy == request.auth.uid;
-      allow update: if isSignedIn() && isOwner();
+      allow update: if isSignedIn() && resource.data.createdBy == request.auth.uid;
       allow delete: if false;
     }
 
@@ -144,10 +140,6 @@ service cloud.firestore {
      * @principle Allows public read, restricts writes to authenticated users.
      */
     match /land_tiles/{landTileId} {
-        function isSignedIn() {
-            return request.auth != null;
-        }
-
         allow get, list: if true;
         allow create: if isSignedIn();
         allow update: if isSignedIn();
@@ -170,13 +162,6 @@ service cloud.firestore {
      * @principle Restricts access to a user's own data tree, enforces document ownership for writes.
      */
     match /problem_attempts/{userId}/attempts/{attemptId} {
-      function isSignedIn() {
-        return request.auth != null;
-      }
-      function isOwner(userId) {
-        return request.auth.uid == userId;
-      }
-
       allow get, list: if isOwner(userId);
       allow create: if isSignedIn() && isOwner(userId);
       allow update, delete: if false;
@@ -199,16 +184,12 @@ service cloud.firestore {
      * @principle Allows public read and create, restricts updates/deletes to authenticated users.
      */
     match /join_requests/{requestId} {
-      function isSignedIn() {
-        return request.auth != null;
-      }
-      
-      function isOwner(req) {
+      function isRequestOwner(req) {
         return request.auth.uid == req.requesterId;
       }
 
       allow get, list: if isSignedIn();
-      allow create: if isSignedIn() && isOwner(request.resource.data);
+      allow create: if isSignedIn() && isRequestOwner(request.resource.data);
       allow update, delete: if isSignedIn();
     }
 
@@ -226,10 +207,6 @@ service cloud.firestore {
      * @principle Allows public read and create, restricts updates/deletes to authenticated users.
      */
     match /alliance_requests/{requestId} {
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
       allow get, list: if isSignedIn();
       allow create: if isSignedIn();
       allow update: if isSignedIn();
@@ -244,10 +221,6 @@ service cloud.firestore {
      * @deny (update, delete) No one can modify or delete alliances.
      */
     match /alliances/{allianceId} {
-       function isSignedIn() {
-        return request.auth != null;
-      }
-      
       allow get, list: if true;
       allow create: if isSignedIn();
       allow update, delete: if false;
@@ -265,10 +238,6 @@ service cloud.firestore {
      * @principle Allows public read and create, no updates or deletes allowed.
      */
     match /map_events/{eventId} {
-      function isSignedIn() {
-        return request.auth != null;
-      }
-
       allow get, list: if true;
       allow create: if isSignedIn();
       allow update, delete: if false;
