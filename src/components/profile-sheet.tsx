@@ -171,11 +171,11 @@ export default function ProfileSheet({ currentUser, allUsers, allCountries, land
   const adjacentCountriesForAlliance = useMemo(() => {
     if (!userCountry || !landTiles || !allCountries || !allUsers) return [];
 
-    const myCountryMemberIds = allUsers
+    const myCountryMemberIds = new Set(allUsers
         .filter(u => u.countryId === userCountry.id)
-        .map(u => u.id);
+        .map(u => u.id));
 
-    const myCountryTiles = landTiles.filter(t => t.ownerId && myCountryMemberIds.includes(t.ownerId));
+    const myCountryTiles = landTiles.filter(t => t.ownerId && myCountryMemberIds.has(t.ownerId));
 
     if (myCountryTiles.length === 0) return [];
 
