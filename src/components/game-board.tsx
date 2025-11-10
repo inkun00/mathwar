@@ -116,7 +116,16 @@ export default function GameBoard({
 
   const isDemise = useMemo(() => {
     if (!currentUser) return false;
-    // User is considered in demise if they have no land and no country affiliation to join.
+  
+    // Freshly signed up user waiting for join approval is not in demise.
+    // We can check this by seeing if they have a nickname but no countryId and no tokens,
+    // and they were created very recently. This is a heuristic.
+    const isNewUserWaitingForApproval = !currentUser.countryId && (currentUser.tokens ?? 0) === 0;
+    if (isNewUserWaitingForApproval) {
+        return false;
+    }
+
+    // User is in demise if they have no land and no country affiliation to join.
     if (!currentUser.countryId) {
         const hasLand = landTiles.some(tile => tile.ownerId === currentUser.id);
         return !hasLand && (currentUser.tokens ?? 0) <= 0;
@@ -296,7 +305,32 @@ export default function GameBoard({
     const clickedTile = landTiles.find(t => t.x === x && t.y === y);
   
     if (isBuildingWall) {
-      if (!clickedTile || !clickedTile.ownerId || clickedTile.ownerId !== currentUser.id || clickedTile.hasWall || (currentUser.walls ?? 0) <= 0) {
+      if (clickedTile && clickedTile.ownerId && clickedTile.ownerId === currentUser.id && !clickedTile.hasWall && (currentUser.walls ?? 0) > 0) {
+        const tileRef = doc(firestore, "land_tiles", clickedTile.id!);
+        const userRef = doc(firestore, "users", currentUser.id);
+        
+        const batch = writeBatch(firestore);
+        batch.update(tileRef, { hasWall: true });
+        batch.update(userRef, { walls: increment(-1) });
+
+        batch.commit().then(() => {
+            toast({ title: "성벽 건설 완료!", description: "영토에 성벽이 건설되었습니다." });
+            addDoc(collection(firestore, 'map_events'), {
+                tileId: clickedTile.id, x: clickedTile.x, y: clickedTile.y,
+                newOwnerId: clickedTile.ownerId, newHasWall: true,
+                newOwnerNickname: currentUser.nickname, newCountryId: currentUser.countryId,
+                newCountryName: currentUserCountry.name, newCountryColor: currentUserCountry.color,
+                timestamp: serverTimestamp(),
+            });
+        }).catch(error => {
+            const permissionError = new FirestorePermissionError({ path: tileRef.path, operation: 'update', requestResourceData: { hasWall: true } });
+            errorEmitter.emit('permission-error', permissionError);
+            toast({ variant: "destructive", title: "오류", description: "성벽을 건설하는 중 오류가 발생했습니다."});
+        }).finally(() => {
+            setIsProcessingClick(false);
+            setIsBuildingWall(false);
+        });
+      } else {
         toast({
           variant: "destructive",
           title: "건설 불가",
@@ -304,34 +338,7 @@ export default function GameBoard({
         });
         setIsBuildingWall(false);
         setIsProcessingClick(false);
-        return;
       }
-
-      const tileRef = doc(firestore, "land_tiles", clickedTile.id!);
-      const userRef = doc(firestore, "users", currentUser.id);
-      
-      const batch = writeBatch(firestore);
-      batch.update(tileRef, { hasWall: true });
-      batch.update(userRef, { walls: increment(-1) });
-
-      batch.commit().then(() => {
-        toast({ title: "성벽 건설 완료!", description: "영토에 성벽이 건설되었습니다." });
-        setIsBuildingWall(false);
-        // Create a map_event for wall construction
-        addDoc(collection(firestore, 'map_events'), {
-            tileId: clickedTile.id, x: clickedTile.x, y: clickedTile.y,
-            newOwnerId: clickedTile.ownerId, newHasWall: true,
-            newOwnerNickname: currentUser.nickname, newCountryId: currentUser.countryId,
-            newCountryName: currentUserCountry.name, newCountryColor: currentUserCountry.color,
-            timestamp: serverTimestamp(),
-        });
-      }).catch(error => {
-        const permissionError = new FirestorePermissionError({ path: tileRef.path, operation: 'update', requestResourceData: { hasWall: true } });
-        errorEmitter.emit('permission-error', permissionError);
-        toast({ variant: "destructive", title: "오류", description: "성벽을 건설하는 중 오류가 발생했습니다."});
-      }).finally(() => {
-        setIsProcessingClick(false);
-      });
       return;
     }
     
@@ -482,10 +489,13 @@ export default function GameBoard({
   };
   
   const canBuildWall = (tile: ClientTile) => {
-    if (!currentUser || isProcessingClick || !isBuildingWall || !tile || !tile.ownerId) {
+    if (!currentUser || isProcessingClick || !isBuildingWall || !tile) {
       return false;
     }
-    return tile.ownerId === currentUser.id && !tile.hasWall;
+    if (tile.ownerId && tile.ownerId === currentUser.id && !tile.hasWall) {
+      return true;
+    }
+    return false;
   }
 
   const handleProblemModalClose = (open: boolean) => {
