@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useAuth, useCollection, useFirestore, useMemoFirebase, errorEmitter, FirestorePermissionError } from '@/firebase';
 import { collection, addDoc, doc, setDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import { Button } from './ui/button';
