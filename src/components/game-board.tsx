@@ -56,6 +56,11 @@ export default function GameBoard({
   const alliancesQuery = useMemoFirebase(() => firestore ? query(collection(firestore, 'alliances')) : null, [firestore]);
   const { data: alliances, isLoading: areAlliancesLoading } = useCollection<Alliance>(alliancesQuery);
   
+  const mapEventsQuery = useMemoFirebase(
+    () => firestore ? query(collection(firestore, "map_events"), where("timestamp", ">", new Date())) : null,
+    [firestore]
+  );
+    
   useEffect(() => {
     // This effect synchronizes the initial prop data with the local state.
     // It runs only when the initial data from the server changes.
@@ -64,9 +69,8 @@ export default function GameBoard({
 
 
   useEffect(() => {
-    if (!firestore) return;
-    const q = query(collection(firestore, "map_events"), where("timestamp", ">", new Date()));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    if (!mapEventsQuery) return;
+    const unsubscribe = onSnapshot(mapEventsQuery, (snapshot) => {
         const events: MapEvent[] = [];
         snapshot.docChanges().forEach((change) => {
             if (change.type === "added") {
@@ -103,7 +107,7 @@ export default function GameBoard({
     });
 
     return () => unsubscribe();
-}, [firestore]);
+}, [mapEventsQuery]);
 
 
   const currentUserCountry = useMemo(() => countries.find(c => c.id === currentUser?.countryId), [countries, currentUser]);
