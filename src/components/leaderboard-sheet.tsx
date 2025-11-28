@@ -8,6 +8,7 @@ import { Badge } from './ui/badge';
 import { useFirestore } from '@/firebase';
 import { collection, getDocs } from 'firebase/firestore';
 import { Skeleton } from './ui/skeleton';
+import { Input } from './ui/input';
 
 interface LeaderboardData {
   userRankings: RankedUser[];
@@ -53,6 +54,7 @@ export default function LeaderboardSheet() {
     const firestore = useFirestore();
     const [isLoading, setIsLoading] = useState(true);
     const [leaderboardData, setLeaderboardData] = useState<LeaderboardData>({ userRankings: [], countryRankings: [] });
+    const [searchTerm, setSearchTerm] = useState('');
 
     useEffect(() => {
       const fetchLeaderboardData = async () => {
@@ -138,6 +140,15 @@ export default function LeaderboardSheet() {
 
       fetchLeaderboardData();
     }, [firestore]);
+
+    const filteredUserRankings = useMemo(() => {
+        if (!searchTerm) {
+            return leaderboardData.userRankings;
+        }
+        return leaderboardData.userRankings.filter(user => 
+            user.nickname.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+    }, [searchTerm, leaderboardData.userRankings]);
     
   if (isLoading) {
     return (
@@ -164,7 +175,15 @@ export default function LeaderboardSheet() {
           <RankingTable data={leaderboardData.countryRankings} type="country" />
         </TabsContent>
         <TabsContent value="user">
-          <RankingTable data={leaderboardData.userRankings} type="user" />
+            <div className="py-4">
+                <Input 
+                    placeholder="닉네임으로 검색..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full"
+                />
+            </div>
+          <RankingTable data={filteredUserRankings} type="user" />
         </TabsContent>
       </Tabs>
     </div>
