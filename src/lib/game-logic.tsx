@@ -7,7 +7,7 @@ import type {
   StorableProblem,
 } from './types';
 import { isLand } from './world-map-shape';
-import React, from 'react';
+import React from 'react';
 import type { ReactNode } from 'react';
 import { cn } from './utils';
 

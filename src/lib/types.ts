@@ -102,6 +102,7 @@ export type ProblemSubType =
   | 'comparison'
   | 'word-problem'
   | 'error-analysis'
+  | 'error-correction'
   | 'conditional'
   | 'list-navigation'
   | 'multiple-choice'

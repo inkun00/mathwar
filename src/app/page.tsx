@@ -6,12 +6,10 @@ import GameBoard from "@/components/game-board";
 import Login from "@/components/login";
 import SignUpDetails from "@/components/signup-details";
 import { useUser, useFirestore, useDoc, useCollection, useMemoFirebase } from "@/firebase";
-import { doc, collection, query, orderBy, getDocs, runTransaction, updateDoc, writeBatch } from "firebase/firestore";
+import { doc, collection, query, where, orderBy, getDocs, runTransaction, updateDoc } from "firebase/firestore";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { User, Country, ClientTile, ProblemAttempt, WrongAnswer, MapEvent } from "@/lib/types";
+import type { User, Country, ClientTile, ProblemAttempt, WrongAnswer } from "@/lib/types";
 import { differenceInCalendarDays, parseISO } from 'date-fns';
-import { isLand } from "@/lib/world-map-shape";
-import { MAP_WIDTH, MAP_HEIGHT } from "@/lib/world-map-shape";
 
 export default function Home() {
   const { user: authUser, isUserLoading: isAuthUserLoading } = useUser();
@@ -25,7 +23,11 @@ export default function Home() {
   const userDocRef = useMemoFirebase(() => (firestore && authUser) ? doc(firestore, 'users', authUser.uid) : null, [firestore, authUser]);
   const { data: userProfile, isLoading: isUserProfileLoading } = useDoc<User>(userDocRef);
 
-  const landTilesQuery = useMemoFirebase(() => firestore ? collection(firestore, 'land_tiles') : null, [firestore]);
+  // Optimized: Query only tiles that are claimed/owned by users (Sparse Map)
+  const landTilesQuery = useMemoFirebase(
+    () => firestore ? query(collection(firestore, 'land_tiles'), where('ownerId', '!=', null)) : null,
+    [firestore]
+  );
   const { data: landTiles, isLoading: areLandTilesLoading } = useCollection<ClientTile>(landTilesQuery);
   
   const wrongAnswersQuery = useMemoFirebase(() => (firestore && authUser) ? collection(firestore, 'users', authUser.uid, 'wrong_answers') : null, [firestore, authUser]);
@@ -33,51 +35,7 @@ export default function Home() {
 
   const problemAttemptsQuery = useMemoFirebase(() => (firestore && authUser) ? query(collection(firestore, 'problem_attempts', authUser.uid, 'attempts'), orderBy('timestamp', 'desc')) : null, [firestore, authUser]);
   const { data: problemAttempts, isLoading: isProblemAttemptsLoading } = useCollection<ProblemAttempt>(problemAttemptsQuery);
-  
-  // Initialize map data if it doesn't exist
-  useEffect(() => {
-    const initializeMap = async () => {
-      if (!firestore) return;
 
-      const landTilesCollection = collection(firestore, 'land_tiles');
-      const snapshot = await getDocs(query(landTilesCollection));
-
-      if (snapshot.empty) {
-        console.log("No land tiles found, initializing map...");
-        const batch = writeBatch(firestore);
-        let tileCount = 0;
-
-        for (let y = 0; y < MAP_HEIGHT; y++) {
-          for (let x = 0; x < MAP_WIDTH; x++) {
-            if (isLand(x, y)) {
-              const tileRef = doc(landTilesCollection);
-              batch.set(tileRef, {
-                x,
-                y,
-                ownerId: null,
-                hasWall: false,
-                ownerNickname: null,
-                countryId: null,
-                countryName: null,
-                countryColor: null,
-              });
-              tileCount++;
-              if (tileCount % 499 === 0) { // Batches can handle up to 500 writes
-                await batch.commit();
-                // batch = writeBatch(firestore); // re-initialize batch
-              }
-            }
-          }
-        }
-        if (tileCount % 499 !== 0) {
-            await batch.commit(); // commit the remaining writes
-        }
-        console.log(`Initialized ${tileCount} land tiles.`);
-      }
-    };
-
-    initializeMap();
-  }, [firestore]);
 
 
   // Fetch static data (users and countries) only once
