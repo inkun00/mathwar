@@ -75,17 +75,43 @@ function ellipseDist(x: number, y: number, cx: number, cy: number, rx: number, r
   return nx * nx + ny * ny;
 }
 
-// Terrain logic for Continent 2: World Continents
+// Distance from point to line segment
+function distToSegment(px: number, py: number, x1: number, y1: number, x2: number, y2: number): number {
+  const l2 = distSq(x1, y1, x2, y2);
+  if (l2 === 0) return Math.sqrt(distSq(px, py, x1, y1));
+  let t = ((px - x1) * (x2 - x1) + (py - y1) * (y2 - y1)) / l2;
+  t = Math.max(0, Math.min(1, t));
+  return Math.sqrt(distSq(px, py, x1 + t * (x2 - x1), y1 + t * (y2 - y1)));
+}
+
+// Terrain logic for Continent 2: World Continents (100% Connected via Land Bridges)
 function getContinent2Terrain(x: number, y: number): TerrainType {
   // Lakes
   if (ellipseDist(x, y, 34, 38, 5, 4) <= 1) return 'lake'; // Great Lakes
   if (ellipseDist(x, y, 92, 38, 4, 3) <= 1) return 'lake'; // Caspian Sea
   if (ellipseDist(x, y, 84, 76, 3, 4) <= 1) return 'lake'; // Victoria Lake
 
-  // Continents: North America
+  // --- Connecting Bridges (Land Bridges / Causeways) ---
+  // Bering Strait Bridge (North America <-> Asia)
+  if (distToSegment(x, y, 18, 20, 0, 18) <= 1.8 || distToSegment(x, y, 143, 18, 128, 20) <= 1.8) return 'land';
+  // Panama Isthmus (North America <-> South America)
+  if (distToSegment(x, y, 28, 48, 38, 68) <= 2.2) return 'land';
+  // Sinai / Suez Bridge (Eurasia <-> Africa)
+  if (distToSegment(x, y, 80, 48, 82, 60) <= 2.5) return 'land';
+  // Indonesian Island Chain Bridge (Asia <-> Australia)
+  if (distToSegment(x, y, 116, 52, 122, 82) <= 1.8) return 'land';
+  // UK Dover Bridge
+  if (distToSegment(x, y, 66, 24, 74, 26) <= 1.5) return 'land';
+  // Japan Straits Bridge
+  if (distToSegment(x, y, 126, 38, 134, 38) <= 1.5) return 'land';
+  // Madagascar Mozambique Bridge
+  if (distToSegment(x, y, 90, 84, 98, 86) <= 1.5) return 'land';
+  // New Zealand Tasman Bridge
+  if (distToSegment(x, y, 128, 92, 136, 98) <= 1.5) return 'land';
+
+  // --- Major Continents ---
+  // North America
   if (ellipseDist(x, y, 28, 36, 18, 16) <= 1 || ellipseDist(x, y, 22, 22, 10, 8) <= 1) return 'land';
-  // Central America bridge
-  if (x >= 28 && x <= 36 && y >= 50 && y <= 62 && Math.abs((y - 50) - (x - 28) * 1.5) < 3) return 'land';
   // South America
   if (ellipseDist(x, y, 42, 82, 14, 22) <= 1 && !(x < 33 && y > 92)) return 'land';
   // Europe
@@ -96,7 +122,8 @@ function getContinent2Terrain(x: number, y: number): TerrainType {
   if (ellipseDist(x, y, 82, 74, 15, 20) <= 1 && !(x > 94 && y > 82)) return 'land';
   // Australia / Oceania
   if (ellipseDist(x, y, 122, 88, 14, 10) <= 1) return 'land';
-  // Japan / UK / Madagascar islands
+
+  // Islands
   if (ellipseDist(x, y, 66, 24, 3, 5) <= 1) return 'land'; // UK
   if (ellipseDist(x, y, 134, 38, 3, 7) <= 1) return 'land'; // Japan
   if (ellipseDist(x, y, 98, 86, 3, 7) <= 1) return 'land'; // Madagascar
@@ -105,7 +132,7 @@ function getContinent2Terrain(x: number, y: number): TerrainType {
   return 'water';
 }
 
-// Terrain logic for Continent 3: Archipelago & Mediterranean
+// Terrain logic for Continent 3: Archipelago & Mediterranean (100% Connected)
 function getContinent3Terrain(x: number, y: number): TerrainType {
   const cx = 72;
   const cy = 60;
@@ -114,6 +141,25 @@ function getContinent3Terrain(x: number, y: number): TerrainType {
   if (ellipseDist(x, y, 32, 28, 4, 3) <= 1) return 'lake';
   if (ellipseDist(x, y, 114, 30, 4, 3) <= 1) return 'lake';
   if (ellipseDist(x, y, 72, 98, 5, 3) <= 1) return 'lake';
+
+  // --- Connecting Bridges for Mediterranean & Islands ---
+  // Gibraltar Western Bridge (Europe <-> Africa)
+  if (distToSegment(x, y, 22, 46, 22, 76) <= 2.2) return 'land';
+  // Levant Eastern Bridge (Europe <-> Africa)
+  if (distToSegment(x, y, 122, 46, 122, 76) <= 2.2) return 'land';
+  // Central Island Bridge Chain (Majorca <-> Corsica <-> Italy <-> Sicily <-> Africa)
+  if (distToSegment(x, y, 50, 52, 58, 62) <= 1.5) return 'land'; // Iberia to Majorca
+  if (distToSegment(x, y, 58, 62, 68, 56) <= 1.5) return 'land'; // Majorca to Corsica
+  if (distToSegment(x, y, 68, 56, 73, 52) <= 1.5) return 'land'; // Corsica to Italy
+  if (distToSegment(x, y, 73, 56, 76, 64) <= 1.5) return 'land'; // Italy to Sicily
+  if (distToSegment(x, y, 76, 64, 76, 76) <= 1.5) return 'land'; // Sicily to North Africa
+  // Aegean Bridge Chain (Greece <-> Crete <-> East Coast)
+  if (distToSegment(x, y, 88, 54, 90, 64) <= 1.5) return 'land'; // Greece to Crete
+  if (distToSegment(x, y, 90, 64, 118, 70) <= 1.5) return 'land'; // Crete to East
+  // Outer island bridges
+  if (distToSegment(x, y, 14, 80, 22, 80) <= 1.5) return 'land';
+  if (distToSegment(x, y, 130, 80, 122, 80) <= 1.5) return 'land';
+  if (distToSegment(x, y, 134, 18, 124, 24) <= 1.5) return 'land';
 
   // Central Mediterranean Inland Sea
   if (ellipseDist(x, y, cx, cy, 32, 16) <= 1) {
@@ -126,16 +172,15 @@ function getContinent3Terrain(x: number, y: number): TerrainType {
     return 'water';
   }
 
-  // Surrounding Northern Land (Europe/Asia)
+  // Surrounding Northern Land
   if (y <= 48 && (x >= 18 && x <= 126)) {
-    // Peninsulas extending down
     if (x >= 44 && x <= 58 && y >= 40 && y <= 58) return 'land'; // Iberian peninsula
     if (x >= 70 && x <= 78 && y >= 40 && y <= 54) return 'land'; // Italy top
     if (x >= 84 && x <= 96 && y >= 40 && y <= 56) return 'land'; // Greece peninsula
     return 'land';
   }
 
-  // Surrounding Southern Land (North Africa style)
+  // Surrounding Southern Land
   if (y >= 74 && (x >= 22 && x <= 124)) {
     return 'land';
   }
@@ -143,7 +188,7 @@ function getContinent3Terrain(x: number, y: number): TerrainType {
   // Western & Eastern Straits and Coastlines
   if (x <= 20 || x >= 126) return 'land';
 
-  // Outer scattered islands
+  // Outer islands
   if (ellipseDist(x, y, 14, 80, 5, 4) <= 1) return 'land';
   if (ellipseDist(x, y, 130, 80, 5, 4) <= 1) return 'land';
   if (ellipseDist(x, y, 134, 18, 4, 4) <= 1) return 'land';
@@ -151,7 +196,7 @@ function getContinent3Terrain(x: number, y: number): TerrainType {
   return 'water';
 }
 
-// Terrain logic for Continent 4: Great Lakes & Rift Basins
+// Terrain logic for Continent 4: Great Lakes & Rift Basins (100% Connected)
 function getContinent4Terrain(x: number, y: number): TerrainType {
   // 4 Great Lakes in the continent
   const isLake1 = ellipseDist(x, y, 46, 40, 16, 12) <= 1; // Northwest Lake
@@ -160,18 +205,23 @@ function getContinent4Terrain(x: number, y: number): TerrainType {
   const isLake4 = ellipseDist(x, y, 96, 84, 18, 14) <= 1; // Southeast Lake
   
   // River channels connecting lakes
-  const isRiver1 = Math.abs(x - 72) <= 2 && y >= 32 && y <= 92; // Central vertical river
-  const isRiver2 = Math.abs(y - 60) <= 2 && x >= 36 && x <= 108; // Central horizontal river
+  const isRiver1 = Math.abs(x - 72) <= 2 && y >= 28 && y <= 96; // Central vertical river
+  const isRiver2 = Math.abs(y - 60) <= 2 && x >= 32 && x <= 112; // Central horizontal river
+
+  // Island in Northeast Lake connected with bridge
+  if (ellipseDist(x, y, 98, 42, 3, 3) <= 1) return 'land';
+  if (distToSegment(x, y, 98, 42, 98, 26) <= 1.5) return 'land'; // Island bridge to North Land
+
+  // Bridges across rivers and lakes
+  if (Math.abs(x - 72) <= 4 && Math.abs(y - 60) <= 4) return 'land'; // Central Grand Crossroad
+  if (Math.abs(x - 72) <= 3 && (y <= 30 || y >= 94)) return 'land'; // North/South River head bridges
+  if (Math.abs(y - 60) <= 3 && (x <= 34 || x >= 110)) return 'land'; // West/East River mouth bridges
 
   if (isLake1 || isLake2 || isLake3 || isLake4) {
-    // Small island in Northeast lake
-    if (ellipseDist(x, y, 98, 42, 3, 3) <= 1) return 'land';
     return 'lake';
   }
 
   if (isRiver1 || isRiver2) {
-    // Bridges across rivers
-    if (Math.abs(x - 72) <= 3 && Math.abs(y - 60) <= 3) return 'land'; // Central Crossroad Bridge
     return 'lake';
   }
 
@@ -183,11 +233,41 @@ function getContinent4Terrain(x: number, y: number): TerrainType {
   return 'land';
 }
 
-// Terrain logic for Continent 5: Ring Atoll & Sea Crater
+// Terrain logic for Continent 5: Ring Atoll & Sea Crater (100% Connected)
 function getContinent5Terrain(x: number, y: number): TerrainType {
   const cx = 72;
   const cy = 60;
   const d = Math.sqrt(distSq(x, y, cx, cy));
+
+  // --- Spoke Bridges: Connecting Central Island <-> Ring Continent ---
+  // North, South, East, West Spokes (width 3 tiles)
+  if (d <= 36) {
+    if (Math.abs(x - cx) <= 1.8 && y >= cy - 36 && y <= cy + 36) return 'land';
+    if (Math.abs(y - cy) <= 1.8 && x >= cx - 36 && x <= cx + 36) return 'land';
+  }
+
+  // --- Ring Arches: Ensuring the Ring Continent is continuous (no water gaps) ---
+  if (d >= 33 && d <= 39) {
+    return 'land'; // Unbroken middle circular road
+  }
+
+  // --- Outer Causeways: Connecting 8 Satellite Atolls to the Main Ring ---
+  const atollCenters = [
+    { x: 18, y: 18 }, { x: 72, y: 10 }, { x: 126, y: 18 },
+    { x: 134, y: 60 }, { x: 126, y: 102 }, { x: 72, y: 110 },
+    { x: 18, y: 102 }, { x: 10, y: 60 },
+  ];
+
+  for (const atoll of atollCenters) {
+    // Causeway from ring (d ~ 44) to atoll center
+    if (distToSegment(x, y, cx, cy, atoll.x, atoll.y) <= 1.8 && d >= 40) {
+      return 'land';
+    }
+    // Atoll island itself
+    if (distSq(x, y, atoll.x, atoll.y) <= 36) {
+      return 'land';
+    }
+  }
 
   // Central mystical island
   if (d <= 7) return 'land';
@@ -197,33 +277,7 @@ function getContinent5Terrain(x: number, y: number): TerrainType {
 
   // Main Ring Continent
   if (d > 26 && d <= 46) {
-    // 4 Water channels breaking the ring
-    const angle = Math.atan2(y - cy, x - cx);
-    const inChannel = 
-      Math.abs(angle - 0) < 0.08 || 
-      Math.abs(angle - Math.PI / 2) < 0.08 || 
-      Math.abs(angle - (-Math.PI / 2)) < 0.08 || 
-      Math.abs(angle - Math.PI) < 0.08 ||
-      Math.abs(angle - (-Math.PI)) < 0.08;
-    
-    if (inChannel) return 'water';
     return 'land';
-  }
-
-  // Outer Ocean with 8 Satellite Atoll Islands
-  if (d > 46) {
-    const atollCenters = [
-      { x: 18, y: 18 }, { x: 72, y: 10 }, { x: 126, y: 18 },
-      { x: 134, y: 60 }, { x: 126, y: 102 }, { x: 72, y: 110 },
-      { x: 18, y: 102 }, { x: 10, y: 60 },
-    ];
-
-    for (const atoll of atollCenters) {
-      if (distSq(x, y, atoll.x, atoll.y) <= 36) {
-        return 'land';
-      }
-    }
-    return 'water';
   }
 
   return 'water';
@@ -262,4 +316,5 @@ export const getTerrainType = (x: number, y: number, continentId = 1): TerrainTy
 export const isLand = (x: number, y: number, continentId = 1): boolean => {
   return getTerrainType(x, y, continentId) === 'land';
 };
+
 
