@@ -1,6 +1,6 @@
 'use client';
 import type { ClientTile, User } from "@/lib/types";
-import { isLand } from "@/lib/world-map-shape";
+import { isLand, getTerrainType, CONTINENTS_INFO, TerrainType } from "@/lib/world-map-shape";
 import React, { useRef, useEffect, useState, useCallback, useMemo } from "react";
 import FlagDisplay from "./flag-display";
 
@@ -13,6 +13,7 @@ interface WorldMapProps {
   currentUser: User;
   mapWidth: number;
   mapHeight: number;
+  continentId?: number;
 }
 
 const BASE_TILE_SIZE = 14; // Base pixel size per tile at scale = 1
@@ -26,9 +27,14 @@ export default function WorldMap({
   currentUser,
   mapWidth,
   mapHeight,
+  continentId = 1,
 }: WorldMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  const currentContinentInfo = useMemo(() => {
+    return CONTINENTS_INFO.find((c) => c.id === continentId) || CONTINENTS_INFO[0];
+  }, [continentId]);
 
   // Viewport camera state (pan and zoom)
   const [camera, setCamera] = useState({ x: 0, y: 0, scale: zoomLevel || 1 });
@@ -43,6 +49,7 @@ export default function WorldMap({
     screenX: number;
     screenY: number;
     tile: ClientTile | null;
+    terrain: TerrainType;
     isLandTile: boolean;
   } | null>(null);
 
@@ -50,10 +57,13 @@ export default function WorldMap({
   const tilesMap = useMemo(() => {
     const map = new Map<string, ClientTile>();
     landTiles.forEach((tile) => {
-      map.set(`${tile.x},${tile.y}`, tile);
+      // Filter tiles by continent if continentId is specified on the tile
+      if (!tile.continentId || tile.continentId === continentId) {
+        map.set(`${tile.x},${tile.y}`, tile);
+      }
     });
     return map;
-  }, [landTiles]);
+  }, [landTiles, continentId]);
 
   // Sync external zoomLevel with camera scale if it changes
   useEffect(() => {
@@ -65,7 +75,7 @@ export default function WorldMap({
     }
   }, [zoomLevel]);
 
-  // Center camera initially
+  // Center camera initially or when continent changes
   useEffect(() => {
     if (containerRef.current) {
       const container = containerRef.current;
@@ -80,7 +90,7 @@ export default function WorldMap({
         y: startY,
       }));
     }
-  }, [mapWidth, mapHeight]);
+  }, [mapWidth, mapHeight, continentId]);
 
   // Get or construct a tile object
   const getTile = useCallback(
@@ -88,9 +98,10 @@ export default function WorldMap({
       const existing = tilesMap.get(`${x},${y}`);
       if (existing) return existing;
       return {
-        id: `${x}-${y}`,
+        id: `${continentId}_${x}_${y}`,
         x,
         y,
+        continentId,
         ownerId: null,
         hasWall: false,
         ownerNickname: null,
@@ -99,10 +110,10 @@ export default function WorldMap({
         countryColor: null,
       };
     },
-    [tilesMap]
+    [tilesMap, continentId]
   );
 
-  // Canvas drawing loop with Viewport Culling
+  // Canvas drawing loop with Viewport Culling and Multi-terrain rendering
   const renderCanvas = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -114,8 +125,8 @@ export default function WorldMap({
     const { x: camX, y: camY, scale } = camera;
     const tileSize = BASE_TILE_SIZE * scale;
 
-    // Clear background (Ocean color)
-    ctx.fillStyle = "#93c5fd"; // Ocean blue (sky-300)
+    // Clear background (Ocean / Water color for the active continent)
+    ctx.fillStyle = currentContinentInfo.waterColor;
     ctx.fillRect(0, 0, width, height);
 
     if (tileSize <= 0) return;
@@ -126,25 +137,40 @@ export default function WorldMap({
     const minTileY = Math.max(0, Math.floor(-camY / tileSize));
     const maxTileY = Math.min(mapHeight - 1, Math.ceil((height - camY) / tileSize));
 
-    // Draw visible land tiles
+    // Draw visible tiles (Land and Lakes)
     for (let ty = minTileY; ty <= maxTileY; ty++) {
       for (let tx = minTileX; tx <= maxTileX; tx++) {
-        const isLandTile = isLand(tx, ty);
-        if (!isLandTile) continue; // Skip ocean tiles (already painted ocean background)
+        const terrain = getTerrainType(tx, ty, continentId);
+        
+        // Ocean tiles are already filled with background color
+        if (terrain === 'water') continue;
 
         const screenTileX = Math.floor(camX + tx * tileSize);
         const screenTileY = Math.floor(camY + ty * tileSize);
         const drawTileSize = Math.ceil(tileSize);
 
+        if (terrain === 'lake') {
+          // Render inland lake
+          ctx.fillStyle = currentContinentInfo.lakeColor;
+          ctx.fillRect(screenTileX, screenTileY, drawTileSize, drawTileSize);
+          
+          if (tileSize >= 8) {
+            ctx.fillStyle = "rgba(255, 255, 255, 0.15)";
+            ctx.fillRect(screenTileX + 2, screenTileY + 2, drawTileSize - 4, Math.max(1, Math.floor(drawTileSize * 0.2)));
+          }
+          continue;
+        }
+
+        // --- Land Tile Rendering ---
         const tile = getTile(tx, ty);
         const conquerable = canConquer(tile);
         const wallBuildable = canBuildWall(tile);
 
-        // Fill color
+        // Land fill color (Country color or unclaimed continent land color)
         if (tile.countryColor) {
           ctx.fillStyle = tile.countryColor;
         } else {
-          ctx.fillStyle = "#fef3c7"; // Unclaimed land (amber-100 / parchment)
+          ctx.fillStyle = currentContinentInfo.landColor;
         }
         ctx.fillRect(screenTileX, screenTileY, drawTileSize, drawTileSize);
 
@@ -242,7 +268,7 @@ export default function WorldMap({
       ctx.fillStyle = "rgba(255, 255, 255, 0.25)";
       ctx.fillRect(hoverScreenX, hoverScreenY, drawTileSize, drawTileSize);
     }
-  }, [camera, mapWidth, mapHeight, getTile, canConquer, canBuildWall, hoveredTile]);
+  }, [camera, mapWidth, mapHeight, getTile, canConquer, canBuildWall, hoveredTile, continentId, currentContinentInfo]);
 
   // Re-render canvas when camera, tilesMap, or hover state updates
   useEffect(() => {
@@ -258,7 +284,6 @@ export default function WorldMap({
   useEffect(() => {
     const handleResize = () => {
       if (containerRef.current && canvasRef.current) {
-        const dpr = window.devicePixelRatio || 1;
         const rect = containerRef.current.getBoundingClientRect();
         canvasRef.current.width = rect.width;
         canvasRef.current.height = rect.height;
@@ -284,17 +309,19 @@ export default function WorldMap({
       const tileY = Math.floor((screenY - camera.y) / tileSize);
 
       if (tileX >= 0 && tileX < mapWidth && tileY >= 0 && tileY < mapHeight) {
+        const terrain = getTerrainType(tileX, tileY, continentId);
         return {
           tileX,
           tileY,
           screenX,
           screenY,
-          isLandTile: isLand(tileX, tileY),
+          terrain,
+          isLandTile: terrain === 'land',
         };
       }
       return null;
     },
-    [camera, mapWidth, mapHeight]
+    [camera, mapWidth, mapHeight, continentId]
   );
 
   // Mouse / Touch Event Handlers for Drag (Pan) & Zoom
@@ -325,6 +352,7 @@ export default function WorldMap({
         screenX: pos.screenX,
         screenY: pos.screenY,
         tile: pos.isLandTile ? tile : null,
+        terrain: pos.terrain,
         isLandTile: pos.isLandTile,
       });
     } else {
@@ -411,14 +439,19 @@ export default function WorldMap({
             ),
           }}
         >
-          {!hoveredTile.isLandTile ? (
+          {hoveredTile.terrain === 'water' ? (
             <div className="flex items-center gap-2 text-sky-400 font-medium">
               <span>🌊</span>
-              <span>바다 ({hoveredTile.x}, {hoveredTile.y})</span>
+              <span>대양/바다 ({hoveredTile.x}, {hoveredTile.y})</span>
+            </div>
+          ) : hoveredTile.terrain === 'lake' ? (
+            <div className="flex items-center gap-2 text-emerald-400 font-medium">
+              <span>🏞️</span>
+              <span>내륙 호수 ({hoveredTile.x}, {hoveredTile.y})</span>
             </div>
           ) : !hoveredTile.tile?.ownerId ? (
             <div>
-              <p className="font-semibold text-emerald-500">🌾 미개척지</p>
+              <p className="font-semibold text-emerald-500">🌾 미개척지 ({currentContinentInfo.subtitle})</p>
               <p className="text-xs text-muted-foreground">좌표: ({hoveredTile.x}, {hoveredTile.y})</p>
               {hoveredTile.tile && canConquer(hoveredTile.tile) && (
                 <p className="mt-1 text-xs text-emerald-400 font-medium animate-pulse">
@@ -462,12 +495,17 @@ export default function WorldMap({
         </div>
       )}
 
-      {/* Mini Controls Guide */}
-      <div className="pointer-events-none absolute bottom-3 right-3 rounded-md bg-background/80 px-2.5 py-1 text-[11px] text-muted-foreground backdrop-blur-sm border shadow-sm flex items-center gap-2">
-        <span>🖱️ 마우스 휠: 줌</span>
+      {/* Mini Controls & Continent Indicator */}
+      <div className="pointer-events-none absolute bottom-3 right-3 rounded-md bg-background/80 px-3 py-1.5 text-xs text-muted-foreground backdrop-blur-sm border shadow-sm flex items-center gap-3">
+        <span className="font-semibold text-primary">
+          🗺️ {currentContinentInfo.name}: {currentContinentInfo.subtitle}
+        </span>
+        <span>•</span>
+        <span>🖱️ 휠: 줌</span>
         <span>•</span>
         <span>드래그: 맵 이동</span>
       </div>
     </div>
   );
 }
+

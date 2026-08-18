@@ -812,7 +812,7 @@ export const canConquer = (tile: ClientTile, currentUser: User, allUsers: User[]
       return false; // Cannot conquer a tile owned by a countryman
     }
     
-    if (!isLand(tile.x, tile.y)) {
+    if (!isLand(tile.x, tile.y, tile.continentId || 1)) {
         return false;
     }
 

@@ -17,6 +17,8 @@ import { cn } from "@/lib/utils";
 import { Alert, AlertDescription } from "./ui/alert";
 import { useFirestore } from "@/firebase";
 
+import { CONTINENTS_INFO } from "@/lib/world-map-shape";
+
 interface HeaderProps {
   currentUser: User;
   onSolveProblemClick: () => void;
@@ -27,6 +29,8 @@ interface HeaderProps {
   allUsers: User[];
   countries: Country[];
   landTiles: ClientTile[];
+  currentContinent?: number;
+  onContinentChange?: (continentId: number) => void;
 }
 
 export default function Header({ 
@@ -39,6 +43,8 @@ export default function Header({
   allUsers,
   countries,
   landTiles,
+  currentContinent = 1,
+  onContinentChange,
 }: HeaderProps) {
   const { toast } = useToast();
   const firestore = useFirestore();
@@ -80,8 +86,6 @@ export default function Header({
     onToggleWallBuilding();
   }
 
-  const continents = ["대륙 1", "대륙 2", "대륙 3", "대륙 4", "대륙 5"];
-
   return (
     <header className="w-full max-w-full rounded-lg border bg-card/80 p-4 shadow-md backdrop-blur-sm">
       <div className="flex flex-col gap-3">
@@ -93,35 +97,36 @@ export default function Header({
             </h1>
           </div>
 
-          <div className="hidden md:flex gap-2 rounded-lg bg-background/50 p-1 backdrop-blur-sm">
-            {continents.map((name, index) => {
-              const isActive = index === 0;
+          {/* Continent 1 ~ 5 Selection Tabs */}
+          <div className="hidden md:flex gap-1.5 rounded-lg bg-background/60 p-1 backdrop-blur-sm border shadow-inner">
+            {CONTINENTS_INFO.map((continent) => {
+              const isActive = continent.id === currentContinent;
               const button = (
                 <Button
-                  variant={isActive ? "secondary" : "ghost"}
+                  key={continent.id}
+                  variant={isActive ? "default" : "ghost"}
                   size="sm"
+                  onClick={() => onContinentChange?.(continent.id)}
                   className={cn(
-                    "disabled:opacity-50",
-                    isActive && "shadow-sm"
+                    "transition-all duration-200 text-xs px-3 font-medium",
+                    isActive ? "shadow-md font-bold" : "text-muted-foreground hover:text-foreground"
                   )}
-                  disabled={!isActive}
-                  aria-label={name}
+                  aria-label={continent.name}
                 >
-                  {name}
+                  {continent.name}
                 </Button>
               );
 
               return (
-                <TooltipProvider key={name} delayDuration={100}>
+                <TooltipProvider key={continent.id} delayDuration={150}>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      {isActive ? button : <span tabIndex={0}>{button}</span>}
+                      {button}
                     </TooltipTrigger>
-                    {!isActive && (
-                      <TooltipContent>
-                        <p>추후 오픈 예정입니다.</p>
-                      </TooltipContent>
-                    )}
+                    <TooltipContent className="max-w-[200px] text-center">
+                      <p className="font-semibold text-primary">{continent.subtitle}</p>
+                      <p className="text-xs text-muted-foreground">{continent.description}</p>
+                    </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
               );

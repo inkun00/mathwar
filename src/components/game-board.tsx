@@ -49,6 +49,7 @@ export default function GameBoard({
   const [isProcessingClick, setIsProcessingClick] = useState(false);
   const [isBuildingWall, setIsBuildingWall] = useState(false);
   const [isRestarting, setIsRestarting] = useState(false);
+  const [currentContinent, setCurrentContinent] = useState(1);
   
   // The landTiles state is now the single source of truth for the map on the client.
   // It's initialized with data from props and then updated by real-time events.
@@ -87,6 +88,7 @@ export default function GameBoard({
                     if (!event.tileId) continue;
                     
                     const eventData = {
+                        continentId: event.continentId || 1,
                         ownerId: event.newOwnerId,
                         hasWall: event.newHasWall,
                         ownerNickname: event.newOwnerNickname,
@@ -113,11 +115,15 @@ export default function GameBoard({
 
   const currentUserCountry = useMemo(() => countries.find(c => c.id === currentUser?.countryId), [countries, currentUser]);
   
+  const currentContinentTiles = useMemo(() => {
+    return landTiles.filter(tile => !tile.continentId || tile.continentId === currentContinent);
+  }, [landTiles, currentContinent]);
+
   const userCountryTiles = useMemo(() => {
     if (!currentUserCountry) return [];
     const countryMemberIds = allUsers.filter(u => u.countryId === currentUserCountry.id).map(u => u.id);
-    return landTiles.filter(tile => tile.ownerId && countryMemberIds.includes(tile.ownerId));
-  }, [landTiles, currentUserCountry, allUsers]);
+    return currentContinentTiles.filter(tile => tile.ownerId && countryMemberIds.includes(tile.ownerId));
+  }, [currentContinentTiles, currentUserCountry, allUsers]);
 
   const isDemise = useMemo(() => {
     if (!currentUser) return false;
@@ -307,7 +313,7 @@ export default function GameBoard({
   
     setIsProcessingClick(true);
   
-    const clickedTile = landTiles.find(t => t.x === x && t.y === y);
+    const clickedTile = landTiles.find(t => t.x === x && t.y === y && (!t.continentId || t.continentId === currentContinent));
   
     if (isBuildingWall) {
       if (clickedTile && clickedTile.ownerId && clickedTile.ownerId === currentUser.id && !clickedTile.hasWall && (currentUser.walls ?? 0) > 0) {
@@ -322,6 +328,7 @@ export default function GameBoard({
             toast({ title: "성벽 건설 완료!", description: "영토에 성벽이 건설되었습니다." });
             addDoc(collection(firestore, 'map_events'), {
                 tileId: clickedTile.id, x: clickedTile.x, y: clickedTile.y,
+                continentId: currentContinent,
                 newOwnerId: clickedTile.ownerId, newHasWall: true,
                 newOwnerNickname: currentUser.nickname, newCountryId: currentUser.countryId,
                 newCountryName: currentUserCountry.name, newCountryColor: currentUserCountry.color,
@@ -401,11 +408,11 @@ export default function GameBoard({
 
     } else { // Conquering an empty tile
       const canPlace = canConquerLogic(
-          { x, y, id: '', ownerId: null, hasWall: false },
+          { x, y, id: '', continentId: currentContinent, ownerId: null, hasWall: false },
           currentUser,
           allUsers, 
           userCountryTiles,
-          landTiles
+          currentContinentTiles
       );
       if (!canPlace) {
            toast({ variant: "destructive", title: "확장 불가", description: "국가 영토에 인접한 타일만 확장할 수 있습니다." });
@@ -415,6 +422,7 @@ export default function GameBoard({
 
       const tileData = { 
           x, y, hasWall: false,
+          continentId: currentContinent,
           ownerId: currentUser.id, 
           ownerNickname: currentUser.nickname,
           countryId: currentUser.countryId,
@@ -440,6 +448,7 @@ export default function GameBoard({
             // Create a map_event for the new tile
             await addDoc(collection(firestore, 'map_events'), {
                 tileId: newTileId, x: x, y: y,
+                continentId: currentContinent,
                 newOwnerId: currentUser.id, newHasWall: false,
                 newOwnerNickname: currentUser.nickname, newCountryId: currentUser.countryId,
                 newCountryName: currentUserCountry.name, newCountryColor: currentUserCountry.color,
@@ -560,6 +569,8 @@ export default function GameBoard({
         allUsers={allUsers}
         countries={countries}
         landTiles={landTiles}
+        currentContinent={currentContinent}
+        onContinentChange={setCurrentContinent}
       />
       <div className="relative h-full w-full max-w-7xl flex-grow">
         <WorldMap 
@@ -571,6 +582,7 @@ export default function GameBoard({
             currentUser={currentUser}
             mapWidth={MAP_WIDTH}
             mapHeight={MAP_HEIGHT}
+            continentId={currentContinent}
         />
         <div className="absolute bottom-4 right-4 flex gap-2">
           <Button size="icon" onClick={handleZoomIn} aria-label="확대">

@@ -56,6 +56,7 @@ export interface ClientTile {
   id: string; // ID from land_tiles document
   x: number;
   y: number;
+  continentId?: number; // 1, 2, 3, 4, 5 (defaults to 1)
   ownerId: string | null;
   hasWall: boolean;
   // Denormalized fields for performance
@@ -71,6 +72,7 @@ export interface MapEvent {
   tileId: string;
   x: number;
   y: number;
+  continentId?: number;
   newOwnerId: string | null;
   newHasWall: boolean;
   timestamp: any;
