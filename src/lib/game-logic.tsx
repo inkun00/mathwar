@@ -817,15 +817,16 @@ export const canConquer = (tile: ClientTile, currentUser: User, allUsers: User[]
     }
 
     if (userCountryTiles.length === 0) {
-      // Rule for the very first tile placement.
+      // Rule for the very first tile placement on this continent.
       if (tile.ownerId !== null) {
         return false;
       }
       
-      const allOwnedTiles = landTiles.filter(t => t.ownerId !== null);
+      const targetContinent = tile.continentId ?? 1;
+      const allOwnedTiles = landTiles.filter(t => t.ownerId !== null && (t.continentId ?? 1) === targetContinent);
 
       if (allOwnedTiles.length === 0) {
-          return true; // No tiles owned by anyone, can place anywhere.
+          return true; // No tiles owned by anyone on this continent, can place anywhere on land.
       }
 
       // Check distance from all other players' tiles.

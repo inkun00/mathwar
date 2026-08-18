@@ -57,8 +57,9 @@ export default function WorldMap({
   const tilesMap = useMemo(() => {
     const map = new Map<string, ClientTile>();
     landTiles.forEach((tile) => {
-      // Filter tiles by continent if continentId is specified on the tile
-      if (!tile.continentId || tile.continentId === continentId) {
+      // Strictly isolate tiles by continent (legacy tiles with no continentId belong to continent 1)
+      const tileContinent = tile.continentId ?? 1;
+      if (tileContinent === continentId) {
         map.set(`${tile.x},${tile.y}`, tile);
       }
     });

@@ -116,7 +116,7 @@ export default function GameBoard({
   const currentUserCountry = useMemo(() => countries.find(c => c.id === currentUser?.countryId), [countries, currentUser]);
   
   const currentContinentTiles = useMemo(() => {
-    return landTiles.filter(tile => !tile.continentId || tile.continentId === currentContinent);
+    return landTiles.filter(tile => (tile.continentId ?? 1) === currentContinent);
   }, [landTiles, currentContinent]);
 
   const userCountryTiles = useMemo(() => {
@@ -313,7 +313,7 @@ export default function GameBoard({
   
     setIsProcessingClick(true);
   
-    const clickedTile = landTiles.find(t => t.x === x && t.y === y && (!t.continentId || t.continentId === currentContinent));
+    const clickedTile = landTiles.find(t => t.x === x && t.y === y && (t.continentId ?? 1) === currentContinent);
   
     if (isBuildingWall) {
       if (clickedTile && clickedTile.ownerId && clickedTile.ownerId === currentUser.id && !clickedTile.hasWall && (currentUser.walls ?? 0) > 0) {
