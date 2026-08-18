@@ -171,7 +171,8 @@ export default function Home() {
      return <SignUpDetails />;
   }
   
-  const isGameDataLoading = areStaticDataLoading || areLandTilesLoading || areWrongAnswersLoading || isProblemAttemptsLoading;
+  // Non-blocking for secondary data: wrongAnswers and problemAttempts load in background
+  const isGameDataLoading = areStaticDataLoading || areLandTilesLoading;
 
   if (isGameDataLoading) {
       return (
@@ -184,15 +185,15 @@ export default function Home() {
     );
   }
   
-  if (userProfile && enrichedTiles && problemAttempts && countries && allUsers && wrongAnswers) {
+  if (userProfile && enrichedTiles && countries && allUsers) {
     return (
       <div className="relative flex h-screen w-full flex-col items-center bg-background p-4 sm:p-6 md:p-8">
         <GameBoard 
           currentUser={userProfile}
           countries={countries}
           landTiles={enrichedTiles}
-          problemAttempts={problemAttempts}
-          wrongAnswers={wrongAnswers}
+          problemAttempts={problemAttempts || []}
+          wrongAnswers={wrongAnswers || []}
           allUsers={allUsers}
           mapEvents={[]}
         />

@@ -15,13 +15,13 @@ import { Badge } from "./ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 import { cn } from "@/lib/utils";
 import { Alert, AlertDescription } from "./ui/alert";
-import { useCollection, useFirestore, useMemoFirebase } from "@/firebase";
-import { collection } from "firebase/firestore";
+import { useFirestore } from "@/firebase";
 
 interface HeaderProps {
   currentUser: User;
   onSolveProblemClick: () => void;
   problemAttempts: ProblemAttempt[];
+  wrongAnswers?: any[];
   isBuildingWall: boolean;
   onToggleWallBuilding: () => void;
   allUsers: User[];
@@ -33,6 +33,7 @@ export default function Header({
   currentUser, 
   onSolveProblemClick, 
   problemAttempts, 
+  wrongAnswers = [],
   isBuildingWall,
   onToggleWallBuilding,
   allUsers,
@@ -43,11 +44,8 @@ export default function Header({
   const firestore = useFirestore();
   const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-
-  // --- Real-time data for sheets ---
-  const wrongAnswersQuery = useMemoFirebase(() => (firestore && currentUser?.id) ? collection(firestore, 'users', currentUser.id, 'wrong_answers') : null, [firestore, currentUser?.id]);
   
-  const { data: wrongAnswers, isLoading: isWrongAnswersLoading } = useCollection(wrongAnswersQuery);
+  const isSheetDataLoading = false;
   
   const remainingProblems = useMemo(() => {
     if (!problemAttempts) return 10;
@@ -83,7 +81,6 @@ export default function Header({
   }
 
   const continents = ["대륙 1", "대륙 2", "대륙 3", "대륙 4", "대륙 5"];
-  const isSheetDataLoading = isWrongAnswersLoading;
 
   return (
     <header className="w-full max-w-full rounded-lg border bg-card/80 p-4 shadow-md backdrop-blur-sm">
@@ -193,7 +190,11 @@ export default function Header({
                 <SheetHeader>
                   <SheetTitle>리더보드</SheetTitle>
                 </SheetHeader>
-                <LeaderboardSheet />
+                <LeaderboardSheet 
+                  allUsers={allUsers}
+                  countries={countries}
+                  landTiles={landTiles}
+                />
               </SheetContent>
             </Sheet>
 

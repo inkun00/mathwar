@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect } from "react";
 import type { ClientTile, MathProblem, Country, User, ProblemAttempt, InvasionTarget, WrongAnswer, MapEvent, Alliance } from "@/lib/types";
 import { generateMathProblem, isAdjacent, canConquer as canConquerLogic } from "@/lib/game-logic";
+import { MAP_WIDTH, MAP_HEIGHT } from "@/lib/world-map-shape";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { ZoomIn, ZoomOut } from "lucide-react";
@@ -553,6 +554,7 @@ export default function GameBoard({
         currentUser={currentUser} 
         onSolveProblemClick={handleSolveProblemForToken} 
         problemAttempts={problemAttempts}
+        wrongAnswers={wrongAnswers}
         isBuildingWall={isBuildingWall}
         onToggleWallBuilding={handleToggleWallBuilding}
         allUsers={allUsers}
@@ -567,8 +569,8 @@ export default function GameBoard({
             canBuildWall={canBuildWall}
             zoomLevel={zoomLevel} 
             currentUser={currentUser}
-            mapWidth={144}
-            mapHeight={120}
+            mapWidth={MAP_WIDTH}
+            mapHeight={MAP_HEIGHT}
         />
         <div className="absolute bottom-4 right-4 flex gap-2">
           <Button size="icon" onClick={handleZoomIn} aria-label="확대">
