@@ -114,11 +114,11 @@ export default function WorldMap({
     [tilesMap, continentId]
   );
 
-  // Canvas drawing loop with Viewport Culling and Multi-terrain rendering
+  // Canvas drawing loop with Viewport Culling and Ultra-Fast Tile Rendering
   const renderCanvas = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", { alpha: false });
     if (!ctx) return;
 
     const width = canvas.width;
@@ -137,9 +137,13 @@ export default function WorldMap({
     const maxTileX = Math.min(mapWidth - 1, Math.ceil((width - camX) / tileSize));
     const minTileY = Math.max(0, Math.floor(-camY / tileSize));
     const maxTileY = Math.min(mapHeight - 1, Math.ceil((height - camY) / tileSize));
+    const drawTileSize = Math.ceil(tileSize);
+    const showDetails = tileSize >= 10;
+    const showFlags = tileSize >= 24;
 
     // Draw visible tiles (Land and Lakes)
     for (let ty = minTileY; ty <= maxTileY; ty++) {
+      const screenTileY = Math.floor(camY + ty * tileSize);
       for (let tx = minTileX; tx <= maxTileX; tx++) {
         const terrain = getTerrainType(tx, ty, continentId);
         
@@ -147,43 +151,27 @@ export default function WorldMap({
         if (terrain === 'water') continue;
 
         const screenTileX = Math.floor(camX + tx * tileSize);
-        const screenTileY = Math.floor(camY + ty * tileSize);
-        const drawTileSize = Math.ceil(tileSize);
 
         if (terrain === 'lake') {
           // Render inland lake
           ctx.fillStyle = currentContinentInfo.lakeColor;
           ctx.fillRect(screenTileX, screenTileY, drawTileSize, drawTileSize);
-          
-          if (tileSize >= 8) {
-            ctx.fillStyle = "rgba(255, 255, 255, 0.15)";
-            ctx.fillRect(screenTileX + 2, screenTileY + 2, drawTileSize - 4, Math.max(1, Math.floor(drawTileSize * 0.2)));
-          }
           continue;
         }
 
         // --- Land Tile Rendering ---
-        const tile = getTile(tx, ty);
-        const conquerable = canConquer(tile);
-        const wallBuildable = canBuildWall(tile);
+        const ownedTile = tilesMap.get(`${tx},${ty}`);
 
         // Land fill color (Country color or unclaimed continent land color)
-        if (tile.countryColor) {
-          ctx.fillStyle = tile.countryColor;
+        if (ownedTile?.countryColor) {
+          ctx.fillStyle = ownedTile.countryColor;
         } else {
           ctx.fillStyle = currentContinentInfo.landColor;
         }
         ctx.fillRect(screenTileX, screenTileY, drawTileSize, drawTileSize);
 
-        // Grid border (if zoomed in enough)
-        if (tileSize >= 6) {
-          ctx.strokeStyle = "rgba(0, 0, 0, 0.08)";
-          ctx.lineWidth = 1;
-          ctx.strokeRect(screenTileX, screenTileY, drawTileSize, drawTileSize);
-        }
-
         // Wall indicator
-        if (tile.hasWall) {
+        if (ownedTile?.hasWall) {
           ctx.strokeStyle = "#1e293b"; // Slate-800
           ctx.lineWidth = Math.max(2, Math.floor(tileSize * 0.18));
           ctx.strokeRect(
@@ -193,7 +181,6 @@ export default function WorldMap({
             drawTileSize - 2
           );
 
-          // Wall icon/hatch pattern when zoomed in
           if (tileSize >= 16) {
             ctx.fillStyle = "#334155";
             const innerMargin = Math.floor(tileSize * 0.25);
@@ -206,36 +193,15 @@ export default function WorldMap({
           }
         }
 
-        // Action Highlights (Conquerable or Wall Buildable)
-        if (conquerable) {
-          ctx.strokeStyle = "#10b981"; // Emerald green
-          ctx.lineWidth = Math.max(2, Math.floor(tileSize * 0.15));
-          ctx.strokeRect(
-            screenTileX + 1,
-            screenTileY + 1,
-            drawTileSize - 2,
-            drawTileSize - 2
-          );
-        } else if (wallBuildable) {
-          ctx.strokeStyle = "#eab308"; // Yellow
-          ctx.lineWidth = Math.max(2, Math.floor(tileSize * 0.15));
-          ctx.strokeRect(
-            screenTileX + 1,
-            screenTileY + 1,
-            drawTileSize - 2,
-            drawTileSize - 2
-          );
-        }
-
         // Draw country flag icon on tile if owned and zoomed in
-        if (tileSize >= 24 && tile.countryFlag && tile.countryFlag.length === 100) {
+        if (showFlags && ownedTile?.countryFlag && ownedTile.countryFlag.length === 100) {
           const flagPixelSize = (tileSize * 0.6) / 10;
           const flagStartX = screenTileX + (tileSize - flagPixelSize * 10) / 2;
           const flagStartY = screenTileY + (tileSize - flagPixelSize * 10) / 2;
 
           for (let fy = 0; fy < 10; fy++) {
             for (let fx = 0; fx < 10; fx++) {
-              const color = tile.countryFlag[fy * 10 + fx];
+              const color = ownedTile.countryFlag[fy * 10 + fx];
               if (color) {
                 ctx.fillStyle = color;
                 ctx.fillRect(
@@ -251,14 +217,44 @@ export default function WorldMap({
       }
     }
 
-    // Draw hover indicator
+    // Draw grid lines when zoomed in enough (single batch stroke for high FPS)
+    if (tileSize >= 8) {
+      ctx.strokeStyle = "rgba(0, 0, 0, 0.06)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let tx = minTileX; tx <= maxTileX + 1; tx++) {
+        const sx = Math.floor(camX + tx * tileSize);
+        ctx.moveTo(sx, Math.floor(camY + minTileY * tileSize));
+        ctx.lineTo(sx, Math.floor(camY + (maxTileY + 1) * tileSize));
+      }
+      for (let ty = minTileY; ty <= maxTileY + 1; ty++) {
+        const sy = Math.floor(camY + ty * tileSize);
+        ctx.moveTo(Math.floor(camX + minTileX * tileSize), sy);
+        ctx.lineTo(Math.floor(camX + (maxTileX + 1) * tileSize), sy);
+      }
+      ctx.stroke();
+    }
+
+    // Draw hover indicator and action highlight for the hovered tile
     if (hoveredTile && hoveredTile.isLandTile) {
       const hoverScreenX = Math.floor(camX + hoveredTile.x * tileSize);
       const hoverScreenY = Math.floor(camY + hoveredTile.y * tileSize);
-      const drawTileSize = Math.ceil(tileSize);
 
-      ctx.strokeStyle = "#ffffff";
-      ctx.lineWidth = 2;
+      const targetTile = getTile(hoveredTile.x, hoveredTile.y);
+      const conquerable = canConquer(targetTile);
+      const wallBuildable = canBuildWall(targetTile);
+
+      if (conquerable) {
+        ctx.strokeStyle = "#10b981"; // Emerald green
+        ctx.lineWidth = 3;
+      } else if (wallBuildable) {
+        ctx.strokeStyle = "#eab308"; // Yellow
+        ctx.lineWidth = 3;
+      } else {
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 2;
+      }
+
       ctx.strokeRect(
         hoverScreenX,
         hoverScreenY,
@@ -266,10 +262,10 @@ export default function WorldMap({
         drawTileSize
       );
 
-      ctx.fillStyle = "rgba(255, 255, 255, 0.25)";
+      ctx.fillStyle = "rgba(255, 255, 255, 0.3)";
       ctx.fillRect(hoverScreenX, hoverScreenY, drawTileSize, drawTileSize);
     }
-  }, [camera, mapWidth, mapHeight, getTile, canConquer, canBuildWall, hoveredTile, continentId, currentContinentInfo]);
+  }, [camera, mapWidth, mapHeight, getTile, canConquer, canBuildWall, hoveredTile, continentId, currentContinentInfo, tilesMap]);
 
   // Re-render canvas when camera, tilesMap, or hover state updates
   useEffect(() => {

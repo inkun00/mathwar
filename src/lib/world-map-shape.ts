@@ -283,16 +283,14 @@ function getContinent5Terrain(x: number, y: number): TerrainType {
   return 'water';
 }
 
-/**
- * Returns the terrain type of a tile at (x, y) for a given continent.
- * @param x The x-coordinate (0 ~ 143)
- * @param y The y-coordinate (0 ~ 119)
- * @param continentId Continent number (1 ~ 5, defaults to 1)
- */
-export const getTerrainType = (x: number, y: number, continentId = 1): TerrainType => {
+// Precompute 144x120 terrain map for each continent (0: land, 1: water, 2: lake)
+const TERRAIN_CODE_MAP: Record<TerrainType, number> = { land: 0, water: 1, lake: 2 };
+const CODE_TO_TERRAIN: TerrainType[] = ['land', 'water', 'lake'];
+
+const rawTerrainEvaluator = (x: number, y: number, continentId: number): TerrainType => {
   switch (continentId) {
     case 1:
-      return 'land'; // Classic rectangular Pangea
+      return 'land';
     case 2:
       return getContinent2Terrain(x, y);
     case 3:
@@ -306,15 +304,51 @@ export const getTerrainType = (x: number, y: number, continentId = 1): TerrainTy
   }
 };
 
+// Build fast static Uint8Array caches for all 5 continents (144 * 120 = 17,280 bytes each)
+const PRECOMPUTED_TERRAINS: Record<number, Uint8Array> = {
+  1: new Uint8Array(MAP_WIDTH * MAP_HEIGHT), // All 0 (land)
+  2: new Uint8Array(MAP_WIDTH * MAP_HEIGHT),
+  3: new Uint8Array(MAP_WIDTH * MAP_HEIGHT),
+  4: new Uint8Array(MAP_WIDTH * MAP_HEIGHT),
+  5: new Uint8Array(MAP_WIDTH * MAP_HEIGHT),
+};
+
+// Populate caches once at startup
+for (let c = 2; c <= 5; c++) {
+  const arr = PRECOMPUTED_TERRAINS[c];
+  for (let y = 0; y < MAP_HEIGHT; y++) {
+    for (let x = 0; x < MAP_WIDTH; x++) {
+      const type = rawTerrainEvaluator(x, y, c);
+      arr[y * MAP_WIDTH + x] = TERRAIN_CODE_MAP[type];
+    }
+  }
+}
+
 /**
- * Checks if a given coordinate is land (claimable/conquerable).
+ * Returns the terrain type of a tile at (x, y) for a given continent in O(1) time.
+ * @param x The x-coordinate (0 ~ 143)
+ * @param y The y-coordinate (0 ~ 119)
+ * @param continentId Continent number (1 ~ 5, defaults to 1)
+ */
+export const getTerrainType = (x: number, y: number, continentId = 1): TerrainType => {
+  if (x < 0 || x >= MAP_WIDTH || y < 0 || y >= MAP_HEIGHT) return 'water';
+  const c = Math.max(1, Math.min(5, continentId));
+  const code = PRECOMPUTED_TERRAINS[c][y * MAP_WIDTH + x];
+  return CODE_TO_TERRAIN[code];
+};
+
+/**
+ * Checks if a given coordinate is land (claimable/conquerable) in O(1) time.
  * @param x The x-coordinate.
  * @param y The y-coordinate.
  * @param continentId Continent number (1 ~ 5).
  * @returns True if the tile is land.
  */
 export const isLand = (x: number, y: number, continentId = 1): boolean => {
-  return getTerrainType(x, y, continentId) === 'land';
+  if (x < 0 || x >= MAP_WIDTH || y < 0 || y >= MAP_HEIGHT) return false;
+  const c = Math.max(1, Math.min(5, continentId));
+  return PRECOMPUTED_TERRAINS[c][y * MAP_WIDTH + x] === 0;
 };
+
 
 
